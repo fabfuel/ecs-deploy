@@ -1,9 +1,11 @@
+from copy import deepcopy
+
 import pytest
 import datetime
 
 from dateutil.tz import tzlocal
 
-from ecs_deploy.ecs import EcsService, EcsTaskDefinition
+from ecs_deploy.ecs import EcsService, EcsTaskDefinition, UnknownContainerError, EcsTaskDefinitionDiff
 
 CLUSTER_NAME = u'test-cluster'
 SERVICE_NAME = u'test-service'
@@ -16,8 +18,8 @@ TASK_2_REVISION = 2
 TASK_2_ARN = u'arn:aws:ecs:eu-central-1:123456789:task-definition/%s:%s' % (TASK_2_FAMILY, TASK_2_REVISION)
 TASK_2_VOLUMES = []
 TASK_2_CONTAINERS = [
-    {u'name': u'app1', u'image': u'webserver:123', u'command': u'run'},
-    {u'name': u'app2', u'image': u'application:123', u'command': u'run'}
+    {u'name': u'webserver', u'image': u'webserver:123', u'command': u'run'},
+    {u'name': u'application', u'image': u'application:123', u'command': u'run'}
 ]
 
 
@@ -27,8 +29,8 @@ def task_definition_payload():
         u'arn': TASK_2_ARN,
         u'family': TASK_2_FAMILY,
         u'revision': TASK_2_REVISION,
-        u'volumes': TASK_2_VOLUMES,
-        u'containerDefinitions': TASK_2_CONTAINERS,
+        u'volumes': deepcopy(TASK_2_VOLUMES),
+        u'containerDefinitions': deepcopy(TASK_2_CONTAINERS),
     }
 
 
@@ -144,6 +146,12 @@ def test_task_containers(task_definition):
     assert task_definition.containers == TASK_2_CONTAINERS
 
 
+def test_task_container_names(task_definition):
+    assert 'webserver' in task_definition.container_names
+    assert 'application' in task_definition.container_names
+    assert 'foobar' not in task_definition.container_names
+
+
 def test_task_volumes(task_definition):
     assert task_definition.volumes == TASK_2_VOLUMES
 
@@ -152,11 +160,52 @@ def test_task_revision(task_definition):
     assert task_definition.revision == TASK_2_REVISION
 
 
-def test_task_diff(task_definition):
+def test_task_no_diff(task_definition):
     assert task_definition.diff == []
+
+
+def test_task_image_diff(task_definition):
+    task_definition.set_images('foobar')
+    assert len(task_definition.diff) == 2
+
+    for diff in task_definition.diff:
+        assert isinstance(diff, EcsTaskDefinitionDiff)
 
 
 def test_task_set_tag(task_definition):
     task_definition.set_images('foobar')
     for container in task_definition.containers:
         assert container['image'].endswith(':foobar')
+
+
+def test_task_set_image(task_definition):
+    task_definition.set_images(webserver='new-image:123', application='app-image:latest')
+    for container in task_definition.containers:
+        if container['name'] == 'webserver':
+            assert container['image'] == 'new-image:123'
+        if container['name'] == 'application':
+            assert container['image'] == 'app-image:latest'
+
+
+def test_task_set_image_for_unknown_container(task_definition):
+    with pytest.raises(UnknownContainerError):
+        task_definition.set_images(foobar='new-image:123')
+
+
+def test_task_set_command(task_definition):
+    task_definition.set_commands(webserver='run-webserver', application='run-application')
+    for container in task_definition.containers:
+        if container['name'] == 'webserver':
+            assert container['command'] == ['run-webserver']
+        if container['name'] == 'application':
+            assert container['command'] == ['run-application']
+
+
+def test_task_set_command_for_unknown_container(task_definition):
+    with pytest.raises(UnknownContainerError):
+        task_definition.set_images(foobar='run-foobar')
+
+
+def test_task_definition_diff():
+    diff = EcsTaskDefinitionDiff('webserver', 'image', 'new', 'old')
+    assert str(diff) == "Changed image of container 'webserver' to: new (was: old)"
