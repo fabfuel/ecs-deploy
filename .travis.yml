@@ -6,4 +6,4 @@ install: pip install tox-travis
 script: tox
 after_script:
     - pip install scrutinizer-ocular
-    - ocular --data-file ".coverage" --config-file ".coveragerc"
+    - ocular --data-file ".coverage"
