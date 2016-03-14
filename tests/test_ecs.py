@@ -3,9 +3,11 @@ from copy import deepcopy
 import pytest
 import datetime
 
+from boto3.session import Session
 from dateutil.tz import tzlocal
+from mock.mock import patch
 
-from ecs_deploy.ecs import EcsService, EcsTaskDefinition, UnknownContainerError, EcsTaskDefinitionDiff
+from ecs_deploy.ecs import EcsService, EcsTaskDefinition, UnknownContainerError, EcsTaskDefinitionDiff, EcsClient
 
 CLUSTER_NAME = u'test-cluster'
 SERVICE_NAME = u'test-service'
@@ -209,3 +211,68 @@ def test_task_set_command_for_unknown_container(task_definition):
 def test_task_definition_diff():
     diff = EcsTaskDefinitionDiff('webserver', 'image', 'new', 'old')
     assert str(diff) == "Changed image of container 'webserver' to: new (was: old)"
+
+
+@patch.object(Session, 'client')
+@patch.object(Session, '__init__')
+def test_client_init(mocked_init, mocked_client):
+    mocked_init.return_value = None
+
+    EcsClient('access_key_id', 'secret_access_key', 'region', 'profile')
+
+    mocked_init.assert_called_once_with(aws_access_key_id='access_key_id',
+                                        aws_secret_access_key='secret_access_key',
+                                        profile_name='profile',
+                                        region_name='region')
+    mocked_client.assert_called_once_with('ecs')
+
+
+@pytest.fixture
+@patch.object(Session, 'client')
+@patch.object(Session, '__init__')
+def client(mocked_init, mocked_client):
+    mocked_init.return_value = None
+    return EcsClient('access_key_id', 'secret_access_key', 'region', 'profile')
+
+
+def test_client_describe_services(client):
+    client.describe_services('my-cluster', 'my-service')
+    client.boto.describe_services.assert_called_once_with(cluster='my-cluster', services=['my-service'])
+
+
+def test_client_describe_task_definition(client):
+    client.describe_task_definition('task_definition_arn')
+    client.boto.describe_task_definition.assert_called_once_with(taskDefinition='task_definition_arn')
+
+
+def test_client_list_tasks(client):
+    client.list_tasks('my-cluster', 'my-service')
+    client.boto.list_tasks.assert_called_once_with(cluster='my-cluster', serviceName='my-service')
+
+
+def test_client_describe_tasks(client):
+    client.describe_tasks('my-cluster', 'task-arns')
+    client.boto.describe_tasks.assert_called_once_with(cluster='my-cluster', tasks='task-arns')
+
+
+def test_client_register_task_definition(client):
+    containers = [{'name': 'foo'}]
+    volumes = [{'foo': 'bar'}]
+    client.register_task_definition('family', containers, volumes)
+    client.boto.register_task_definition.assert_called_once_with(family='family', containerDefinitions=containers,
+                                                                 volumes=volumes)
+
+
+def test_client_deregister_task_definition(client):
+    client.deregister_task_definition('task_definition_arn')
+    client.boto.deregister_task_definition.assert_called_once_with(taskDefinition='task_definition_arn')
+
+
+def test_client_update_service(client):
+    client.update_service('my-cluster', 'my-service', 5, 'task-definition')
+    client.boto.update_service.assert_called_once_with(
+        cluster='my-cluster',
+        service='my-service',
+        desiredCount=5,
+        taskDefinition='task-definition'
+    )
