@@ -4,7 +4,7 @@ from time import sleep
 import click
 from datetime import datetime, timedelta
 
-from ecs_deploy.ecs import DeployAction, ConnectionError, ScaleAction
+from ecs_deploy.ecs import DeployAction, ConnectionError, ScaleAction, EcsClient
 
 
 @click.group()
@@ -36,7 +36,8 @@ def deploy(cluster, service, tag, image, command, access_key_id, secret_access_k
     """
 
     try:
-        action = DeployAction(cluster, service, access_key_id, secret_access_key, region, profile)
+        client = EcsClient(access_key_id, secret_access_key, region, profile)
+        action = DeployAction(client, cluster, service)
         task_definition = action.get_current_task_definition()
 
         images = {key: value for (key, value) in image}
@@ -114,7 +115,8 @@ def scale(cluster, service, desired_count, access_key_id, secret_access_key, reg
 
     """
     try:
-        action = ScaleAction(cluster, service, access_key_id, secret_access_key, region, profile)
+        client = EcsClient(access_key_id, secret_access_key, region, profile)
+        action = ScaleAction(client, cluster, service)
 
         click.secho('Updating service')
         action.scale(desired_count)
@@ -157,7 +159,7 @@ def scale(cluster, service, desired_count, access_key_id, secret_access_key, reg
             exit(1)
 
     except ConnectionError as e:
-        click.secho(e.message, fg='red', err=True)
+        click.secho(str(e), fg='red', err=True)
 
 
 main.add_command(deploy)

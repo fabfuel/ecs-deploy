@@ -4,104 +4,94 @@ import pytest
 import datetime
 
 from boto3.session import Session
+from botocore.exceptions import ClientError, NoCredentialsError
 from dateutil.tz import tzlocal
 from mock.mock import patch
 
-from ecs_deploy.ecs import EcsService, EcsTaskDefinition, UnknownContainerError, EcsTaskDefinitionDiff, EcsClient
+from ecs_deploy.ecs import EcsService, EcsTaskDefinition, UnknownContainerError, EcsTaskDefinitionDiff, EcsClient, \
+    EcsAction, ConnectionError
 
 CLUSTER_NAME = u'test-cluster'
 SERVICE_NAME = u'test-service'
 DESIRED_COUNT = 4
-TASK_1_FAMILY = u'test'
+TASK_1_FAMILY = u'test-task'
 TASK_1_REVISION = 1
-TASK_1_ARN = u'arn:aws:ecs:eu-central-1:123456789:task-definition/%s:%s' % (TASK_1_FAMILY, TASK_1_REVISION)
-TASK_2_FAMILY = u'test'
+TASK_1_ARN = u'arn:aws:ecs:eu-central-1:123456789012:task-definition/%s:%s' % (TASK_1_FAMILY, TASK_1_REVISION)
+TASK_2_FAMILY = u'test-task'
 TASK_2_REVISION = 2
-TASK_2_ARN = u'arn:aws:ecs:eu-central-1:123456789:task-definition/%s:%s' % (TASK_2_FAMILY, TASK_2_REVISION)
+TASK_2_ARN = u'arn:aws:ecs:eu-central-1:123456789012:task-definition/%s:%s' % (TASK_2_FAMILY, TASK_2_REVISION)
 TASK_2_VOLUMES = []
 TASK_2_CONTAINERS = [
     {u'name': u'webserver', u'image': u'webserver:123', u'command': u'run'},
     {u'name': u'application', u'image': u'application:123', u'command': u'run'}
 ]
 
+PAYLOAD_TASK_DEFINITION = {
+    u'taskDefinitionArn': TASK_2_ARN,
+    u'family': TASK_2_FAMILY,
+    u'revision': TASK_2_REVISION,
+    u'volumes': deepcopy(TASK_2_VOLUMES),
+    u'containerDefinitions': deepcopy(TASK_2_CONTAINERS),
+}
 
-@pytest.fixture
-def task_definition_payload():
-    return {
-        u'arn': TASK_2_ARN,
-        u'family': TASK_2_FAMILY,
-        u'revision': TASK_2_REVISION,
-        u'volumes': deepcopy(TASK_2_VOLUMES),
-        u'containerDefinitions': deepcopy(TASK_2_CONTAINERS),
+PAYLOAD_DEPLOYMENTS = [
+    {
+        u'status': u'ACTIVE',
+        u'pendingCount': 0,
+        u'desiredCount': DESIRED_COUNT - 1,
+        u'runningCount': DESIRED_COUNT - 1,
+        u'taskDefinition': TASK_1_ARN,
+        u'createdAt': datetime.datetime(2016, 3, 10, 12, 00, 00, 000000, tzinfo=tzlocal()),
+        u'updatedAt': datetime.datetime(2016, 3, 10, 12, 5, 00, 000000, tzinfo=tzlocal()),
+        u'id': u'ecs-svc/0000000000000000001',
+    },
+    {
+        u'status': u'PRIMARY',
+        u'pendingCount': 0,
+        u'desiredCount': DESIRED_COUNT,
+        u'runningCount': DESIRED_COUNT,
+        u'taskDefinition': TASK_1_ARN,
+        u'createdAt': datetime.datetime(2016, 3, 11, 12, 00, 00, 000000, tzinfo=tzlocal()),
+        u'updatedAt': datetime.datetime(2016, 3, 11, 12, 5, 00, 000000, tzinfo=tzlocal()),
+        u'id': u'ecs-svc/0000000000000000002',
     }
+]
+
+PAYLOAD_SERVICE = {
+    u'serviceName': SERVICE_NAME,
+    u'desiredCount': DESIRED_COUNT,
+    u'taskDefinition': TASK_1_ARN,
+    u'deployments': PAYLOAD_DEPLOYMENTS
+}
+
+PAYLOAD_SERVICE_WITHOUT_DEPLOYMENTS = {
+    u'serviceName': SERVICE_NAME,
+    u'desiredCount': DESIRED_COUNT,
+    u'taskDefinition': TASK_1_ARN,
+    u'deployments': []
+}
 
 
 @pytest.fixture
-def task_definition(task_definition_payload):
-    return EcsTaskDefinition(task_definition_payload)
+def task_definition():
+    return EcsTaskDefinition(PAYLOAD_TASK_DEFINITION)
 
 
 @pytest.fixture
-def deployment_payload():
-    return [
-        {
-            u'status': u'ACTIVE',
-            u'pendingCount': 0,
-            u'desiredCount': DESIRED_COUNT - 1,
-            u'runningCount': DESIRED_COUNT - 1,
-            u'taskDefinition': TASK_1_ARN,
-            u'createdAt': datetime.datetime(2016, 3, 10, 12, 00, 00, 000000, tzinfo=tzlocal()),
-            u'updatedAt': datetime.datetime(2016, 3, 10, 12, 5, 00, 000000, tzinfo=tzlocal()),
-            u'id': u'ecs-svc/0000000000000000001',
-        },
-        {
-            u'status': u'PRIMARY',
-            u'pendingCount': 0,
-            u'desiredCount': DESIRED_COUNT,
-            u'runningCount': DESIRED_COUNT,
-            u'taskDefinition': TASK_1_ARN,
-            u'createdAt': datetime.datetime(2016, 3, 11, 12, 00, 00, 000000, tzinfo=tzlocal()),
-            u'updatedAt': datetime.datetime(2016, 3, 11, 12, 5, 00, 000000, tzinfo=tzlocal()),
-            u'id': u'ecs-svc/0000000000000000002',
-        }
-    ]
+def service():
+    return EcsService(CLUSTER_NAME, PAYLOAD_SERVICE)
 
 
 @pytest.fixture
-def service_payload(deployment_payload):
-    return {
-        'serviceName': SERVICE_NAME,
-        'desiredCount': DESIRED_COUNT,
-        'taskDefinition': TASK_1_ARN,
-        'deployments': deployment_payload
-    }
-
-
-@pytest.fixture
-def service_payload_without_deployments():
-    return {
-        'serviceName': SERVICE_NAME,
-        'desiredCount': DESIRED_COUNT,
-        'taskDefinition': TASK_1_ARN,
-        'deployments': []
-    }
-
-
-@pytest.fixture
-def service(service_payload):
-    return EcsService(CLUSTER_NAME, service_payload)
-
-
-@pytest.fixture
-def service_without_deployments(service_payload_without_deployments):
-    return EcsService(CLUSTER_NAME, service_payload_without_deployments)
+def service_without_deployments():
+    return EcsService(CLUSTER_NAME, PAYLOAD_SERVICE_WITHOUT_DEPLOYMENTS)
 
 
 def test_service_init(service):
     assert isinstance(service, dict)
     assert service.cluster == CLUSTER_NAME
-    assert service['desiredCount'] == DESIRED_COUNT
-    assert service['taskDefinition'] == TASK_1_ARN
+    assert service[u'desiredCount'] == DESIRED_COUNT
+    assert service[u'taskDefinition'] == TASK_1_ARN
 
 
 def test_service_set_desired_count(service):
@@ -149,9 +139,9 @@ def test_task_containers(task_definition):
 
 
 def test_task_container_names(task_definition):
-    assert 'webserver' in task_definition.container_names
-    assert 'application' in task_definition.container_names
-    assert 'foobar' not in task_definition.container_names
+    assert u'webserver' in task_definition.container_names
+    assert u'application' in task_definition.container_names
+    assert u'foobar' not in task_definition.container_names
 
 
 def test_task_volumes(task_definition):
@@ -167,7 +157,7 @@ def test_task_no_diff(task_definition):
 
 
 def test_task_image_diff(task_definition):
-    task_definition.set_images('foobar')
+    task_definition.set_images(u'foobar')
     assert len(task_definition.diff) == 2
 
     for diff in task_definition.diff:
@@ -175,42 +165,42 @@ def test_task_image_diff(task_definition):
 
 
 def test_task_set_tag(task_definition):
-    task_definition.set_images('foobar')
+    task_definition.set_images(u'foobar')
     for container in task_definition.containers:
-        assert container['image'].endswith(':foobar')
+        assert container[u'image'].endswith(u':foobar')
 
 
 def test_task_set_image(task_definition):
-    task_definition.set_images(webserver='new-image:123', application='app-image:latest')
+    task_definition.set_images(webserver=u'new-image:123', application=u'app-image:latest')
     for container in task_definition.containers:
-        if container['name'] == 'webserver':
-            assert container['image'] == 'new-image:123'
-        if container['name'] == 'application':
-            assert container['image'] == 'app-image:latest'
+        if container[u'name'] == u'webserver':
+            assert container[u'image'] == u'new-image:123'
+        if container[u'name'] == u'application':
+            assert container[u'image'] == u'app-image:latest'
 
 
 def test_task_set_image_for_unknown_container(task_definition):
     with pytest.raises(UnknownContainerError):
-        task_definition.set_images(foobar='new-image:123')
+        task_definition.set_images(foobar=u'new-image:123')
 
 
 def test_task_set_command(task_definition):
-    task_definition.set_commands(webserver='run-webserver', application='run-application')
+    task_definition.set_commands(webserver=u'run-webserver', application=u'run-application')
     for container in task_definition.containers:
-        if container['name'] == 'webserver':
-            assert container['command'] == ['run-webserver']
-        if container['name'] == 'application':
-            assert container['command'] == ['run-application']
+        if container[u'name'] == u'webserver':
+            assert container[u'command'] == [u'run-webserver']
+        if container[u'name'] == u'application':
+            assert container[u'command'] == [u'run-application']
 
 
 def test_task_set_command_for_unknown_container(task_definition):
     with pytest.raises(UnknownContainerError):
-        task_definition.set_images(foobar='run-foobar')
+        task_definition.set_images(foobar=u'run-foobar')
 
 
 def test_task_definition_diff():
-    diff = EcsTaskDefinitionDiff('webserver', 'image', 'new', 'old')
-    assert str(diff) == "Changed image of container 'webserver' to: new (was: old)"
+    diff = EcsTaskDefinitionDiff(u'webserver', u'image', u'new', u'old')
+    assert str(diff) == u"Changed image of container 'webserver' to: new (was: old)"
 
 
 @patch.object(Session, 'client')
@@ -218,13 +208,13 @@ def test_task_definition_diff():
 def test_client_init(mocked_init, mocked_client):
     mocked_init.return_value = None
 
-    EcsClient('access_key_id', 'secret_access_key', 'region', 'profile')
+    EcsClient(u'access_key_id', u'secret_access_key', u'region', u'profile')
 
-    mocked_init.assert_called_once_with(aws_access_key_id='access_key_id',
-                                        aws_secret_access_key='secret_access_key',
-                                        profile_name='profile',
-                                        region_name='region')
-    mocked_client.assert_called_once_with('ecs')
+    mocked_init.assert_called_once_with(aws_access_key_id=u'access_key_id',
+                                        aws_secret_access_key=u'secret_access_key',
+                                        profile_name=u'profile',
+                                        region_name=u'region')
+    mocked_client.assert_called_once_with(u'ecs')
 
 
 @pytest.fixture
@@ -232,47 +222,136 @@ def test_client_init(mocked_init, mocked_client):
 @patch.object(Session, '__init__')
 def client(mocked_init, mocked_client):
     mocked_init.return_value = None
-    return EcsClient('access_key_id', 'secret_access_key', 'region', 'profile')
+    return EcsClient(u'access_key_id', u'secret_access_key', u'region', u'profile')
 
 
 def test_client_describe_services(client):
-    client.describe_services('my-cluster', 'my-service')
-    client.boto.describe_services.assert_called_once_with(cluster='my-cluster', services=['my-service'])
+    client.describe_services(u'test-cluster', u'test-service')
+    client.boto.describe_services.assert_called_once_with(cluster=u'test-cluster', services=[u'test-service'])
 
 
 def test_client_describe_task_definition(client):
-    client.describe_task_definition('task_definition_arn')
-    client.boto.describe_task_definition.assert_called_once_with(taskDefinition='task_definition_arn')
+    client.describe_task_definition(u'task_definition_arn')
+    client.boto.describe_task_definition.assert_called_once_with(taskDefinition=u'task_definition_arn')
 
 
 def test_client_list_tasks(client):
-    client.list_tasks('my-cluster', 'my-service')
-    client.boto.list_tasks.assert_called_once_with(cluster='my-cluster', serviceName='my-service')
+    client.list_tasks(u'test-cluster', u'test-service')
+    client.boto.list_tasks.assert_called_once_with(cluster=u'test-cluster', serviceName=u'test-service')
 
 
 def test_client_describe_tasks(client):
-    client.describe_tasks('my-cluster', 'task-arns')
-    client.boto.describe_tasks.assert_called_once_with(cluster='my-cluster', tasks='task-arns')
+    client.describe_tasks(u'test-cluster', u'task-arns')
+    client.boto.describe_tasks.assert_called_once_with(cluster=u'test-cluster', tasks=u'task-arns')
 
 
 def test_client_register_task_definition(client):
-    containers = [{'name': 'foo'}]
-    volumes = [{'foo': 'bar'}]
-    client.register_task_definition('family', containers, volumes)
-    client.boto.register_task_definition.assert_called_once_with(family='family', containerDefinitions=containers,
+    containers = [{u'name': u'foo'}]
+    volumes = [{u'foo': u'bar'}]
+    client.register_task_definition(u'family', containers, volumes)
+    client.boto.register_task_definition.assert_called_once_with(family=u'family', containerDefinitions=containers,
                                                                  volumes=volumes)
 
 
 def test_client_deregister_task_definition(client):
-    client.deregister_task_definition('task_definition_arn')
-    client.boto.deregister_task_definition.assert_called_once_with(taskDefinition='task_definition_arn')
+    client.deregister_task_definition(u'task_definition_arn')
+    client.boto.deregister_task_definition.assert_called_once_with(taskDefinition=u'task_definition_arn')
 
 
 def test_client_update_service(client):
-    client.update_service('my-cluster', 'my-service', 5, 'task-definition')
+    client.update_service(u'test-cluster', u'test-service', 5, u'task-definition')
     client.boto.update_service.assert_called_once_with(
-        cluster='my-cluster',
-        service='my-service',
+        cluster=u'test-cluster',
+        service=u'test-service',
         desiredCount=5,
-        taskDefinition='task-definition'
+        taskDefinition=u'task-definition'
     )
+
+
+def test_ecs_action_init(client):
+    action = EcsAction(client, u'test-cluster', u'test-service')
+    assert action.client == client
+    assert action.cluster_name == u'test-cluster'
+    assert action.service_name == u'test-service'
+    assert isinstance(action.service, EcsService)
+
+
+def test_ecs_action_init_with_invalid_cluster():
+    with pytest.raises(ConnectionError) as excinfo:
+        client = EcsTestClient(u'access_key',  u'secret_key')
+        EcsAction(client, u'invliad-cluster', u'test-service')
+    assert str(excinfo.value) == u'An error occurred (ClusterNotFoundException) when calling the DescribeServices ' \
+                                 u'operation: Cluster not found.'
+
+
+def test_ecs_action_init_with_invalid_service():
+    with pytest.raises(ConnectionError) as excinfo:
+        client = EcsTestClient(u'access_key',  u'secret_key')
+        EcsAction(client, u'test-cluster', u'invalid-service')
+    assert str(excinfo.value) == u'An error occurred when calling the DescribeServices operation: Service not found'
+
+
+def test_ecs_action_init_without_credentials():
+    with pytest.raises(ConnectionError) as excinfo:
+        client = EcsTestClient()
+        EcsAction(client, u'test-cluster', u'invalid-service')
+    assert str(excinfo.value) == u'Unable to locate credentials. Configure credentials by running "aws configure".'
+
+
+def test_ecs_action_get_service():
+    client = EcsTestClient(u'access_key', u'secret_key')
+    action = EcsAction(client, u'test-cluster', u'test-service')
+    service = action.get_service()
+    assert service.name == u'test-service'
+    assert service.cluster == u'test-cluster'
+
+
+def test_ecs_action_get_current_task_definition():
+    test_client = EcsTestClient(u'access_key',  u'secret_key')
+    action = EcsAction(test_client, u'test-cluster', u'test-service')
+    task_definition = action.get_current_task_definition()
+
+    assert isinstance(task_definition, EcsTaskDefinition)
+    assert task_definition.family == u'test-task'
+    assert task_definition.revision == 2
+    assert task_definition.arn == u'arn:aws:ecs:eu-central-1:123456789012:task-definition/test-task:2'
+
+
+class EcsTestClient(object):
+    def __init__(self, access_key_id=None, secret_access_key=None, region=None, profile=None):
+        super(EcsTestClient, self).__init__()
+        self.access_key_id = access_key_id
+        self.secret_access_key = secret_access_key
+        self.region = region
+        self.profile = profile
+
+    def describe_services(self, cluster_name, service_name):
+        if not self.access_key_id or not self.secret_access_key:
+            raise NoCredentialsError()
+        if cluster_name != u'test-cluster':
+            error_response = {u'Error': {u'Code': u'ClusterNotFoundException', u'Message': u'Cluster not found.'}}
+            raise ClientError(error_response, u'DescribeServices')
+        if service_name != u'test-service':
+            return {u'services': []}
+        return {
+            u"services": [PAYLOAD_SERVICE],
+            u"failures": []
+        }
+
+    def describe_task_definition(self, task_definition_arn):
+        return {u"taskDefinition": PAYLOAD_TASK_DEFINITION}
+
+    def list_tasks(self, cluster_name, service_name):
+        return {}
+
+    def describe_tasks(self, cluster_name, task_arns):
+        return {}
+
+    def register_task_definition(self, family, containers, volumes):
+        return {}
+
+    def deregister_task_definition(self, task_definition_arn):
+        return {}
+
+    def update_service(self, cluster, service, desired_count, task_definition):
+        return {}

@@ -5,12 +5,12 @@ from botocore.exceptions import ClientError, NoCredentialsError
 
 
 class EcsClient(object):
-    def __init__(self, access_key_id, secret_access_key, region, profile):
+    def __init__(self, access_key_id=None, secret_access_key=None, region=None, profile=None):
         session = boto3.session.Session(aws_access_key_id=access_key_id,
                                         aws_secret_access_key=secret_access_key,
                                         region_name=region,
                                         profile_name=profile)
-        self.boto = session.client('ecs')
+        self.boto = session.client(u'ecs')
 
     def describe_services(self, cluster_name, service_name):
         return self.boto.describe_services(cluster=cluster_name, services=[service_name])
@@ -45,10 +45,10 @@ class EcsService(dict):
         super(EcsService, self).__init__(iterable, **kwargs)
 
     def set_desired_count(self, desired_count):
-        self['desiredCount'] = desired_count
+        self[u'desiredCount'] = desired_count
 
     def set_task_definition(self, task_definition):
-        self['taskDefinition'] = task_definition.arn
+        self[u'taskDefinition'] = task_definition.arn
 
     @property
     def cluster(self):
@@ -68,14 +68,14 @@ class EcsService(dict):
 
     @property
     def deployment_created_at(self):
-        for deployment in self.get('deployments'):
+        for deployment in self.get(u'deployments'):
             if deployment.get(u'status') == u'PRIMARY':
                 return deployment.get(u'createdAt')
         return datetime.now()
 
     @property
     def deployment_updated_at(self):
-        for deployment in self.get('deployments'):
+        for deployment in self.get(u'deployments'):
             if deployment.get(u'status') == u'PRIMARY':
                 return deployment.get(u'updatedAt')
         return datetime.now()
@@ -88,28 +88,28 @@ class EcsTaskDefinition(dict):
 
     @property
     def containers(self):
-        return self.get('containerDefinitions')
+        return self.get(u'containerDefinitions')
 
     @property
     def container_names(self):
-        for container in self.get('containerDefinitions'):
-            yield container['name']
+        for container in self.get(u'containerDefinitions'):
+            yield container[u'name']
 
     @property
     def volumes(self):
-        return self.get('volumes')
+        return self.get(u'volumes')
 
     @property
     def arn(self):
-        return self.get('taskDefinitionArn')
+        return self.get(u'taskDefinitionArn')
 
     @property
     def family(self):
-        return self.get('family')
+        return self.get(u'family')
 
     @property
     def revision(self):
-        return self.get('revision')
+        return self.get(u'revision')
 
     @property
     def diff(self):
@@ -118,31 +118,31 @@ class EcsTaskDefinition(dict):
     def set_images(self, tag=None, **images):
         self.validate_image_options(**images)
         for container in self.containers:
-            if container['name'] in images:
-                new_image = images[container['name']]
-                diff = EcsTaskDefinitionDiff(container['name'], 'image', new_image, container['image'])
+            if container[u'name'] in images:
+                new_image = images[container[u'name']]
+                diff = EcsTaskDefinitionDiff(container[u'name'], u'image', new_image, container[u'image'])
                 self._diff.append(diff)
-                container['image'] = new_image
+                container[u'image'] = new_image
             elif tag:
-                image_definition = container['image'].rsplit(':', 1)
-                new_image = '%s:%s' % (image_definition[0], tag)
-                diff = EcsTaskDefinitionDiff(container['name'], 'image', new_image, container['image'])
+                image_definition = container[u'image'].rsplit(u':', 1)
+                new_image = u'%s:%s' % (image_definition[0], tag)
+                diff = EcsTaskDefinitionDiff(container[u'name'], u'image', new_image, container[u'image'])
                 self._diff.append(diff)
-                container['image'] = new_image
+                container[u'image'] = new_image
 
     def set_commands(self, **commands):
         self.validate_image_options(**commands)
         for container in self.containers:
-            if container['name'] in commands:
-                new_command = commands[container['name']]
-                diff = EcsTaskDefinitionDiff(container['name'], 'command', new_command, container.get('command'))
+            if container[u'name'] in commands:
+                new_command = commands[container[u'name']]
+                diff = EcsTaskDefinitionDiff(container[u'name'], u'command', new_command, container.get(u'command'))
                 self._diff.append(diff)
-                container['command'] = [new_command]
+                container[u'command'] = [new_command]
 
     def validate_image_options(self, **container_options):
         for container_name in container_options:
             if container_name not in self.container_names:
-                raise UnknownContainerError('Unknown container: %s' % container_name)
+                raise UnknownContainerError(u'Unknown container: %s' % container_name)
 
 
 class EcsTaskDefinitionDiff(object):
@@ -153,58 +153,75 @@ class EcsTaskDefinitionDiff(object):
         self.old_value = old_value
 
     def __repr__(self):
-        return "Changed %s of container '%s' to: %s (was: %s)" % \
+        return u"Changed %s of container '%s' to: %s (was: %s)" % \
                (self.field, self.container, self.value, self.old_value)
 
 
 class EcsAction(object):
-    def __init__(self, cluster, service, access_key_id, secret_access_key, region, profile):
-        self._client = EcsClient(access_key_id, secret_access_key, region, profile)
+    def __init__(self, client, cluster, service):
+        self._client = client
         self._cluster_name = cluster
         self._service_name = service
 
         try:
             self._service = self.get_service()
         except IndexError:
-            raise ConnectionError('An error occurred when calling the DescribeServices operation: Service not found')
+            raise ConnectionError(u'An error occurred when calling the DescribeServices operation: Service not found')
         except ClientError as e:
-            raise ConnectionError(e.message)
+            raise ConnectionError(str(e))
         except NoCredentialsError:
-            raise ConnectionError('Unable to locate credentials. Configure credentials by running "aws configure".')
+            raise ConnectionError(u'Unable to locate credentials. Configure credentials by running "aws configure".')
 
     def get_service(self):
         services_definition = self._client.describe_services(self._cluster_name, self._service_name)
-        return EcsService(self._cluster_name, services_definition['services'][0])
+        return EcsService(self._cluster_name, services_definition[u'services'][0])
 
     def get_current_task_definition(self):
         task_definition = self._client.describe_task_definition(self._service.task_definition)
-        task_definition = EcsTaskDefinition(task_definition['taskDefinition'])
+        task_definition = EcsTaskDefinition(task_definition[u'taskDefinition'])
         return task_definition
 
     def update_task_definition(self, task_definition):
         response = self._client.register_task_definition(task_definition.family, task_definition.containers,
                                                          task_definition.volumes)
-        new_task_definition = EcsTaskDefinition(response['taskDefinition'])
+        new_task_definition = EcsTaskDefinition(response[u'taskDefinition'])
         self._client.deregister_task_definition(task_definition.arn)
         return new_task_definition
 
     def update_service(self, service):
-        response = self._client.update_service(service.cluster, service.name, service.desired_count, service.task_definition)
-        return EcsService(self._cluster_name, response['service'])
+        response = self._client.update_service(service.cluster, service.name, service.desired_count,
+                                               service.task_definition)
+        return EcsService(self._cluster_name, response[u'service'])
 
     def is_deployed(self):
         running_tasks = self._client.list_tasks(self._cluster_name, self._service_name)
-        if not running_tasks['taskArns']:
+        if not running_tasks[u'taskArns']:
             return self._service.desired_count == 0
-        return self._service.desired_count == self.get_running_tasks_count(running_tasks['taskArns'])
+        return self._service.desired_count == self.get_running_tasks_count(running_tasks[u'taskArns'])
 
     def get_running_tasks_count(self, task_arns):
         running_count = 0
         tasks_details = self._client.describe_tasks(self._cluster_name, task_arns)
-        for task in tasks_details['tasks']:
-            if task['taskDefinitionArn'] == self._service.task_definition and task['lastStatus'] == 'RUNNING':
+        for task in tasks_details[u'tasks']:
+            if task[u'taskDefinitionArn'] == self._service.task_definition and task[u'lastStatus'] == u'RUNNING':
                 running_count += 1
         return running_count
+
+    @property
+    def client(self):
+        return self._client
+
+    @property
+    def service(self):
+        return self._service
+
+    @property
+    def cluster_name(self):
+        return self._cluster_name
+
+    @property
+    def service_name(self):
+        return self._service_name
 
 
 class DeployAction(EcsAction):
