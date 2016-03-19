@@ -92,7 +92,8 @@ class EcsService(dict):
     def older_errors(self):
         errors = {}
         for event in self.get('events'):
-            if u'unable' in event[u'message'] and event[u'createdAt'] >= self.deployment_created_at:
+            if u'unable' in event[u'message'] and \
+                                    self.deployment_created_at <= event[u'createdAt'] <= self.deployment_updated_at:
                 errors[event[u'createdAt'].isoformat()] = 'ERROR: %s' % event[u'message']
         return errors
 

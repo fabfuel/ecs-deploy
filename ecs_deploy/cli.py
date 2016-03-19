@@ -9,7 +9,7 @@ from ecs_deploy.ecs import DeployAction, ScaleAction, EcsClient
 
 @click.group()
 def ecs():
-    return True
+    pass
 
 
 def get_client(access_key_id, secret_access_key, region, profile):
@@ -63,6 +63,7 @@ def deploy(cluster, service, tag, image, command, access_key_id, secret_access_k
         click.secho('%s\n' % str(e), fg='red', err=True)
         exit(1)
 
+
 @click.command()
 @click.argument('cluster')
 @click.argument('service')
@@ -98,20 +99,14 @@ def wait_for_finish(action, timeout, title, success_message, failure_message):
     click.secho(title, nl=False)
     waiting = True
     waiting_timeout = datetime.now() + timedelta(seconds=timeout)
-    service = action.get_service()
     while waiting and datetime.now() < waiting_timeout:
-        if action.is_deployed(service) or service.errors:
-            waiting = False
-        else:
-            sleep(2)
-            service = action.get_service()
-            click.secho('.', nl=False)
+        sleep(1)
+        click.secho('.', nl=False)
+        service = action.get_service()
+        waiting = not action.is_deployed(service) and not service.errors
 
-    if waiting:
-        print_errors(service.older_errors, '%s (timeout)!' % failure_message)
-        exit(1)
-    elif service.errors:
-        print_errors(service.errors, failure_message)
+    if waiting or service.errors:
+        print_errors(service, waiting, failure_message)
         exit(1)
 
     click.secho('\n%s\n' % success_message, fg='green')
@@ -126,13 +121,20 @@ def print_diff(task_definition):
         click.secho('')
 
 
-def print_errors(errors, title=''):
-    click.secho('\n%s\n' % title, fg='red', err=True)
-    if errors:
-        for timestamp in errors:
-            click.secho('%s\n' % errors[timestamp], fg='red', err=True)
-        return True
-    return False
+def print_errors(service, was_timeout=False, message=''):
+    if was_timeout:
+        click.secho('\n%s (timeout)\n' % message, fg='red', err=True)
+    else:
+        click.secho('\n%s\n' % message, fg='red', err=True)
+
+    for timestamp in service.errors:
+        click.secho('%s\n%s\n' % (timestamp, service.errors[timestamp]), fg='red', err=True)
+
+    if service.older_errors:
+        click.secho('Older errors', fg='yellow', err=True)
+        for timestamp in service.older_errors:
+            click.secho('%s\n%s\n' % (timestamp, service.older_errors[timestamp]), fg='yellow', err=True)
+
 
 ecs.add_command(deploy)
 ecs.add_command(scale)

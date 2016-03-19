@@ -249,7 +249,7 @@ def test_service_errors(service_with_errors):
 
 
 def test_service_older_errors(service_with_errors):
-    assert len(service_with_errors.older_errors) == 2
+    assert len(service_with_errors.older_errors) == 1
 
 
 def test_task_family(task_definition):
