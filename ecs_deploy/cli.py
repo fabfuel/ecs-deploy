@@ -4,12 +4,16 @@ from time import sleep
 import click
 from datetime import datetime, timedelta
 
-from ecs_deploy.ecs import DeployAction, ConnectionError, ScaleAction, EcsClient
+from ecs_deploy.ecs import DeployAction, ScaleAction, EcsClient
 
 
 @click.group()
-def main():
-    return
+def ecs():
+    return True
+
+
+def get_client(access_key_id, secret_access_key, region, profile):
+    return EcsClient(access_key_id, secret_access_key, region, profile)
 
 
 @click.command()
@@ -36,7 +40,7 @@ def deploy(cluster, service, tag, image, command, access_key_id, secret_access_k
     """
 
     try:
-        client = EcsClient(access_key_id, secret_access_key, region, profile)
+        client = get_client(access_key_id, secret_access_key, region, profile)
         deployment = DeployAction(client, cluster, service)
         task_definition = deployment.get_current_task_definition(deployment.service)
 
@@ -53,11 +57,11 @@ def deploy(cluster, service, tag, image, command, access_key_id, secret_access_k
         click.secho('Successfully changed task definition to: %s:%s\n' %
                     (new_task_definition.family, new_task_definition.revision), fg='green')
 
-        wait_for_finish(deployment, timeout, 'Deploying new task definition', 'Deployment successful!')
+        wait_for_finish(deployment, timeout, 'Deploying task definition', 'Deployment successful', 'Deployment failed')
 
     except Exception as e:
         click.secho('%s\n' % str(e), fg='red', err=True)
-
+        exit(1)
 
 @click.command()
 @click.argument('cluster')
@@ -78,38 +82,39 @@ def scale(cluster, service, desired_count, access_key_id, secret_access_key, reg
     DESIRED_COUNT is the number of tasks your service should run.
     """
     try:
-        client = EcsClient(access_key_id, secret_access_key, region, profile)
+        client = get_client(access_key_id, secret_access_key, region, profile)
         scaling = ScaleAction(client, cluster, service)
         click.secho('Updating service')
         scaling.scale(desired_count)
         click.secho('Successfully changed desired count to: %s\n' % desired_count, fg='green')
-        wait_for_finish(scaling, timeout, 'Scaling service', 'Scaling successful!')
+        wait_for_finish(scaling, timeout, 'Scaling service', 'Scaling successful', 'Scaling failed')
 
     except Exception as e:
         click.secho('%s\n' % str(e), fg='red', err=True)
-
-
-def wait_for_finish(action, timeout, title, success_message):
-    click.secho(title, nl=False)
-    waiting = True
-    check_timeout = datetime.now() + timedelta(seconds=timeout)
-    service = action.get_service()
-    while waiting and datetime.now() < check_timeout:
-        if action.is_deployed(service):
-            click.secho('\n%s\n' % success_message, fg='green')
-            waiting = False
-        elif print_errors(service.errors):
-            exit(1)
-        else:
-            service = action.get_service()
-            click.secho('.', nl=False)
-            sleep(2)
-
-    if waiting:
-        click.secho('\nScaling failed (timeout)!', fg='red', err=True)
-        print_errors(service.older_errors, 'Older errors')
         exit(1)
 
+
+def wait_for_finish(action, timeout, title, success_message, failure_message):
+    click.secho(title, nl=False)
+    waiting = True
+    waiting_timeout = datetime.now() + timedelta(seconds=timeout)
+    service = action.get_service()
+    while waiting and datetime.now() < waiting_timeout:
+        if action.is_deployed(service) or service.errors:
+            waiting = False
+        else:
+            sleep(2)
+            service = action.get_service()
+            click.secho('.', nl=False)
+
+    if waiting:
+        print_errors(service.older_errors, '%s (timeout)!' % failure_message)
+        exit(1)
+    elif service.errors:
+        print_errors(service.errors, failure_message)
+        exit(1)
+
+    click.secho('\n%s\n' % success_message, fg='green')
     exit(0)
 
 
@@ -122,15 +127,15 @@ def print_diff(task_definition):
 
 
 def print_errors(errors, title=''):
+    click.secho('\n%s\n' % title, fg='red', err=True)
     if errors:
-        click.secho('\n%s' % title)
         for timestamp in errors:
             click.secho('%s\n' % errors[timestamp], fg='red', err=True)
         return True
     return False
 
-main.add_command(deploy)
-main.add_command(scale)
+ecs.add_command(deploy)
+ecs.add_command(scale)
 
 if __name__ == '__main__':
-    main()
+    ecs()

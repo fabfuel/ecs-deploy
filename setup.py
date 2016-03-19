@@ -22,7 +22,7 @@ setup(
     install_requires=dependencies,
     entry_points={
         'console_scripts': [
-            'ecs = ecs_deploy.cli:main',
+            'ecs = ecs_deploy.cli:ecs',
         ],
     },
     tests_require=[

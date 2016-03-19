@@ -141,7 +141,7 @@ class EcsTaskDefinition(dict):
                 container[u'image'] = new_image
             elif tag:
                 image_definition = container[u'image'].rsplit(u':', 1)
-                new_image = u'%s:%s' % (image_definition[0], tag)
+                new_image = u'%s:%s' % (image_definition[0], tag.strip())
                 diff = EcsTaskDefinitionDiff(container[u'name'], u'image', new_image, container[u'image'])
                 self._diff.append(diff)
                 container[u'image'] = new_image
@@ -182,7 +182,7 @@ class EcsAction(object):
         try:
             self._service = self.get_service()
         except IndexError:
-            raise ConnectionError(u'An error occurred when calling the DescribeServices operation: Service not found')
+            raise ConnectionError(u'An error occurred when calling the DescribeServices operation: Service not found.')
         except ClientError as e:
             raise ConnectionError(str(e))
         except NoCredentialsError:

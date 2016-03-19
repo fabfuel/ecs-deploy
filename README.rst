@@ -1,14 +1,28 @@
 ECS Deploy
 ----------
 
-.. image:: https://travis-ci.org/fabfuel/ecs-deploy.svg?branch=master
+.. image:: https://travis-ci.org/fabfuel/ecs-deploy.svg?branch=develop
     :target: https://travis-ci.org/fabfuel/ecs-deploy
-    
+
+.. image:: https://scrutinizer-ci.com/g/fabfuel/ecs-deploy/badges/coverage.png?b=develop
+    :target: https://scrutinizer-ci.com/g/fabfuel/ecs-deploy
+
+.. image:: https://scrutinizer-ci.com/g/fabfuel/ecs-deploy/badges/quality-score.png?b=develop
+    :target: https://scrutinizer-ci.com/g/fabfuel/ecs-deploy
+
+
 Redeploying a service in Amazon ECS causes some effort, even if you just want to pull the most recent image versions.
 You have to create a new revision of the task definition and update the service to use the newly created revision. 
 
 This project simplyfies deployments on Amazon ECS by providing a convinience CLI tool for actions, which are executed
 pretty often.
+
+TL;DR
+-----
+Redeploy or scale a service in Amazon ECS as simple as this::
+
+    $ ecs deploy my-cluster my-service --tag latest
+    $ ecs scale my-cluster my-service 4
 
 
 Installation

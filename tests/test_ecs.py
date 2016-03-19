@@ -1,4 +1,5 @@
 from copy import deepcopy
+from datetime import timedelta
 
 import pytest
 import datetime
@@ -119,6 +120,14 @@ PAYLOAD_SERVICE = {
     u'desiredCount': DESIRED_COUNT,
     u'taskDefinition': TASK_DEFINITION_ARN_1,
     u'deployments': PAYLOAD_DEPLOYMENTS,
+    u'events': []
+}
+
+PAYLOAD_SERVICE_WITH_ERRORS = {
+    u'serviceName': SERVICE_NAME,
+    u'desiredCount': DESIRED_COUNT,
+    u'taskDefinition': TASK_DEFINITION_ARN_1,
+    u'deployments': PAYLOAD_DEPLOYMENTS,
     u'events': PAYLOAD_EVENTS
 }
 
@@ -126,11 +135,16 @@ PAYLOAD_SERVICE_WITHOUT_DEPLOYMENTS = {
     u'serviceName': SERVICE_NAME,
     u'desiredCount': DESIRED_COUNT,
     u'taskDefinition': TASK_DEFINITION_ARN_1,
-    u'deployments': []
+    u'deployments': [],
+    u'events': []
 }
 
 RESPONSE_SERVICE = {
     u"service": PAYLOAD_SERVICE
+}
+
+RESPONSE_SERVICE_WITH_ERRORS = {
+    u"service": PAYLOAD_SERVICE_WITH_ERRORS
 }
 
 RESPONSE_DESCRIBE_SERVICES = {
@@ -139,6 +153,10 @@ RESPONSE_DESCRIBE_SERVICES = {
 
 RESPONSE_TASK_DEFINITION = {
     u"taskDefinition": PAYLOAD_TASK_DEFINITION_1
+}
+
+RESPONSE_TASK_DEFINITION_2 = {
+    u"taskDefinition": PAYLOAD_TASK_DEFINITION_2
 }
 
 RESPONSE_LIST_TASKS_2 = {
@@ -158,24 +176,29 @@ RESPONSE_DESCRIBE_TASKS = {
 }
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def task_definition():
-    return EcsTaskDefinition(PAYLOAD_TASK_DEFINITION_1)
+    return EcsTaskDefinition(deepcopy(PAYLOAD_TASK_DEFINITION_1))
 
 
 @pytest.fixture
 def task_definition_revision_2():
-    return EcsTaskDefinition(PAYLOAD_TASK_DEFINITION_2)
+    return EcsTaskDefinition(deepcopy(PAYLOAD_TASK_DEFINITION_2))
 
 
 @pytest.fixture
 def service():
-    return EcsService(CLUSTER_NAME, PAYLOAD_SERVICE)
+    return EcsService(CLUSTER_NAME, deepcopy(PAYLOAD_SERVICE))
+
+
+@pytest.fixture
+def service_with_errors():
+    return EcsService(CLUSTER_NAME, deepcopy(PAYLOAD_SERVICE_WITH_ERRORS))
 
 
 @pytest.fixture
 def service_without_deployments():
-    return EcsService(CLUSTER_NAME, PAYLOAD_SERVICE_WITHOUT_DEPLOYMENTS)
+    return EcsService(CLUSTER_NAME, deepcopy(PAYLOAD_SERVICE_WITHOUT_DEPLOYMENTS))
 
 
 def test_service_init(service):
@@ -221,12 +244,12 @@ def test_service_deployment_updated_at_without_deployments(service_without_deplo
     assert service_without_deployments.deployment_updated_at <= datetime.datetime.now()
 
 
-def test_service_errors(service):
-    assert len(service.errors) == 1
+def test_service_errors(service_with_errors):
+    assert len(service_with_errors.errors) == 1
 
 
-def test_service_older_errors(service):
-    assert len(service.older_errors) == 2
+def test_service_older_errors(service_with_errors):
+    assert len(service_with_errors.older_errors) == 2
 
 
 def test_task_family(task_definition):
@@ -387,7 +410,7 @@ def test_ecs_action_init_with_invalid_service():
     with pytest.raises(ConnectionError) as excinfo:
         client = EcsTestClient(u'access_key',  u'secret_key')
         EcsAction(client, u'test-cluster', u'invalid-service')
-    assert str(excinfo.value) == u'An error occurred when calling the DescribeServices operation: Service not found'
+    assert str(excinfo.value) == u'An error occurred when calling the DescribeServices operation: Service not found.'
 
 
 def test_ecs_action_init_without_credentials():
@@ -518,12 +541,14 @@ def test_scale_action(client):
 
 
 class EcsTestClient(object):
-    def __init__(self, access_key_id=None, secret_access_key=None, region=None, profile=None):
+    def __init__(self, access_key_id=None, secret_access_key=None, region=None, profile=None, errors=False, wait=0):
         super(EcsTestClient, self).__init__()
         self.access_key_id = access_key_id
         self.secret_access_key = secret_access_key
         self.region = region
         self.profile = profile
+        self.errors = errors
+        self.wait_until = datetime.datetime.now() + timedelta(seconds=wait)
 
     def describe_services(self, cluster_name, service_name):
         if not self.access_key_id or not self.secret_access_key:
@@ -533,7 +558,34 @@ class EcsTestClient(object):
             raise ClientError(error_response, u'DescribeServices')
         if service_name != u'test-service':
             return {u'services': []}
+        if self.errors:
+            return {
+                u"services": [PAYLOAD_SERVICE_WITH_ERRORS],
+                u"failures": []
+            }
         return {
             u"services": [PAYLOAD_SERVICE],
             u"failures": []
         }
+
+    def describe_task_definition(self, task_definition_arn):
+        return deepcopy(RESPONSE_TASK_DEFINITION)
+
+    def list_tasks(self, cluster_name, service_name):
+        if self.wait_until <= datetime.datetime.now():
+            return deepcopy(RESPONSE_LIST_TASKS_2)
+        return deepcopy(RESPONSE_LIST_TASKS_0)
+
+    def describe_tasks(self, cluster_name, task_arns):
+        return deepcopy(RESPONSE_DESCRIBE_TASKS)
+
+    def register_task_definition(self, family, containers, volumes):
+        return deepcopy(RESPONSE_TASK_DEFINITION_2)
+
+    def deregister_task_definition(self, task_definition_arn):
+        return deepcopy(RESPONSE_TASK_DEFINITION)
+
+    def update_service(self, cluster, service, desired_count, task_definition):
+        if self.errors:
+            return deepcopy(RESPONSE_SERVICE_WITH_ERRORS)
+        return deepcopy(RESPONSE_SERVICE)
