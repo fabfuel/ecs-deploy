@@ -158,10 +158,10 @@ class EcsTaskDefinitionDiff(object):
 
 
 class EcsAction(object):
-    def __init__(self, client, cluster, service):
+    def __init__(self, client, cluster_name, service_name):
         self._client = client
-        self._cluster_name = cluster
-        self._service_name = service
+        self._cluster_name = cluster_name
+        self._service_name = service_name
 
         try:
             self._service = self.get_service()
@@ -176,9 +176,9 @@ class EcsAction(object):
         services_definition = self._client.describe_services(self._cluster_name, self._service_name)
         return EcsService(self._cluster_name, services_definition[u'services'][0])
 
-    def get_current_task_definition(self):
-        task_definition = self._client.describe_task_definition(self._service.task_definition)
-        task_definition = EcsTaskDefinition(task_definition[u'taskDefinition'])
+    def get_current_task_definition(self, service):
+        task_definition_payload = self._client.describe_task_definition(service.task_definition)
+        task_definition = EcsTaskDefinition(task_definition_payload[u'taskDefinition'])
         return task_definition
 
     def update_task_definition(self, task_definition):
@@ -193,17 +193,17 @@ class EcsAction(object):
                                                service.task_definition)
         return EcsService(self._cluster_name, response[u'service'])
 
-    def is_deployed(self):
-        running_tasks = self._client.list_tasks(self._cluster_name, self._service_name)
+    def is_deployed(self, service):
+        running_tasks = self._client.list_tasks(service.cluster, service.name)
         if not running_tasks[u'taskArns']:
-            return self._service.desired_count == 0
-        return self._service.desired_count == self.get_running_tasks_count(running_tasks[u'taskArns'])
+            return service.desired_count == 0
+        return service.desired_count == self.get_running_tasks_count(service, running_tasks[u'taskArns'])
 
-    def get_running_tasks_count(self, task_arns):
+    def get_running_tasks_count(self, service, task_arns):
         running_count = 0
         tasks_details = self._client.describe_tasks(self._cluster_name, task_arns)
         for task in tasks_details[u'tasks']:
-            if task[u'taskDefinitionArn'] == self._service.task_definition and task[u'lastStatus'] == u'RUNNING':
+            if task[u'taskDefinitionArn'] == service.task_definition and task[u'lastStatus'] == u'RUNNING':
                 running_count += 1
         return running_count
 

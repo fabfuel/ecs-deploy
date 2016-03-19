@@ -9,7 +9,7 @@ from ecs_deploy.ecs import DeployAction, ConnectionError, ScaleAction, EcsClient
 
 @click.group()
 def main():
-    pass
+    return
 
 
 @click.command()
@@ -37,8 +37,8 @@ def deploy(cluster, service, tag, image, command, access_key_id, secret_access_k
 
     try:
         client = EcsClient(access_key_id, secret_access_key, region, profile)
-        action = DeployAction(client, cluster, service)
-        task_definition = action.get_current_task_definition()
+        deployment = DeployAction(client, cluster, service)
+        task_definition = deployment.get_current_task_definition(deployment.service)
 
         images = {key: value for (key, value) in image}
         task_definition.set_images(tag, **images)
@@ -50,25 +50,25 @@ def deploy(cluster, service, tag, image, command, access_key_id, secret_access_k
         for diff in task_definition.diff:
             click.secho(str(diff), fg='blue')
 
-        new_task_definition = action.update_task_definition(task_definition)
+        new_task_definition = deployment.update_task_definition(task_definition)
         click.secho('Successfully created revision: %d' % new_task_definition.revision, fg='green')
         click.secho('Successfully deregistered revision: %d' % task_definition.revision, fg='green')
         click.secho('')
 
         click.secho('Deploying new task definition', nl=False)
-        action.deploy(new_task_definition)
+        deployment.deploy(new_task_definition)
 
         waiting = True
         old_errors = {}
         check_timeout = datetime.now() + timedelta(seconds=timeout)
         while waiting and datetime.now() < check_timeout:
-            if action.is_deployed():
+            service = deployment.get_service()
+            if deployment.is_deployed(service):
                 click.secho('')
                 click.secho('Deployment successful!', fg='green')
                 click.secho('')
                 waiting = False
             else:
-                service = action.get_service()
                 for event in service.get('events'):
                     if u'unable' in event.get(u'message') and event.get(u'createdAt') >= service.deployment_updated_at:
                         click.secho('')
@@ -103,7 +103,7 @@ def deploy(cluster, service, tag, image, command, access_key_id, secret_access_k
 @click.option('--access-key-id', help='AWS access key id')
 @click.option('--secret-access-key', help='AWS secret access yey')
 @click.option('--profile', help='AWS configuration profile')
-@click.option('--timeout', default=60, type=int, help='AWS configuration profile')
+@click.option('--timeout', default=300, type=int, help='AWS configuration profile')
 def scale(cluster, service, desired_count, access_key_id, secret_access_key, region, profile, timeout):
     """
     Scale a service up or down.
@@ -116,10 +116,10 @@ def scale(cluster, service, desired_count, access_key_id, secret_access_key, reg
     """
     try:
         client = EcsClient(access_key_id, secret_access_key, region, profile)
-        action = ScaleAction(client, cluster, service)
+        scaling = ScaleAction(client, cluster, service)
 
         click.secho('Updating service')
-        action.scale(desired_count)
+        scaling.scale(desired_count)
         click.secho('Successfully changed desired count to: %s' % desired_count, fg='green')
         click.secho('')
 
@@ -129,13 +129,13 @@ def scale(cluster, service, desired_count, access_key_id, secret_access_key, reg
         old_errors = {}
         check_timeout = datetime.now() + timedelta(seconds=timeout)
         while waiting and datetime.now() < check_timeout:
-            if action.is_deployed():
+            service = scaling.get_service()
+            if scaling.is_deployed(service):
                 click.secho('')
                 click.secho('Scaling successful!', fg='green')
                 click.secho('')
                 waiting = False
             else:
-                service = action.get_service()
                 for event in service.get('events'):
                     if u'unable' in event.get(u'message') and event.get(u'createdAt') >= service.deployment_updated_at:
                         click.secho('')
