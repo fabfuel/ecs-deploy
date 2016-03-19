@@ -101,11 +101,25 @@ PAYLOAD_DEPLOYMENTS = [
     }
 ]
 
+PAYLOAD_EVENTS = [
+    {
+        u'id': u'error',
+        u'createdAt': datetime.datetime(2016, 3, 11, 12, 5, 5, 000000, tzinfo=tzlocal()),
+        u'message': u'Service was unable to Lorem Ipsum'
+    },
+    {
+        u'id': u'older_error',
+        u'createdAt': datetime.datetime(2016, 3, 11, 12, 00, 5, 000000, tzinfo=tzlocal()),
+        u'message': u'Service was unable to Lorem Ipsum'
+    }
+]
+
 PAYLOAD_SERVICE = {
     u'serviceName': SERVICE_NAME,
     u'desiredCount': DESIRED_COUNT,
     u'taskDefinition': TASK_DEFINITION_ARN_1,
-    u'deployments': PAYLOAD_DEPLOYMENTS
+    u'deployments': PAYLOAD_DEPLOYMENTS,
+    u'events': PAYLOAD_EVENTS
 }
 
 PAYLOAD_SERVICE_WITHOUT_DEPLOYMENTS = {
@@ -205,6 +219,14 @@ def test_service_deployment_updated_at_without_deployments(service_without_deplo
     now = datetime.datetime.now()
     assert service_without_deployments.deployment_updated_at >= now
     assert service_without_deployments.deployment_updated_at <= datetime.datetime.now()
+
+
+def test_service_errors(service):
+    assert len(service.errors) == 1
+
+
+def test_service_older_errors(service):
+    assert len(service.older_errors) == 2
 
 
 def test_task_family(task_definition):

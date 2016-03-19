@@ -80,6 +80,22 @@ class EcsService(dict):
                 return deployment.get(u'updatedAt')
         return datetime.now()
 
+    @property
+    def errors(self):
+        errors = {}
+        for event in self.get('events'):
+            if u'unable' in event[u'message'] and event[u'createdAt'] >= self.deployment_updated_at:
+                errors[event[u'createdAt'].isoformat()] = 'ERROR: %s' % event[u'message']
+        return errors
+
+    @property
+    def older_errors(self):
+        errors = {}
+        for event in self.get('events'):
+            if u'unable' in event[u'message'] and event[u'createdAt'] >= self.deployment_created_at:
+                errors[event[u'createdAt'].isoformat()] = 'ERROR: %s' % event[u'message']
+        return errors
+
 
 class EcsTaskDefinition(dict):
     def __init__(self, iterable=None, **kwargs):
