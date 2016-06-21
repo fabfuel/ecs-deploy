@@ -8,7 +8,7 @@ from ecs_deploy.ecs import DeployAction, ScaleAction, EcsClient
 
 
 @click.group()
-def ecs():
+def ecs(): # pragma: no cover
     pass
 
 
@@ -139,5 +139,5 @@ def print_errors(service, was_timeout=False, message=''):
 ecs.add_command(deploy)
 ecs.add_command(scale)
 
-if __name__ == '__main__':
+if __name__ == '__main__':  # pragma: no cover
     ecs()

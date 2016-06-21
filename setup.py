@@ -3,7 +3,7 @@ Simplify AWS ECS deployments
 """
 from setuptools import find_packages, setup
 
-dependencies = ['click', 'botocore', 'boto3', 'future']
+dependencies = ['click', 'botocore', 'boto3', 'future', 'requests']
 
 setup(
     name='ecs-deploy',
