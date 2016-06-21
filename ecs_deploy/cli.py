@@ -2,9 +2,11 @@ from __future__ import print_function, absolute_import
 from time import sleep
 
 import click
+import getpass
 from datetime import datetime, timedelta
 
 from ecs_deploy.ecs import DeployAction, ScaleAction, EcsClient
+from ecs_deploy.newrelic import Deployment
 
 
 @click.group()
@@ -27,7 +29,12 @@ def get_client(access_key_id, secret_access_key, region, profile):
 @click.option('--secret-access-key', required=False, help='AWS secret access yey')
 @click.option('--profile', required=False, help='AWS configuration profile')
 @click.option('--timeout', required=False, default=300, type=int, help='AWS configuration profile')
-def deploy(cluster, service, tag, image, command, access_key_id, secret_access_key, region, profile, timeout):
+@click.option('--newrelic-apikey', required=False, help='New Relic API Key for recording the deployment')
+@click.option('--newrelic-appid', required=False, help='New Relic App ID for recording the deployment')
+@click.option('--comment', required=False, help='Description/comment for recording the deployment')
+@click.option('--user', required=False, help='User who executes the deployment (used for recording)')
+def deploy(cluster, service, tag, image, command, access_key_id, secret_access_key, region, profile, timeout,
+           newrelic_apikey, newrelic_appid, comment, user):
     """
     Redeploy or modify a service.
 
@@ -56,6 +63,8 @@ def deploy(cluster, service, tag, image, command, access_key_id, secret_access_k
         deployment.deploy(new_task_definition)
         click.secho('Successfully changed task definition to: %s:%s\n' %
                     (new_task_definition.family, new_task_definition.revision), fg='green')
+
+        record_deployment(tag, newrelic_apikey, newrelic_appid, comment, user);
 
         wait_for_finish(deployment, timeout, 'Deploying task definition', 'Deployment successful', 'Deployment failed')
 
@@ -111,6 +120,22 @@ def wait_for_finish(action, timeout, title, success_message, failure_message):
 
     click.secho('\n%s\n' % success_message, fg='green')
     exit(0)
+
+
+def record_deployment(revision, newrelic_apikey, newrelic_appid, comment, user):
+    if not revision or not newrelic_apikey or not newrelic_appid:
+        return False
+
+    user = user or getpass.getuser()
+
+    click.secho('Recording deployment in New Relic', nl=False)
+
+    deployment = Deployment(newrelic_apikey, newrelic_appid, user)
+    deployment.deploy(revision, '', comment)
+
+    click.secho('\nDone\n', fg='green')
+
+    return True
 
 
 def print_diff(task_definition):
