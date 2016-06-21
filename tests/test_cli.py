@@ -3,8 +3,9 @@ from click.testing import CliRunner
 from mock.mock import patch
 
 from ecs_deploy import cli
-from ecs_deploy.cli import get_client
+from ecs_deploy.cli import get_client, record_deployment
 from ecs_deploy.ecs import EcsClient
+from ecs_deploy.newrelic import Deployment
 from tests.test_ecs import EcsTestClient, CLUSTER_NAME, SERVICE_NAME
 
 
@@ -186,3 +187,33 @@ def test_scale_with_timeout(get_client, runner):
     result = runner.invoke(cli.scale, (CLUSTER_NAME, SERVICE_NAME, '2', '--timeout', '1'))
     assert result.exit_code == 1
     assert u"Scaling failed (timeout)" in result.output
+
+
+@patch('ecs_deploy.newrelic.Deployment')
+def test_record_deployment_without_revision(Deployment):
+    result = record_deployment(None, None, None, None, None)
+    assert result is False
+
+
+@patch('ecs_deploy.newrelic.Deployment')
+def test_record_deployment_without_apikey(Deployment):
+    result = record_deployment('1.2.3', None, None, None, None)
+    assert result is False
+
+
+@patch('ecs_deploy.newrelic.Deployment')
+def test_record_deployment_without_appid(Deployment):
+    result = record_deployment('1.2.3', 'APIKEY', None, None, None)
+    assert result is False
+
+
+@patch.object(Deployment, 'deploy')
+@patch.object(Deployment, '__init__')
+def test_record_deployment_without_apikeys(deployment_init, deployment_deploy):
+    deployment_init.return_value = None
+    result = record_deployment('1.2.3', 'APIKEY', 'APPID', 'Comment', 'user')
+
+    deployment_init.assert_called_once_with('APIKEY', 'APPID', 'user')
+    deployment_deploy.assert_called_once_with('1.2.3', '', 'Comment')
+
+    assert result is True
