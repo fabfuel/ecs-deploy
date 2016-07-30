@@ -1,4 +1,5 @@
 from datetime import datetime
+from json import dumps
 
 import boto3
 from botocore.exceptions import ClientError, NoCredentialsError
@@ -133,7 +134,7 @@ class EcsTaskDefinition(dict):
         return self._diff
 
     def set_images(self, tag=None, **images):
-        self.validate_image_options(**images)
+        self.validate_container_options(**images)
         for container in self.containers:
             if container[u'name'] in images:
                 new_image = images[container[u'name']]
@@ -148,7 +149,7 @@ class EcsTaskDefinition(dict):
                 container[u'image'] = new_image
 
     def set_commands(self, **commands):
-        self.validate_image_options(**commands)
+        self.validate_container_options(**commands)
         for container in self.containers:
             if container[u'name'] in commands:
                 new_command = commands[container[u'name']]
@@ -156,7 +157,28 @@ class EcsTaskDefinition(dict):
                 self._diff.append(diff)
                 container[u'command'] = [new_command]
 
-    def validate_image_options(self, **container_options):
+    def set_environment(self, environment_list):
+        environment = {}
+
+        for env in environment_list:
+            environment.setdefault(env[0], {})
+            environment[env[0]][env[1]] = env[2]
+
+        self.validate_container_options(**environment)
+        for container in self.containers:
+            if container[u'name'] in environment:
+                self.apply_container_environment(container, environment[container[u'name']])
+
+    def apply_container_environment(self, container, new_environment):
+        old_environment = {env['name']: env['value'] for env in container.get('environment', {})}
+        merged_environment = old_environment.copy()
+        merged_environment.update(new_environment)
+
+        diff = EcsTaskDefinitionDiff(container[u'name'], u'environment', dumps(merged_environment), dumps(old_environment))
+        self._diff.append(diff)
+        container[u'environment'] = merged_environment
+
+    def validate_container_options(self, **container_options):
         for container_name in container_options:
             if container_name not in self.container_names:
                 raise UnknownContainerError(u'Unknown container: %s' % container_name)

@@ -129,6 +129,27 @@ def test_deploy_one_new_command(get_client, runner):
 
 
 @patch('ecs_deploy.cli.get_client')
+def test_deploy_one_new_environment_variable(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME,
+                                        '-e', 'application', 'foo', 'bar',
+                                        '-e', 'webserver', 'foo', 'baz'))
+
+    assert result.exit_code == 0
+    assert not result.exception
+
+    assert u"Updating task definition" in result.output
+    assert u'Changed environment of container \'application\' to: {"foo": "bar"} (was: {})' in result.output
+    assert u'Changed environment of container \'webserver\' to: ' in result.output
+    assert u'"foo": "baz"' in result.output
+    assert u'"lorem": "ipsum"' in result.output
+    assert u'Successfully created revision: 2' in result.output
+    assert u'Successfully deregistered revision: 1' in result.output
+    assert u'Successfully changed task definition to: test-task:2' in result.output
+    assert u'Deployment successful' in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
 def test_deploy_with_errors(get_client, runner):
     get_client.return_value = EcsTestClient('acces_key', 'secret_key', errors=True)
     result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME))

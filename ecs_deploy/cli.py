@@ -22,8 +22,9 @@ def get_client(access_key_id, secret_access_key, region, profile):
 @click.argument('cluster')
 @click.argument('service')
 @click.option('-t', '--tag', help='Changes the tag for ALL container images')
-@click.option('-i', '--image', type=(str, str), multiple=True, help='Overwrites the image for a container')
-@click.option('-c', '--command', type=(str, str), multiple=True, help='Overwrites the command in a container')
+@click.option('-i', '--image', type=(str, str), multiple=True, help='Overwrites the image for a container: <container> <image>')
+@click.option('-c', '--command', type=(str, str), multiple=True, help='Overwrites the command in a container: <container> <command>')
+@click.option('-e', '--env', type=(str, str, str), multiple=True, help='Adds or changes an environment variable: <container> <name> <value>')
 @click.option('--region', required=False, help='AWS region')
 @click.option('--access-key-id', required=False, help='AWS access key id')
 @click.option('--secret-access-key', required=False, help='AWS secret access yey')
@@ -33,7 +34,7 @@ def get_client(access_key_id, secret_access_key, region, profile):
 @click.option('--newrelic-appid', required=False, help='New Relic App ID for recording the deployment')
 @click.option('--comment', required=False, help='Description/comment for recording the deployment')
 @click.option('--user', required=False, help='User who executes the deployment (used for recording)')
-def deploy(cluster, service, tag, image, command, access_key_id, secret_access_key, region, profile, timeout,
+def deploy(cluster, service, tag, image, command, env, access_key_id, secret_access_key, region, profile, timeout,
            newrelic_apikey, newrelic_appid, comment, user):
     """
     Redeploy or modify a service.
@@ -53,6 +54,7 @@ def deploy(cluster, service, tag, image, command, access_key_id, secret_access_k
 
         task_definition.set_images(tag, **{key: value for (key, value) in image})
         task_definition.set_commands(**{key: value for (key, value) in command})
+        task_definition.set_environment(env)
         print_diff(task_definition)
 
         click.secho('Creating new task definition revision')
