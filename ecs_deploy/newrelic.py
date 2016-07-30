@@ -1,5 +1,3 @@
-from json import dumps
-
 import requests
 
 
@@ -45,6 +43,10 @@ class Deployment(object):
         response = requests.post(self.endpoint, headers=self.headers, json=payload)
 
         if response.status_code != 201:
-            raise NewRelicDeploymentException
+            try:
+                raise NewRelicDeploymentException('Recording deployment failed: %s' %
+                                                  response.json()['error']['title'])
+            except (AttributeError, KeyError):
+                raise NewRelicDeploymentException('Recording deployment failed')
 
         return response

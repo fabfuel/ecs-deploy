@@ -6,7 +6,7 @@ import getpass
 from datetime import datetime, timedelta
 
 from ecs_deploy.ecs import DeployAction, ScaleAction, EcsClient
-from ecs_deploy.newrelic import Deployment
+from ecs_deploy.newrelic import Deployment, NewRelicDeploymentException
 
 
 @click.group()
@@ -66,7 +66,10 @@ def deploy(cluster, service, tag, image, command, env, access_key_id, secret_acc
         click.secho('Successfully changed task definition to: %s:%s\n' %
                     (new_task_definition.family, new_task_definition.revision), fg='green')
 
-        record_deployment(tag, newrelic_apikey, newrelic_appid, comment, user);
+        try:
+            record_deployment(tag, newrelic_apikey, newrelic_appid, comment, user)
+        except NewRelicDeploymentException as e:
+            click.secho('\n%s\n' % str(e), fg='yellow')
 
         wait_for_finish(deployment, timeout, 'Deploying task definition', 'Deployment successful', 'Deployment failed')
 
