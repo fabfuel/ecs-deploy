@@ -23,7 +23,8 @@ TASK_DEFINITION_ARN_1 = u'arn:aws:ecs:eu-central-1:123456789012:task-definition/
                                                                                           TASK_DEFINITION_REVISION_1)
 TASK_DEFINITION_VOLUMES_1 = []
 TASK_DEFINITION_CONTAINERS_1 = [
-    {u'name': u'webserver', u'image': u'webserver:123', u'command': u'run'},
+    {u'name': u'webserver', u'image': u'webserver:123', u'command': u'run',
+     u'environment': ({"name": "foo", "value": "bar"}, {"name": "lorem", "value": "ipsum"})},
     {u'name': u'application', u'image': u'application:123', u'command': u'run'}
 ]
 TASK_DEFINITION_FAMILY_2 = u'test-task'
@@ -32,7 +33,8 @@ TASK_DEFINITION_ARN_2 = u'arn:aws:ecs:eu-central-1:123456789012:task-definition/
                                                                                           TASK_DEFINITION_REVISION_2)
 TASK_DEFINITION_VOLUMES_2 = []
 TASK_DEFINITION_CONTAINERS_2 = [
-    {u'name': u'webserver', u'image': u'webserver:123', u'command': u'run'},
+    {u'name': u'webserver', u'image': u'webserver:123', u'command': u'run',
+     u'environment': ({"name": "foo", "value": "bar"}, {"name": "lorem", "value": "ipsum"})},
     {u'name': u'application', u'image': u'application:123', u'command': u'run'}
 ]
 
@@ -299,6 +301,19 @@ def test_task_set_image(task_definition):
             assert container[u'image'] == u'new-image:123'
         if container[u'name'] == u'application':
             assert container[u'image'] == u'app-image:latest'
+
+
+def test_task_set_environment(task_definition):
+    task_definition.set_environment(((u'webserver', u'foo', u'baz'), (u'webserver', u'some-name', u'some-value')))
+    for container in task_definition.containers:
+        if container[u'name'] == u'webserver':
+            for name in container[u'environment']:
+                if name == 'foo':
+                    assert container[u'environment'][name] == 'baz'
+                if name == 'lorem':
+                    assert container[u'environment'][name] == 'ipsum'
+                if name == 'some-name':
+                    assert container[u'environment'][name] == 'some-value'
 
 
 def test_task_set_image_for_unknown_container(task_definition):
