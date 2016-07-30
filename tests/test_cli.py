@@ -140,8 +140,9 @@ def test_deploy_one_new_environment_variable(get_client, runner):
 
     assert u"Updating task definition" in result.output
     assert u'Changed environment of container \'application\' to: {"foo": "bar"} (was: {})' in result.output
-    assert u'Changed environment of container \'webserver\' to: {"foo": "baz", "lorem": "ipsum"} ' \
-           u'(was: {"foo": "bar", "lorem": "ipsum"})' in result.output
+    assert u'Changed environment of container \'webserver\' to: ' in result.output
+    assert u'"foo": "baz"' in result.output
+    assert u'"lorem": "ipsum"' in result.output
     assert u'Successfully created revision: 2' in result.output
     assert u'Successfully deregistered revision: 1' in result.output
     assert u'Successfully changed task definition to: test-task:2' in result.output
