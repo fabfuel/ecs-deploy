@@ -207,13 +207,16 @@ def test_record_deployment_without_appid(Deployment):
     assert result is False
 
 
+@patch('click.secho')
 @patch.object(Deployment, 'deploy')
 @patch.object(Deployment, '__init__')
-def test_record_deployment_without_apikeys(deployment_init, deployment_deploy):
+def test_record_deployment_without_apikeys(deployment_init, deployment_deploy, secho):
     deployment_init.return_value = None
     result = record_deployment('1.2.3', 'APIKEY', 'APPID', 'Comment', 'user')
 
     deployment_init.assert_called_once_with('APIKEY', 'APPID', 'user')
     deployment_deploy.assert_called_once_with('1.2.3', '', 'Comment')
+    secho.assert_any_call('Recording deployment in New Relic', nl=False)
+    secho.assert_any_call('\nDone\n', fg='green')
 
     assert result is True
