@@ -50,7 +50,7 @@ Currently the following actions are supported:
 
 deploy
 ======
-Redeploy a service either without any modifications or with new image and/or command definitions.
+Redeploy a service either without any modifications or with a new image, environment variable and/or command definition.
 
 scale
 =====
@@ -102,12 +102,30 @@ The `-i` or `--image` option can also be passed several times::
 This will change the **webserver**'s container image to "nginx:1.9" and the **application**'s image to "django:latest".
 
 
+Add a new environment variable
+==============================
+To add a new environment variable to a specific container, run the following command::
+
+    $ ecs deploy my-cluster my-service -e webserver SOME_VARIABLE SOME_VALUE
+     
+This will modify the **webserver** container and add the environment variable SOME_VARIABLE with the value "SOME_VALUE".
+
+
+Adjust an existing environment variable
+=======================================
+To change an existing environment variable of a specific container, run the following command::
+
+    $ ecs deploy my-cluster my-service -e webserver SOME_VARIABLE SOME_VALUE
+
+This will modify the **webserver** container definition and change the environment variable SOME_VARIABLE to the value "SOME_VALUE".
+
+
 Modify a command
 ================
 To change the command of a specific container, run the following command::
 
     $ ecs deploy my-cluster my-service --command webserver "nginx"
-     
+
 This will modify the **webserver** container and change its command to "nginx".
 
 Scale a service
