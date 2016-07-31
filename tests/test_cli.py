@@ -3,8 +3,9 @@ from click.testing import CliRunner
 from mock.mock import patch
 
 from ecs_deploy import cli
-from ecs_deploy.cli import get_client
+from ecs_deploy.cli import get_client, record_deployment
 from ecs_deploy.ecs import EcsClient
+from ecs_deploy.newrelic import Deployment, NewRelicDeploymentException
 from tests.test_ecs import EcsTestClient, CLUSTER_NAME, SERVICE_NAME
 
 
@@ -128,12 +129,49 @@ def test_deploy_one_new_command(get_client, runner):
 
 
 @patch('ecs_deploy.cli.get_client')
+def test_deploy_one_new_environment_variable(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME,
+                                        '-e', 'application', 'foo', 'bar',
+                                        '-e', 'webserver', 'foo', 'baz'))
+
+    assert result.exit_code == 0
+    assert not result.exception
+
+    assert u"Updating task definition" in result.output
+    assert u'Changed environment of container \'application\' to: {"foo": "bar"} (was: {})' in result.output
+    assert u'Changed environment of container \'webserver\' to: ' in result.output
+    assert u'"foo": "baz"' in result.output
+    assert u'"lorem": "ipsum"' in result.output
+    assert u'Successfully created revision: 2' in result.output
+    assert u'Successfully deregistered revision: 1' in result.output
+    assert u'Successfully changed task definition to: test-task:2' in result.output
+    assert u'Deployment successful' in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
 def test_deploy_with_errors(get_client, runner):
     get_client.return_value = EcsTestClient('acces_key', 'secret_key', errors=True)
     result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME))
     assert result.exit_code == 1
     assert u"Deployment failed" in result.output
     assert u"ERROR: Service was unable to Lorem Ipsum" in result.output
+
+
+@patch('ecs_deploy.newrelic.Deployment.deploy')
+@patch('ecs_deploy.cli.get_client')
+def test_deploy_with_newrelic_errors(get_client, deploy, runner):
+    e = NewRelicDeploymentException('Recording deployment failed')
+    deploy.side_effect = e
+
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME,
+                                        '-t', 'test',
+                                        '--newrelic-apikey', 'test',
+                                        '--newrelic-appid', 'test'))
+
+    assert result.exit_code == 1
+    assert u"Recording deployment failed" in result.output
 
 
 @patch('ecs_deploy.cli.get_client')
@@ -186,3 +224,36 @@ def test_scale_with_timeout(get_client, runner):
     result = runner.invoke(cli.scale, (CLUSTER_NAME, SERVICE_NAME, '2', '--timeout', '1'))
     assert result.exit_code == 1
     assert u"Scaling failed (timeout)" in result.output
+
+
+@patch('ecs_deploy.newrelic.Deployment')
+def test_record_deployment_without_revision(Deployment):
+    result = record_deployment(None, None, None, None, None)
+    assert result is False
+
+
+@patch('ecs_deploy.newrelic.Deployment')
+def test_record_deployment_without_apikey(Deployment):
+    result = record_deployment('1.2.3', None, None, None, None)
+    assert result is False
+
+
+@patch('ecs_deploy.newrelic.Deployment')
+def test_record_deployment_without_appid(Deployment):
+    result = record_deployment('1.2.3', 'APIKEY', None, None, None)
+    assert result is False
+
+
+@patch('click.secho')
+@patch.object(Deployment, 'deploy')
+@patch.object(Deployment, '__init__')
+def test_record_deployment(deployment_init, deployment_deploy, secho):
+    deployment_init.return_value = None
+    result = record_deployment('1.2.3', 'APIKEY', 'APPID', 'Comment', 'user')
+
+    deployment_init.assert_called_once_with('APIKEY', 'APPID', 'user')
+    deployment_deploy.assert_called_once_with('1.2.3', '', 'Comment')
+    secho.assert_any_call('Recording deployment in New Relic', nl=False)
+    secho.assert_any_call('\nDone\n', fg='green')
+
+    assert result is True

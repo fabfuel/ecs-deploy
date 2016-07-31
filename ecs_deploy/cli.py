@@ -2,13 +2,15 @@ from __future__ import print_function, absolute_import
 from time import sleep
 
 import click
+import getpass
 from datetime import datetime, timedelta
 
 from ecs_deploy.ecs import DeployAction, ScaleAction, EcsClient
+from ecs_deploy.newrelic import Deployment, NewRelicDeploymentException
 
 
 @click.group()
-def ecs():
+def ecs(): # pragma: no cover
     pass
 
 
@@ -20,14 +22,20 @@ def get_client(access_key_id, secret_access_key, region, profile):
 @click.argument('cluster')
 @click.argument('service')
 @click.option('-t', '--tag', help='Changes the tag for ALL container images')
-@click.option('-i', '--image', type=(str, str), multiple=True, help='Overwrites the image for a container')
-@click.option('-c', '--command', type=(str, str), multiple=True, help='Overwrites the command in a container')
+@click.option('-i', '--image', type=(str, str), multiple=True, help='Overwrites the image for a container: <container> <image>')
+@click.option('-c', '--command', type=(str, str), multiple=True, help='Overwrites the command in a container: <container> <command>')
+@click.option('-e', '--env', type=(str, str, str), multiple=True, help='Adds or changes an environment variable: <container> <name> <value>')
 @click.option('--region', required=False, help='AWS region')
 @click.option('--access-key-id', required=False, help='AWS access key id')
 @click.option('--secret-access-key', required=False, help='AWS secret access yey')
 @click.option('--profile', required=False, help='AWS configuration profile')
 @click.option('--timeout', required=False, default=300, type=int, help='AWS configuration profile')
-def deploy(cluster, service, tag, image, command, access_key_id, secret_access_key, region, profile, timeout):
+@click.option('--newrelic-apikey', required=False, help='New Relic API Key for recording the deployment')
+@click.option('--newrelic-appid', required=False, help='New Relic App ID for recording the deployment')
+@click.option('--comment', required=False, help='Description/comment for recording the deployment')
+@click.option('--user', required=False, help='User who executes the deployment (used for recording)')
+def deploy(cluster, service, tag, image, command, env, access_key_id, secret_access_key, region, profile, timeout,
+           newrelic_apikey, newrelic_appid, comment, user):
     """
     Redeploy or modify a service.
 
@@ -46,12 +54,16 @@ def deploy(cluster, service, tag, image, command, access_key_id, secret_access_k
 
         task_definition.set_images(tag, **{key: value for (key, value) in image})
         task_definition.set_commands(**{key: value for (key, value) in command})
+        task_definition.set_environment(env)
         print_diff(task_definition)
 
         click.secho('Creating new task definition revision')
         new_task_definition = deployment.update_task_definition(task_definition)
         click.secho('Successfully created revision: %d' % new_task_definition.revision, fg='green')
         click.secho('Successfully deregistered revision: %d\n' % task_definition.revision, fg='green')
+
+        record_deployment(tag, newrelic_apikey, newrelic_appid, comment, user)
+
         click.secho('Updating service')
         deployment.deploy(new_task_definition)
         click.secho('Successfully changed task definition to: %s:%s\n' %
@@ -113,6 +125,22 @@ def wait_for_finish(action, timeout, title, success_message, failure_message):
     exit(0)
 
 
+def record_deployment(revision, newrelic_apikey, newrelic_appid, comment, user):
+    if not revision or not newrelic_apikey or not newrelic_appid:
+        return False
+
+    user = user or getpass.getuser()
+
+    click.secho('Recording deployment in New Relic', nl=False)
+
+    deployment = Deployment(newrelic_apikey, newrelic_appid, user)
+    deployment.deploy(revision, '', comment)
+
+    click.secho('\nDone\n', fg='green')
+
+    return True
+
+
 def print_diff(task_definition):
     if task_definition.diff:
         click.secho('Updating task definition')
@@ -139,5 +167,5 @@ def print_errors(service, was_timeout=False, message=''):
 ecs.add_command(deploy)
 ecs.add_command(scale)
 
-if __name__ == '__main__':
+if __name__ == '__main__':  # pragma: no cover
     ecs()

@@ -3,6 +3,7 @@
 
 dist/
 build/
+env/
 *.egg-info/
 
 .tox/
