@@ -61,15 +61,13 @@ def deploy(cluster, service, tag, image, command, env, access_key_id, secret_acc
         new_task_definition = deployment.update_task_definition(task_definition)
         click.secho('Successfully created revision: %d' % new_task_definition.revision, fg='green')
         click.secho('Successfully deregistered revision: %d\n' % task_definition.revision, fg='green')
+
+        record_deployment(tag, newrelic_apikey, newrelic_appid, comment, user)
+
         click.secho('Updating service')
         deployment.deploy(new_task_definition)
         click.secho('Successfully changed task definition to: %s:%s\n' %
                     (new_task_definition.family, new_task_definition.revision), fg='green')
-
-        try:
-            record_deployment(tag, newrelic_apikey, newrelic_appid, comment, user)
-        except NewRelicDeploymentException as e:
-            click.secho('\n%s\n' % str(e), fg='yellow')
 
         wait_for_finish(deployment, timeout, 'Deploying task definition', 'Deployment successful', 'Deployment failed')
 
