@@ -305,15 +305,10 @@ def test_task_set_image(task_definition):
 
 def test_task_set_environment(task_definition):
     task_definition.set_environment(((u'webserver', u'foo', u'baz'), (u'webserver', u'some-name', u'some-value')))
-    for container in task_definition.containers:
-        if container[u'name'] == u'webserver':
-            for name in container[u'environment']:
-                if name == 'foo':
-                    assert container[u'environment'][name] == 'baz'
-                if name == 'lorem':
-                    assert container[u'environment'][name] == 'ipsum'
-                if name == 'some-name':
-                    assert container[u'environment'][name] == 'some-value'
+
+    assert {'name': 'lorem', 'value': 'ipsum'} in task_definition.containers[0]['environment']
+    assert {'name': 'foo', 'value': 'baz'} in task_definition.containers[0]['environment']
+    assert {'name': 'some-name', 'value': 'some-value'} in task_definition.containers[0]['environment']
 
 
 def test_task_set_image_for_unknown_container(task_definition):
