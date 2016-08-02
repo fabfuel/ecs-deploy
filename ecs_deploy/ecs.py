@@ -176,7 +176,8 @@ class EcsTaskDefinition(dict):
 
         diff = EcsTaskDefinitionDiff(container[u'name'], u'environment', dumps(merged_environment), dumps(old_environment))
         self._diff.append(diff)
-        container[u'environment'] = merged_environment
+
+        container[u'environment'] = [{"name": e, "value": merged_environment[e]} for e in merged_environment]
 
     def validate_container_options(self, **container_options):
         for container_name in container_options:
