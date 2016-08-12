@@ -83,16 +83,6 @@ PAYLOAD_TASK_2 = {
 
 PAYLOAD_DEPLOYMENTS = [
     {
-        u'status': u'ACTIVE',
-        u'pendingCount': 0,
-        u'desiredCount': DESIRED_COUNT - 1,
-        u'runningCount': DESIRED_COUNT - 1,
-        u'taskDefinition': TASK_DEFINITION_ARN_1,
-        u'createdAt': datetime.datetime(2016, 3, 10, 12, 00, 00, 000000, tzinfo=tzlocal()),
-        u'updatedAt': datetime.datetime(2016, 3, 10, 12, 5, 00, 000000, tzinfo=tzlocal()),
-        u'id': u'ecs-svc/0000000000000000001',
-    },
-    {
         u'status': u'PRIMARY',
         u'pendingCount': 0,
         u'desiredCount': DESIRED_COUNT,
@@ -488,6 +478,19 @@ def test_is_deployed(client, service):
 
     assert is_deployed is True
     client.list_tasks.assert_called_once_with(service.cluster, service.name)
+
+
+@patch.object(EcsClient, '__init__')
+def test_is_not_deployed_with_more_than_one_deployment(client, service):
+    service['deployments'].append(service['deployments'][0])
+
+    client.list_tasks.return_value = RESPONSE_LIST_TASKS_1
+    client.describe_tasks.return_value = RESPONSE_DESCRIBE_TASKS
+
+    action = EcsAction(client, CLUSTER_NAME, SERVICE_NAME)
+    is_deployed = action.is_deployed(service)
+
+    assert is_deployed is False
 
 
 @patch.object(EcsClient, '__init__')
