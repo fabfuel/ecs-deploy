@@ -39,6 +39,14 @@ class EcsClient(object):
             taskDefinition=task_definition
         )
 
+    def run_task(self, cluster, task_definition, count, started_by, overrides):
+        return self.boto.run_task(
+            cluster=cluster,
+            taskDefinition=task_definition,
+            count=count,
+            startedBy=started_by,
+            overrides=overrides
+        )
 
 class EcsService(dict):
     def __init__(self, cluster, iterable=None, **kwargs):
@@ -128,6 +136,10 @@ class EcsTaskDefinition(dict):
     @property
     def revision(self):
         return self.get(u'revision')
+
+    @property
+    def family_revision(self):
+        return '%s:%d' % (self.get(u'family'), self.get(u'revision'))
 
     @property
     def diff(self):
@@ -221,6 +233,11 @@ class EcsAction(object):
         task_definition = EcsTaskDefinition(task_definition_payload[u'taskDefinition'])
         return task_definition
 
+    def get_task_definition(self, task_definition):
+        task_definition_payload = self._client.describe_task_definition(task_definition)
+        task_definition = EcsTaskDefinition(task_definition_payload[u'taskDefinition'])
+        return task_definition
+
     def update_task_definition(self, task_definition):
         response = self._client.register_task_definition(task_definition.family, task_definition.containers,
                                                          task_definition.volumes)
@@ -276,6 +293,26 @@ class ScaleAction(EcsAction):
     def scale(self, desired_count):
         self._service.set_desired_count(desired_count)
         return self.update_service(self._service)
+
+
+class RunAction(EcsAction):
+    def __init__(self, client, cluster_name):
+        self._client = client
+        self._cluster_name = cluster_name
+
+    def run(self, task_definition, count, started_by):
+        overrides = []
+        if task_definition.diff:
+            for diff in task_definition.diff:
+                override = dict(name=diff.container)
+                if diff.field == 'command':
+                    override['command'] = diff.value.split(' ')
+                elif diff.field == 'environment':
+                    override['environment'] = [{"name": e, "value": diff.value[e]} for e in diff.value]
+                overrides.append(override)
+
+        self._client.run_task(self._cluster_name, task_definition.family_revision, count, started_by, dict(containerOverrides=overrides))
+        return True
 
 
 class EcsError(Exception):
