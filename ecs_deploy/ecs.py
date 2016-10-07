@@ -48,6 +48,7 @@ class EcsClient(object):
             overrides=overrides
         )
 
+
 class EcsService(dict):
     def __init__(self, cluster, iterable=None, **kwargs):
         self._cluster = cluster
@@ -144,6 +145,23 @@ class EcsTaskDefinition(dict):
     @property
     def diff(self):
         return self._diff
+
+    def get_overrides(self):
+        overrides = []
+        for diff in self.diff:
+            override = dict(name=diff.container)
+            if diff.field == 'command':
+                override['command'] = self.get_overrides_command(diff.value)
+            elif diff.field == 'environment':
+                override['environment'] = self.get_overrides_environment(diff.value)
+            overrides.append(override)
+        return overrides
+
+    def get_overrides_command(self, command):
+        return command.split(' ')
+
+    def get_overrides_environment(self, environment_dict):
+        return [{"name": e, "value": environment_dict[e]} for e in environment_dict]
 
     def set_images(self, tag=None, **images):
         self.validate_container_options(**images)
@@ -302,17 +320,13 @@ class RunAction(EcsAction):
         self.started_tasks = []
 
     def run(self, task_definition, count, started_by):
-        overrides = []
-        if task_definition.diff:
-            for diff in task_definition.diff:
-                override = dict(name=diff.container)
-                if diff.field == 'command':
-                    override['command'] = diff.value.split(' ')
-                elif diff.field == 'environment':
-                    override['environment'] = [{"name": e, "value": diff.value[e]} for e in diff.value]
-                overrides.append(override)
-
-        result = self._client.run_task(self._cluster_name, task_definition.family_revision, count, started_by, dict(containerOverrides=overrides))
+        result = self._client.run_task(
+            cluster=self._cluster_name,
+            task_definition=task_definition.family_revision,
+            count=count,
+            started_by=started_by,
+            overrides=dict(containerOverrides=task_definition.get_overrides())
+        )
         self.started_tasks = result['tasks']
         return True
 
