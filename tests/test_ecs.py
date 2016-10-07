@@ -332,11 +332,11 @@ def test_task_get_overrides_with_command(task_definition):
 
 
 def test_task_get_overrides_with_environment(task_definition):
-    task_definition.set_environment((('webserver', 'foo', 'bar'),))
+    task_definition.set_environment((('webserver', 'foo', 'baz'),))
     overrides = task_definition.get_overrides()
     assert len(overrides) == 1
     assert overrides[0]['name'] == 'webserver'
-    assert overrides[0]['environment'] == [dict(name='foo', value='bar'), dict(name='lorem', value='ipsum')]
+    assert dict(name='foo', value='baz') in overrides[0]['environment']
 
 
 def test_task_get_overrides_command(task_definition):
