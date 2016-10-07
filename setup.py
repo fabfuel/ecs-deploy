@@ -7,12 +7,12 @@ dependencies = ['click', 'botocore', 'boto3', 'future', 'requests']
 
 setup(
     name='ecs-deploy',
-    version='0.3.0',
+    version='1.0.0',
     url='https://github.com/fabfuel/ecs-deploy',
-    download_url='https://github.com/fabfuel/ecs-deploy/archive/0.3.0.tar.gz',
+    download_url='https://github.com/fabfuel/ecs-deploy/archive/1.0.0.tar.gz',
     license='BSD',
     author='Fabian Fuelling',
-    author_email='fabian@fabfuel.de',
+    author_email='pypi@fabfuel.de',
     description='Simplify Amazon ECS deployments',
     long_description=__doc__,
     packages=find_packages(exclude=['tests']),
