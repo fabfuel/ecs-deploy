@@ -322,7 +322,7 @@ def test_task_set_command_for_unknown_container(task_definition):
 
 def test_task_definition_diff():
     diff = EcsTaskDefinitionDiff(u'webserver', u'image', u'new', u'old')
-    assert str(diff) == u"Changed image of container 'webserver' to: new (was: old)"
+    assert str(diff) == u"Changed image of container 'webserver' to: \"new\" (was: \"old\")"
 
 
 @patch.object(Session, 'client')
@@ -602,3 +602,9 @@ class EcsTestClient(object):
         if self.errors:
             return deepcopy(RESPONSE_SERVICE_WITH_ERRORS)
         return deepcopy(RESPONSE_SERVICE)
+
+    def run_task(self, cluster, task_definition, count, started_by, overrides):
+        if self.errors:
+            error = dict(Error=dict(Code=123, Message="Something went wrong"))
+            raise ClientError(error, 'fake_error')
+        return dict(tasks=[dict(taskArn='arn:foo:bar'), dict(taskArn='arn:lorem:ipsum')])

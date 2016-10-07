@@ -76,8 +76,8 @@ def test_deploy_new_tag(get_client, runner):
     assert result.exit_code == 0
     assert not result.exception
     assert u"Updating task definition" in result.output
-    assert u"Changed image of container 'webserver' to: webserver:latest (was: webserver:123)" in result.output
-    assert u"Changed image of container 'application' to: application:latest (was: application:123)" in result.output
+    assert u"Changed image of container 'webserver' to: \"webserver:latest\" (was: \"webserver:123\")" in result.output
+    assert u"Changed image of container 'application' to: \"application:latest\" (was: \"application:123\")" in result.output
     assert u'Successfully created revision: 2' in result.output
     assert u'Successfully deregistered revision: 1' in result.output
     assert u'Successfully changed task definition to: test-task:2' in result.output
@@ -91,7 +91,7 @@ def test_deploy_one_new_image(get_client, runner):
     assert result.exit_code == 0
     assert not result.exception
     assert u"Updating task definition" in result.output
-    assert u"Changed image of container 'application' to: application:latest (was: application:123)" in result.output
+    assert u"Changed image of container 'application' to: \"application:latest\" (was: \"application:123\")" in result.output
     assert u'Successfully created revision: 2' in result.output
     assert u'Successfully deregistered revision: 1' in result.output
     assert u'Successfully changed task definition to: test-task:2' in result.output
@@ -106,8 +106,8 @@ def test_deploy_two_new_images(get_client, runner):
     assert result.exit_code == 0
     assert not result.exception
     assert u"Updating task definition" in result.output
-    assert u"Changed image of container 'webserver' to: webserver:latest (was: webserver:123)" in result.output
-    assert u"Changed image of container 'application' to: application:latest (was: application:123)" in result.output
+    assert u"Changed image of container 'webserver' to: \"webserver:latest\" (was: \"webserver:123\")" in result.output
+    assert u"Changed image of container 'application' to: \"application:latest\" (was: \"application:123\")" in result.output
     assert u'Successfully created revision: 2' in result.output
     assert u'Successfully deregistered revision: 1' in result.output
     assert u'Successfully changed task definition to: test-task:2' in result.output
@@ -121,7 +121,7 @@ def test_deploy_one_new_command(get_client, runner):
     assert result.exit_code == 0
     assert not result.exception
     assert u"Updating task definition" in result.output
-    assert u"Changed command of container 'application' to: foobar (was: run)" in result.output
+    assert u"Changed command of container 'application' to: \"foobar\" (was: \"run\")" in result.output
     assert u'Successfully created revision: 2' in result.output
     assert u'Successfully deregistered revision: 1' in result.output
     assert u'Successfully changed task definition to: test-task:2' in result.output
@@ -224,6 +224,57 @@ def test_scale_with_timeout(get_client, runner):
     result = runner.invoke(cli.scale, (CLUSTER_NAME, SERVICE_NAME, '2', '--timeout', '1'))
     assert result.exit_code == 1
     assert u"Scaling failed (timeout)" in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_run_task(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.run, (CLUSTER_NAME, 'test-task'))
+
+    assert not result.exception
+    assert result.exit_code == 0
+
+    assert u"Successfully started 2 instances of task: test-task:1" in result.output
+    assert u"- arn:foo:bar" in result.output
+    assert u"- arn:lorem:ipsum" in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_run_task_with_command(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.run, (CLUSTER_NAME, 'test-task', '2', '-c', 'webserver', 'date'))
+
+    assert not result.exception
+    assert result.exit_code == 0
+
+    assert u"Using task definition: test-task" in result.output
+    assert u"Changed command of container 'webserver' to: \"date\" (was: \"run\")" in result.output
+    assert u"Successfully started 2 instances of task: test-task:1" in result.output
+    assert u"- arn:foo:bar" in result.output
+    assert u"- arn:lorem:ipsum" in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_run_task_with_environment_var(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.run, (CLUSTER_NAME, 'test-task', '2', '-e', 'application', 'foo', 'bar'))
+
+    assert not result.exception
+    assert result.exit_code == 0
+
+    assert u"Using task definition: test-task" in result.output
+    assert u'Changed environment of container \'application\' to: {"foo": "bar"} (was: {})' in result.output
+    assert u"Successfully started 2 instances of task: test-task:1" in result.output
+    assert u"- arn:foo:bar" in result.output
+    assert u"- arn:lorem:ipsum" in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_run_task_with_errors(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key', errors=True)
+    result = runner.invoke(cli.run, (CLUSTER_NAME, 'foobar'))
+    assert result.exit_code == 1
+    assert u"An error occurred (123) when calling the fake_error operation: Something went wrong" in result.output
 
 
 @patch('ecs_deploy.newrelic.Deployment')

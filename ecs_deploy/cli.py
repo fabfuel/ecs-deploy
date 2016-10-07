@@ -137,9 +137,10 @@ def run(cluster, task, count, command, env, region, access_key_id, secret_access
 
         action.run(task_definition, count, 'ECS Deploy')
 
-
-        # click.secho('Successfully changed desired count to: %s\n' % desired_count, fg='green')
-        # wait_for_finish(scaling, timeout, 'Scaling service', 'Scaling successful', 'Scaling failed')
+        click.secho('Successfully started %d instances of task: %s' % (len(action.started_tasks), task_definition.family_revision), fg='green')
+        for started_task in action.started_tasks:
+            click.secho('- %s' % started_task['taskArn'], fg='green')
+        click.secho(' ')
 
     except Exception as e:
         click.secho('%s\n' % str(e), fg='red', err=True)

@@ -186,7 +186,7 @@ class EcsTaskDefinition(dict):
         merged_environment = old_environment.copy()
         merged_environment.update(new_environment)
 
-        diff = EcsTaskDefinitionDiff(container[u'name'], u'environment', dumps(merged_environment), dumps(old_environment))
+        diff = EcsTaskDefinitionDiff(container[u'name'], u'environment', merged_environment, old_environment)
         self._diff.append(diff)
 
         container[u'environment'] = [{"name": e, "value": merged_environment[e]} for e in merged_environment]
@@ -206,7 +206,7 @@ class EcsTaskDefinitionDiff(object):
 
     def __repr__(self):
         return u"Changed %s of container '%s' to: %s (was: %s)" % \
-               (self.field, self.container, self.value, self.old_value)
+               (self.field, self.container, dumps(self.value), dumps(self.old_value))
 
 
 class EcsAction(object):
@@ -299,6 +299,7 @@ class RunAction(EcsAction):
     def __init__(self, client, cluster_name):
         self._client = client
         self._cluster_name = cluster_name
+        self.started_tasks = []
 
     def run(self, task_definition, count, started_by):
         overrides = []
@@ -311,7 +312,8 @@ class RunAction(EcsAction):
                     override['environment'] = [{"name": e, "value": diff.value[e]} for e in diff.value]
                 overrides.append(override)
 
-        self._client.run_task(self._cluster_name, task_definition.family_revision, count, started_by, dict(containerOverrides=overrides))
+        result = self._client.run_task(self._cluster_name, task_definition.family_revision, count, started_by, dict(containerOverrides=overrides))
+        self.started_tasks = result['tasks']
         return True
 
 

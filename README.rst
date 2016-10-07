@@ -93,8 +93,8 @@ To change the image of a specific container, run the following command::
 This will modify the **webserver** container only and change its image to "nginx:latest".
 
 
-Deploy several new image
-========================
+Deploy several new images
+=========================
 The `-i` or `--image` option can also be passed several times::
 
     $ ecs deploy my-cluster my-service -i webserver nginx:1.9 -i application django:latest
