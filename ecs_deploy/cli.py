@@ -1,4 +1,6 @@
 from __future__ import print_function, absolute_import
+
+from os import getenv
 from time import sleep
 
 import click
@@ -166,6 +168,9 @@ def wait_for_finish(action, timeout, title, success_message, failure_message):
 
 
 def record_deployment(revision, newrelic_apikey, newrelic_appid, comment, user):
+    newrelic_apikey = getenv('NEW_RELIC_API_KEY', newrelic_apikey)
+    newrelic_appid = getenv('NEW_RELIC_APP_ID', newrelic_appid)
+
     if not revision or not newrelic_apikey or not newrelic_appid:
         return False
 
