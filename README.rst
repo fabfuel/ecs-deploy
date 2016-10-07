@@ -161,4 +161,22 @@ command in a natural syntax, e.g. no conversion to comma-separation required::
 
     $ ecs run my-cluster my-task -c my-container "python some-script.py param1 param2"
 
+Monitoring
+----------
+With ECS deploy you can track your deployments automatically. Currently only New Relic is supported:
 
+New Relic
+=========
+To record a deployment in New Relic, you can provide the the API Key (**Attention**: this is a specific REST API Key, not the license key) and the application id in two ways:
+
+Via cli options::
+
+    $ ecs deploy my-cluster my-service --newrelic-apikey ABCDEFGHIJKLMN --newrelic-appid 1234567890
+  
+Or implicitly via environment variables ``NEW_RELIC_API_KEY`` and ``NEW_RELIC_APP_ID`` ::
+
+    $ export NEW_RELIC_API_KEY=ABCDEFGHIJKLMN
+    $ export NEW_RELIC_APP_ID=1234567890
+    $ ecs deploy my-cluster my-service 
+
+Optionally you can provide an additional comment to the deployment via ``--comment "New feature X"`` and the name of the user who deployed with ``--user john.doe``
