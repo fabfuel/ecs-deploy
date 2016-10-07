@@ -5,7 +5,7 @@ import click
 import getpass
 from datetime import datetime, timedelta
 
-from ecs_deploy.ecs import DeployAction, ScaleAction, EcsClient
+from ecs_deploy.ecs import DeployAction, ScaleAction, RunAction, EcsClient
 from ecs_deploy.newrelic import Deployment, NewRelicDeploymentException
 
 
@@ -107,6 +107,46 @@ def scale(cluster, service, desired_count, access_key_id, secret_access_key, reg
         exit(1)
 
 
+@click.command()
+@click.argument('cluster')
+@click.argument('task')
+@click.argument('count', required=False, default=1)
+@click.option('-c', '--command', type=(str, str), multiple=True, help='Overwrites the command in a container: <container> <command>')
+@click.option('-e', '--env', type=(str, str, str), multiple=True, help='Adds or changes an environment variable: <container> <name> <value>')
+@click.option('--region', help='AWS region')
+@click.option('--access-key-id', help='AWS access key id')
+@click.option('--secret-access-key', help='AWS secret access yey')
+@click.option('--profile', help='AWS configuration profile')
+def run(cluster, task, count, command, env, region, access_key_id, secret_access_key, profile):
+    """
+    Run a one-off task.
+
+    \b
+    CLUSTER is the name of your cluster (e.g. 'my-custer') within ECS.
+    TASK is the name of your task definintion (e.g. 'mytask') within ECS.
+    COMMAND is the number of tasks your service should run.
+    """
+    try:
+        client = get_client(access_key_id, secret_access_key, region, profile)
+        action = RunAction(client, cluster)
+
+        task_definition = action.get_task_definition(task)
+        task_definition.set_commands(**{key: value for (key, value) in command})
+        task_definition.set_environment(env)
+        print_diff(task_definition, 'Using task definition: %s' % task)
+
+        action.run(task_definition, count, 'ECS Deploy')
+
+        click.secho('Successfully started %d instances of task: %s' % (len(action.started_tasks), task_definition.family_revision), fg='green')
+        for started_task in action.started_tasks:
+            click.secho('- %s' % started_task['taskArn'], fg='green')
+        click.secho(' ')
+
+    except Exception as e:
+        click.secho('%s\n' % str(e), fg='red', err=True)
+        exit(1)
+
+
 def wait_for_finish(action, timeout, title, success_message, failure_message):
     click.secho(title, nl=False)
     waiting = True
@@ -141,9 +181,9 @@ def record_deployment(revision, newrelic_apikey, newrelic_appid, comment, user):
     return True
 
 
-def print_diff(task_definition):
+def print_diff(task_definition, title='Updating task definition'):
     if task_definition.diff:
-        click.secho('Updating task definition')
+        click.secho(title)
         for diff in task_definition.diff:
             click.secho(str(diff), fg='blue')
         click.secho('')
@@ -166,6 +206,7 @@ def print_errors(service, was_timeout=False, message=''):
 
 ecs.add_command(deploy)
 ecs.add_command(scale)
+ecs.add_command(run)
 
 if __name__ == '__main__':  # pragma: no cover
     ecs()

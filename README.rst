@@ -56,6 +56,10 @@ scale
 =====
 Scale a service up or down and change the number of running tasks.
 
+run
+===
+Run a one-off task based on an existing task-definition and optionally override command and/or environment variables.
+
 
 Usage
 -----
@@ -93,8 +97,8 @@ To change the image of a specific container, run the following command::
 This will modify the **webserver** container only and change its image to "nginx:latest".
 
 
-Deploy several new image
-========================
+Deploy several new images
+=========================
 The `-i` or `--image` option can also be passed several times::
 
     $ ecs deploy my-cluster my-service -i webserver nginx:1.9 -i application django:latest
@@ -135,4 +139,26 @@ Scale a service
 To change the number of running tasks and scale a service up and down, run this command::
 
     $ ecs scale my-cluster my-service 4
+
+
+Run a one-off task
+==================
+To run a one-off task, based on an existing task-definition, run this command::
+
+    $ ecs run my-cluster my-task
+
+You can define just the task family (e.g. ``my-task``) or you can run a specific revision of the task-definition (e.g.
+``my-task:123``). And optionally you can add or adjust environment variables like this::
+
+    $ ecs run my-cluster my-task:123 -e my-container MY_VARIABLE "my value"
+
+
+Run a task with a custom command
+================================
+
+You can override the command definition via option ``-c`` or ``--command`` followed by the container name and the
+command in a natural syntax, e.g. no conversion to comma-separation required::
+
+    $ ecs run my-cluster my-task -c my-container "python some-script.py param1 param2"
+
 

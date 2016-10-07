@@ -10,7 +10,7 @@ from dateutil.tz import tzlocal
 from mock.mock import patch
 
 from ecs_deploy.ecs import EcsService, EcsTaskDefinition, UnknownContainerError, EcsTaskDefinitionDiff, EcsClient, \
-    EcsAction, ConnectionError, DeployAction, ScaleAction
+    EcsAction, ConnectionError, DeployAction, ScaleAction, RunAction
 
 CLUSTER_NAME = u'test-cluster'
 CLUSTER_ARN = u'arn:aws:ecs:eu-central-1:123456789012:cluster/%s' % CLUSTER_NAME
@@ -168,7 +168,7 @@ RESPONSE_DESCRIBE_TASKS = {
 }
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture()
 def task_definition():
     return EcsTaskDefinition(deepcopy(PAYLOAD_TASK_DEFINITION_1))
 
@@ -320,9 +320,62 @@ def test_task_set_command_for_unknown_container(task_definition):
         task_definition.set_images(foobar=u'run-foobar')
 
 
+def test_task_get_overrides(task_definition):
+    assert task_definition.get_overrides() == []
+
+
+def test_task_get_overrides_with_command(task_definition):
+    task_definition.set_commands(webserver='/usr/bin/python script.py')
+    overrides = task_definition.get_overrides()
+    assert len(overrides) == 1
+    assert overrides[0]['command'] == ['/usr/bin/python','script.py']
+
+
+def test_task_get_overrides_with_environment(task_definition):
+    task_definition.set_environment((('webserver', 'foo', 'baz'),))
+    overrides = task_definition.get_overrides()
+    assert len(overrides) == 1
+    assert overrides[0]['name'] == 'webserver'
+    assert dict(name='foo', value='baz') in overrides[0]['environment']
+
+
+def test_task_get_overrides_with_commandand_environment(task_definition):
+    task_definition.set_commands(webserver='/usr/bin/python script.py')
+    task_definition.set_environment((('webserver', 'foo', 'baz'),))
+    overrides = task_definition.get_overrides()
+    assert len(overrides) == 1
+    assert overrides[0]['name'] == 'webserver'
+    assert overrides[0]['command'] == ['/usr/bin/python','script.py']
+    assert dict(name='foo', value='baz') in overrides[0]['environment']
+
+
+def test_task_get_overrides_with_commandand_environment_for_multiple_containers(task_definition):
+    task_definition.set_commands(application='/usr/bin/python script.py')
+    task_definition.set_environment((('webserver', 'foo', 'baz'),))
+    overrides = task_definition.get_overrides()
+    assert len(overrides) == 2
+    assert overrides[0]['name'] == 'application'
+    assert overrides[0]['command'] == ['/usr/bin/python','script.py']
+    assert overrides[1]['name'] == 'webserver'
+    assert dict(name='foo', value='baz') in overrides[1]['environment']
+
+
+def test_task_get_overrides_command(task_definition):
+    command = task_definition.get_overrides_command('/usr/bin/python script.py')
+    assert isinstance(command, list)
+    assert command == ['/usr/bin/python','script.py']
+
+
+def test_task_get_overrides_environment(task_definition):
+    environment = task_definition.get_overrides_environment(dict(foo='bar'))
+    assert isinstance(environment, list)
+    assert len(environment) == 1
+    assert environment[0] == dict(name='foo', value='bar')
+
+
 def test_task_definition_diff():
     diff = EcsTaskDefinitionDiff(u'webserver', u'image', u'new', u'old')
-    assert str(diff) == u"Changed image of container 'webserver' to: new (was: old)"
+    assert str(diff) == u"Changed image of container 'webserver' to: \"new\" (was: \"old\")"
 
 
 @patch.object(Session, 'client')
@@ -387,6 +440,24 @@ def test_client_update_service(client):
         service=u'test-service',
         desiredCount=5,
         taskDefinition=u'task-definition'
+    )
+
+
+def test_client_run_task(client):
+    client.run_task(
+        cluster=u'test-cluster',
+        task_definition=u'test-task',
+        count=2,
+        started_by='test',
+        overrides=dict(foo='bar')
+    )
+
+    client.boto.run_task.assert_called_once_with(
+        cluster=u'test-cluster',
+        taskDefinition=u'test-task',
+        count=2,
+        startedBy='test',
+        overrides=dict(foo='bar')
     )
 
 
@@ -552,6 +623,28 @@ def test_scale_action(client):
     client.update_service.assert_called_once_with(action.service.cluster, action.service.name,
                                                   5, action.service.task_definition)
 
+@patch.object(EcsClient, '__init__')
+def test_run_action(client):
+    action = RunAction(client, CLUSTER_NAME)
+    assert len(action.started_tasks) == 0
+
+
+@patch.object(EcsClient, '__init__')
+def test_run_action_run(client, task_definition):
+    action = RunAction(client, CLUSTER_NAME)
+    client.run_task.return_value = dict(tasks=[dict(taskArn='A'), dict(taskArn='B')])
+    action.run(task_definition, 2, 'test')
+
+    client.run_task.assert_called_once_with(
+        cluster=CLUSTER_NAME,
+        task_definition=task_definition.family_revision,
+        count=2,
+        started_by='test',
+        overrides=dict(containerOverrides=task_definition.get_overrides())
+    )
+
+    assert len(action.started_tasks) == 2
+
 
 class EcsTestClient(object):
     def __init__(self, access_key_id=None, secret_access_key=None, region=None, profile=None, errors=False, wait=0):
@@ -602,3 +695,13 @@ class EcsTestClient(object):
         if self.errors:
             return deepcopy(RESPONSE_SERVICE_WITH_ERRORS)
         return deepcopy(RESPONSE_SERVICE)
+
+    def run_task(self, cluster, task_definition, count, started_by, overrides):
+        if not self.access_key_id or not self.secret_access_key:
+            raise ConnectionError(u'Unable to locate credentials. Configure credentials by running "aws configure".')
+        if cluster == 'unknown-cluster':
+            raise ConnectionError(u'An error occurred (ClusterNotFoundException) when calling the RunTask operation: Cluster not found.')
+        if self.errors:
+            error = dict(Error=dict(Code=123, Message="Something went wrong"))
+            raise ClientError(error, 'fake_error')
+        return dict(tasks=[dict(taskArn='arn:foo:bar'), dict(taskArn='arn:lorem:ipsum')])
