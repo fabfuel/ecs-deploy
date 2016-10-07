@@ -227,6 +227,21 @@ def test_scale_with_timeout(get_client, runner):
 
 
 @patch('ecs_deploy.cli.get_client')
+def test_scale_without_credentials(get_client, runner):
+    get_client.return_value = EcsTestClient()
+    result = runner.invoke(cli.scale, (CLUSTER_NAME, SERVICE_NAME, '2'))
+    assert result.exit_code == 1
+    assert result.output == u'Unable to locate credentials. Configure credentials by running "aws configure".\n\n'
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_scale_with_invalid_service(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.scale, (CLUSTER_NAME, 'unknown-service', '2'))
+    assert result.exit_code == 1
+    assert result.output == u'An error occurred when calling the DescribeServices operation: Service not found.\n\n'
+
+@patch('ecs_deploy.cli.get_client')
 def test_run_task(get_client, runner):
     get_client.return_value = EcsTestClient('acces_key', 'secret_key')
     result = runner.invoke(cli.run, (CLUSTER_NAME, 'test-task'))
@@ -272,9 +287,25 @@ def test_run_task_with_environment_var(get_client, runner):
 @patch('ecs_deploy.cli.get_client')
 def test_run_task_with_errors(get_client, runner):
     get_client.return_value = EcsTestClient('acces_key', 'secret_key', errors=True)
-    result = runner.invoke(cli.run, (CLUSTER_NAME, 'foobar'))
+    result = runner.invoke(cli.run, (CLUSTER_NAME, 'test-task'))
     assert result.exit_code == 1
     assert u"An error occurred (123) when calling the fake_error operation: Something went wrong" in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_run_task_without_credentials(get_client, runner):
+    get_client.return_value = EcsTestClient()
+    result = runner.invoke(cli.run, (CLUSTER_NAME, 'test-task'))
+    assert result.exit_code == 1
+    assert result.output == u'Unable to locate credentials. Configure credentials by running "aws configure".\n\n'
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_run_task_with_invalid_cluster(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.run, ('unknown-cluster', 'test-task'))
+    assert result.exit_code == 1
+    assert result.output == u'An error occurred (ClusterNotFoundException) when calling the RunTask operation: Cluster not found.\n\n'
 
 
 @patch('ecs_deploy.newrelic.Deployment')

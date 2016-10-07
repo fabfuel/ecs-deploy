@@ -604,6 +604,10 @@ class EcsTestClient(object):
         return deepcopy(RESPONSE_SERVICE)
 
     def run_task(self, cluster, task_definition, count, started_by, overrides):
+        if not self.access_key_id or not self.secret_access_key:
+            raise ConnectionError(u'Unable to locate credentials. Configure credentials by running "aws configure".')
+        if cluster == 'unknown-cluster':
+            raise ConnectionError(u'An error occurred (ClusterNotFoundException) when calling the RunTask operation: Cluster not found.')
         if self.errors:
             error = dict(Error=dict(Code=123, Message="Something went wrong"))
             raise ClientError(error, 'fake_error')
