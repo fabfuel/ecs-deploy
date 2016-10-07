@@ -56,6 +56,10 @@ scale
 =====
 Scale a service up or down and change the number of running tasks.
 
+run
+===
+Run a one-off task based on an existing task-definition and optionally override command and/or environment variables.
+
 
 Usage
 -----
@@ -93,8 +97,8 @@ To change the image of a specific container, run the following command::
 This will modify the **webserver** container only and change its image to "nginx:latest".
 
 
-Deploy several new image
-========================
+Deploy several new images
+=========================
 The `-i` or `--image` option can also be passed several times::
 
     $ ecs deploy my-cluster my-service -i webserver nginx:1.9 -i application django:latest
@@ -136,3 +140,43 @@ To change the number of running tasks and scale a service up and down, run this 
 
     $ ecs scale my-cluster my-service 4
 
+
+Run a one-off task
+==================
+To run a one-off task, based on an existing task-definition, run this command::
+
+    $ ecs run my-cluster my-task
+
+You can define just the task family (e.g. ``my-task``) or you can run a specific revision of the task-definition (e.g.
+``my-task:123``). And optionally you can add or adjust environment variables like this::
+
+    $ ecs run my-cluster my-task:123 -e my-container MY_VARIABLE "my value"
+
+
+Run a task with a custom command
+================================
+
+You can override the command definition via option ``-c`` or ``--command`` followed by the container name and the
+command in a natural syntax, e.g. no conversion to comma-separation required::
+
+    $ ecs run my-cluster my-task -c my-container "python some-script.py param1 param2"
+
+Monitoring
+----------
+With ECS deploy you can track your deployments automatically. Currently only New Relic is supported:
+
+New Relic
+=========
+To record a deployment in New Relic, you can provide the the API Key (**Attention**: this is a specific REST API Key, not the license key) and the application id in two ways:
+
+Via cli options::
+
+    $ ecs deploy my-cluster my-service --newrelic-apikey ABCDEFGHIJKLMN --newrelic-appid 1234567890
+  
+Or implicitly via environment variables ``NEW_RELIC_API_KEY`` and ``NEW_RELIC_APP_ID`` ::
+
+    $ export NEW_RELIC_API_KEY=ABCDEFGHIJKLMN
+    $ export NEW_RELIC_APP_ID=1234567890
+    $ ecs deploy my-cluster my-service 
+
+Optionally you can provide an additional comment to the deployment via ``--comment "New feature X"`` and the name of the user who deployed with ``--user john.doe``
