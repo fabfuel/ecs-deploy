@@ -19,6 +19,7 @@ SERVICE_ARN = u'ecs-svc/12345678901234567890'
 DESIRED_COUNT = 2
 TASK_DEFINITION_FAMILY_1 = u'test-task'
 TASK_DEFINITION_REVISION_1 = 1
+TASK_DEFINITION_ROLE_ARN_1 = u'arn:test:role:1'
 TASK_DEFINITION_ARN_1 = u'arn:aws:ecs:eu-central-1:123456789012:task-definition/%s:%s' % (TASK_DEFINITION_FAMILY_1,
                                                                                           TASK_DEFINITION_REVISION_1)
 TASK_DEFINITION_VOLUMES_1 = []
@@ -42,6 +43,7 @@ PAYLOAD_TASK_DEFINITION_1 = {
     u'taskDefinitionArn': TASK_DEFINITION_ARN_1,
     u'family': TASK_DEFINITION_FAMILY_1,
     u'revision': TASK_DEFINITION_REVISION_1,
+    u'taskRoleArn': TASK_DEFINITION_ROLE_ARN_1,
     u'volumes': deepcopy(TASK_DEFINITION_VOLUMES_1),
     u'containerDefinitions': deepcopy(TASK_DEFINITION_CONTAINERS_1),
 }
@@ -51,6 +53,7 @@ PAYLOAD_TASK_DEFINITION_2 = {
     u'family': TASK_DEFINITION_FAMILY_2,
     u'revision': TASK_DEFINITION_REVISION_2,
     u'volumes': deepcopy(TASK_DEFINITION_VOLUMES_2),
+    u'taskRoleArn': '',
     u'containerDefinitions': deepcopy(TASK_DEFINITION_CONTAINERS_2),
 }
 
@@ -423,9 +426,14 @@ def test_client_describe_tasks(client):
 def test_client_register_task_definition(client):
     containers = [{u'name': u'foo'}]
     volumes = [{u'foo': u'bar'}]
-    client.register_task_definition(u'family', containers, volumes)
-    client.boto.register_task_definition.assert_called_once_with(family=u'family', containerDefinitions=containers,
-                                                                 volumes=volumes)
+    role_arn = 'arn:test:role'
+    client.register_task_definition(u'family', containers, volumes, role_arn)
+    client.boto.register_task_definition.assert_called_once_with(
+        family=u'family',
+        containerDefinitions=containers,
+        volumes=volumes,
+        taskRoleArn=role_arn
+    )
 
 
 def test_client_deregister_task_definition(client):
@@ -522,9 +530,15 @@ def test_update_task_definition(client, task_definition):
     new_task_definition = action.update_task_definition(task_definition)
 
     assert isinstance(new_task_definition, EcsTaskDefinition)
-    client.register_task_definition.assert_called_once_with(task_definition.family, task_definition.containers,
-                                                            task_definition.volumes)
-    client.deregister_task_definition.assert_called_once_with(task_definition.arn)
+    client.register_task_definition.assert_called_once_with(
+        task_definition.family,
+        task_definition.containers,
+        task_definition.volumes,
+        task_definition.role_arn,
+    )
+    client.deregister_task_definition.assert_called_once_with(
+        task_definition.arn
+    )
 
 
 @patch.object(EcsClient, '__init__')
@@ -685,7 +699,7 @@ class EcsTestClient(object):
     def describe_tasks(self, cluster_name, task_arns):
         return deepcopy(RESPONSE_DESCRIBE_TASKS)
 
-    def register_task_definition(self, family, containers, volumes):
+    def register_task_definition(self, family, containers, volumes, role_arn):
         return deepcopy(RESPONSE_TASK_DEFINITION_2)
 
     def deregister_task_definition(self, task_definition_arn):
