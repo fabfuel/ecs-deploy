@@ -71,7 +71,10 @@ For detailed information about the available actions, arguments and options, run
 
 Examples
 --------
-All examples assume, that authentication has already been configured.  
+All examples assume, that authentication has already been configured.
+
+Deployment
+----------
 
 Simple Redeploy
 ===============
@@ -134,12 +137,27 @@ To change the command of a specific container, run the following command::
 
 This will modify the **webserver** container and change its command to "nginx".
 
+
+Set a task role
+===============
+To change or set the role, the service's task should run as, use the following command::
+
+    $ ecs deploy my-cluster my-service -r arn:aws:iam::123456789012:role/MySpecialEcsTaskRole
+
+This will set the task role to "MySpecialEcsTaskRole".
+
+Scaling
+-------
+
 Scale a service
 ===============
 To change the number of running tasks and scale a service up and down, run this command::
 
     $ ecs scale my-cluster my-service 4
 
+
+Running a Task
+--------------
 
 Run a one-off task
 ==================

@@ -25,8 +25,13 @@ class EcsClient(object):
     def describe_tasks(self, cluster_name, task_arns):
         return self.boto.describe_tasks(cluster=cluster_name, tasks=task_arns)
 
-    def register_task_definition(self, family, containers, volumes):
-        return self.boto.register_task_definition(family=family, containerDefinitions=containers, volumes=volumes)
+    def register_task_definition(self, family, containers, volumes, role_arn):
+        return self.boto.register_task_definition(
+            family=family,
+            containerDefinitions=containers,
+            volumes=volumes,
+            taskRoleArn=role_arn or ''
+        )
 
     def deregister_task_definition(self, task_definition_arn):
         return self.boto.deregister_task_definition(taskDefinition=task_definition_arn)
@@ -135,6 +140,10 @@ class EcsTaskDefinition(dict):
         return self.get(u'family')
 
     @property
+    def role_arn(self):
+        return self.get(u'taskRoleArn')
+
+    @property
     def revision(self):
         return self.get(u'revision')
 
@@ -216,6 +225,12 @@ class EcsTaskDefinition(dict):
             if container_name not in self.container_names:
                 raise UnknownContainerError(u'Unknown container: %s' % container_name)
 
+    def set_role_arn(self, role_arn):
+        if role_arn:
+            diff = EcsTaskDefinitionDiff(None, u'role_arn', role_arn, self[u'taskRoleArn'])
+            self[u'taskRoleArn'] = role_arn
+            self._diff.append(diff)
+
 
 class EcsTaskDefinitionDiff(object):
     def __init__(self, container, field, value, old_value):
@@ -225,8 +240,20 @@ class EcsTaskDefinitionDiff(object):
         self.old_value = old_value
 
     def __repr__(self):
-        return u"Changed %s of container '%s' to: %s (was: %s)" % \
-               (self.field, self.container, dumps(self.value), dumps(self.old_value))
+        if self.container:
+            return u"Changed %s of container '%s' to: %s (was: %s)" % (
+                self.field,
+                self.container,
+                dumps(self.value),
+                dumps(self.old_value)
+            )
+        else:
+            return u"Changed %s to: %s (was: %s)" % (
+                self.field,
+                dumps(self.value),
+                dumps(self.old_value)
+            )
+
 
 
 class EcsAction(object):
@@ -259,8 +286,12 @@ class EcsAction(object):
         return task_definition
 
     def update_task_definition(self, task_definition):
-        response = self._client.register_task_definition(task_definition.family, task_definition.containers,
-                                                         task_definition.volumes)
+        response = self._client.register_task_definition(
+            task_definition.family,
+            task_definition.containers,
+            task_definition.volumes,
+            task_definition.role_arn
+        )
         new_task_definition = EcsTaskDefinition(response[u'taskDefinition'])
         self._client.deregister_task_definition(task_definition.arn)
         return new_task_definition
