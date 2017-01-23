@@ -10,18 +10,30 @@ ECS Deploy
 .. image:: https://scrutinizer-ci.com/g/fabfuel/ecs-deploy/badges/quality-score.png?b=develop
     :target: https://scrutinizer-ci.com/g/fabfuel/ecs-deploy
 
+`ecs-deploy` simplifies deployments on Amazon ECS by providing a convinience CLI tool for complex actions, which are executed pretty often.
 
-Redeploying a service in Amazon ECS causes some effort, even if you just want to pull the most recent image versions.
-You have to create a new revision of the task definition and update the service to use the newly created revision. 
-
-This project simplyfies deployments on Amazon ECS by providing a convinience CLI tool for actions, which are executed
-pretty often.
+Key Features
+------------
+- support for complex task definitions (e.g. multiple containers & task role)
+- easily redeploy the current task definition (including `docker pull` of eventually updated images) 
+- deploy new versions/tags or all containers or just a single container in your task definition
+- scale up or down by adjusting the desired count of running tasks
+- add or adjust containers environment variables
+- run one-off tasks from the CLI
+- automatically monitor deployments in New Relic
 
 TL;DR
 -----
-Redeploy or scale a service in Amazon ECS as simple as this::
+Deploy a new version of your service::
+ 
+    $ ecs deploy my-cluster my-service --tag 1.2.3
 
-    $ ecs deploy my-cluster my-service --tag latest
+Redeploy the current version of a service::
+ 
+    $ ecs deploy my-cluster my-service
+
+Scale up or down a service::
+
     $ ecs scale my-cluster my-service 4
 
 
@@ -68,6 +80,7 @@ For detailed information about the available actions, arguments and options, run
 
     $ ecs deploy --help
     $ ecs scale --help
+    $ ecs run --help
 
 Examples
 --------
@@ -95,18 +108,18 @@ Deploy a new image
 ==================
 To change the image of a specific container, run the following command::
 
-    $ ecs deploy my-cluster my-service --image webserver nginx:latest
+    $ ecs deploy my-cluster my-service --image webserver nginx:1.11.8
      
-This will modify the **webserver** container only and change its image to "nginx:latest".
+This will modify the **webserver** container only and change its image to "nginx:1.11.8".
 
 
 Deploy several new images
 =========================
 The `-i` or `--image` option can also be passed several times::
 
-    $ ecs deploy my-cluster my-service -i webserver nginx:1.9 -i application django:latest
+    $ ecs deploy my-cluster my-service -i webserver nginx:1.9 -i application my-app:1.2.3
      
-This will change the **webserver**'s container image to "nginx:1.9" and the **application**'s image to "django:latest".
+This will change the **webserver**'s container image to "nginx:1.9" and the **application**'s image to "my-app:1.2.3".
 
 
 Set an environment variable
