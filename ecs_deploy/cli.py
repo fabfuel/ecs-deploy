@@ -32,7 +32,7 @@ def get_client(access_key_id, secret_access_key, region, profile):
 @click.option('--access-key-id', required=False, help='AWS access key id')
 @click.option('--secret-access-key', required=False, help='AWS secret access yey')
 @click.option('--profile', required=False, help='AWS configuration profile')
-@click.option('--timeout', required=False, default=300, type=int, help='AWS configuration profile')
+@click.option('--timeout', required=False, default=300, type=int, help='Amount of seconds to wait for deployment before command fails (default: 300)')
 @click.option('--newrelic-apikey', required=False, help='New Relic API Key for recording the deployment')
 @click.option('--newrelic-appid', required=False, help='New Relic App ID for recording the deployment')
 @click.option('--comment', required=False, help='Description/comment for recording the deployment')
