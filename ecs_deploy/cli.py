@@ -157,9 +157,15 @@ def wait_for_finish(action, timeout, title, success_message, failure_message):
     waiting_timeout = datetime.now() + timedelta(seconds=timeout)
     while waiting and datetime.now() < waiting_timeout:
         sleep(1)
-        click.secho('.', nl=False)
         service = action.get_service()
-        waiting = not action.is_deployed(service) and not service.errors
+        service_errors = dict(service.errors.items())
+        for error_key, error_message in dict(service_errors.items()).items():
+            if 'is already using a port required by your task' in error_message:
+                click.secho('o', nl=False)
+                del service_errors[error_key]
+        click.secho('.', nl=False)
+
+        waiting = not action.is_deployed(service) and not service_errors
 
     if waiting or service.errors:
         print_errors(service, waiting, failure_message)
