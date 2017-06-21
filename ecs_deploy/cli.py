@@ -159,11 +159,10 @@ def wait_for_finish(action, timeout, title, success_message, failure_message):
         sleep(1)
         click.secho('.', nl=False)
         service = action.get_service()
-        waiting = not action.is_deployed(service) and not service.errors
+        inspect_errors(service, failure_message)
+        waiting = not action.is_deployed(service)
 
-    if waiting or service.errors:
-        print_errors(service, waiting, failure_message)
-        exit(1)
+    inspect_errors(service, failure_message, waiting)
 
     click.secho('\n%s\n' % success_message, fg='green')
     exit(0)
@@ -196,19 +195,31 @@ def print_diff(task_definition, title='Updating task definition'):
         click.secho('')
 
 
-def print_errors(service, was_timeout=False, message=''):
-    if was_timeout:
-        click.secho('\n%s (timeout)\n' % message, fg='red', err=True)
-    else:
-        click.secho('\n%s\n' % message, fg='red', err=True)
+def inspect_errors(service, failure_message, was_timeout=False):
+    error = False
 
     for timestamp in service.errors:
-        click.secho('%s\n%s\n' % (timestamp, service.errors[timestamp]), fg='red', err=True)
+        message = service.errors[timestamp]
+        # print(message)
+        click.secho('')
+        click.secho('%s\n%s\n' % (timestamp, message), fg='red', err=True)
+        error = True
 
     if service.older_errors:
+        click.secho('')
         click.secho('Older errors', fg='yellow', err=True)
         for timestamp in service.older_errors:
             click.secho('%s\n%s\n' % (timestamp, service.older_errors[timestamp]), fg='yellow', err=True)
+
+    if was_timeout:
+        click.secho('')
+        click.secho('\n%s (timeout)\n' % failure_message, fg='red', err=True)
+        exit(1)
+
+    if error:
+        click.secho('')
+        click.secho('\n%s\n' % failure_message, fg='red', err=True)
+        exit(1)
 
 
 ecs.add_command(deploy)

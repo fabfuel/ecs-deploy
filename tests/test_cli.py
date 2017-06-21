@@ -189,14 +189,6 @@ def test_deploy_with_newrelic_errors(get_client, deploy, runner):
 
 
 @patch('ecs_deploy.cli.get_client')
-def test_scale_without_credentials(get_client, runner):
-    get_client.return_value = EcsTestClient()
-    result = runner.invoke(cli.scale, (CLUSTER_NAME, SERVICE_NAME, '2'))
-    assert result.exit_code == 1
-    assert result.output == u'Unable to locate credentials. Configure credentials by running "aws configure".\n\n'
-
-
-@patch('ecs_deploy.cli.get_client')
 def test_scale_with_invalid_cluster(get_client, runner):
     get_client.return_value = EcsTestClient('acces_key', 'secret_key')
     result = runner.invoke(cli.scale, ('unknown-cluster', SERVICE_NAME, '2'))
@@ -247,13 +239,6 @@ def test_scale_without_credentials(get_client, runner):
     assert result.exit_code == 1
     assert result.output == u'Unable to locate credentials. Configure credentials by running "aws configure".\n\n'
 
-
-@patch('ecs_deploy.cli.get_client')
-def test_scale_with_invalid_service(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.scale, (CLUSTER_NAME, 'unknown-service', '2'))
-    assert result.exit_code == 1
-    assert result.output == u'An error occurred when calling the DescribeServices operation: Service not found.\n\n'
 
 @patch('ecs_deploy.cli.get_client')
 def test_run_task(get_client, runner):
