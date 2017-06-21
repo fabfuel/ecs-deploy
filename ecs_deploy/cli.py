@@ -28,6 +28,7 @@ def get_client(access_key_id, secret_access_key, region, profile):
 @click.option('-c', '--command', type=(str, str), multiple=True, help='Overwrites the command in a container: <container> <command>')
 @click.option('-e', '--env', type=(str, str, str), multiple=True, help='Adds or changes an environment variable: <container> <name> <value>')
 @click.option('-r', '--role', type=str, help='Sets the task\'s role ARN: <task role ARN>')
+@click.option('--task', type=str, help='Task definition to be deployed. Can be a task ARN or a task familiy with optional revision')
 @click.option('--region', required=False, help='AWS region')
 @click.option('--access-key-id', required=False, help='AWS access key id')
 @click.option('--secret-access-key', required=False, help='AWS secret access yey')
@@ -37,8 +38,9 @@ def get_client(access_key_id, secret_access_key, region, profile):
 @click.option('--newrelic-appid', required=False, help='New Relic App ID for recording the deployment')
 @click.option('--comment', required=False, help='Description/comment for recording the deployment')
 @click.option('--user', required=False, help='User who executes the deployment (used for recording)')
-def deploy(cluster, service, tag, image, command, env, role, access_key_id, secret_access_key, region, profile, timeout,
-           newrelic_apikey, newrelic_appid, comment, user):
+def deploy(cluster, service, tag, image, command, env, role,
+           task, region, access_key_id, secret_access_key,
+           profile, timeout, newrelic_apikey, newrelic_appid, comment, user):
     """
     Redeploy or modify a service.
 
@@ -53,7 +55,12 @@ def deploy(cluster, service, tag, image, command, env, role, access_key_id, secr
     try:
         client = get_client(access_key_id, secret_access_key, region, profile)
         deployment = DeployAction(client, cluster, service)
-        task_definition = deployment.get_current_task_definition(deployment.service)
+
+        if task:
+            task_definition = deployment.get_task_definition(task)
+            click.secho('Deploying based on task definition: %s' % task)
+        else:
+            task_definition = deployment.get_current_task_definition(deployment.service)
 
         task_definition.set_images(tag, **{key: value for (key, value) in image})
         task_definition.set_commands(**{key: value for (key, value) in command})

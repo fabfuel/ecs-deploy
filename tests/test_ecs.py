@@ -9,8 +9,10 @@ from botocore.exceptions import ClientError, NoCredentialsError
 from dateutil.tz import tzlocal
 from mock.mock import patch
 
-from ecs_deploy.ecs import EcsService, EcsTaskDefinition, UnknownContainerError, EcsTaskDefinitionDiff, EcsClient, \
-    EcsAction, ConnectionError, DeployAction, ScaleAction, RunAction
+from ecs_deploy.ecs import EcsService, EcsTaskDefinition, \
+    UnknownContainerError, EcsTaskDefinitionDiff, EcsClient, \
+    EcsAction, ConnectionError, DeployAction, ScaleAction, RunAction, \
+    UnknownTaskDefinitionError
 
 CLUSTER_NAME = u'test-cluster'
 CLUSTER_ARN = u'arn:aws:ecs:eu-central-1:123456789012:cluster/%s' % CLUSTER_NAME
@@ -152,6 +154,14 @@ RESPONSE_TASK_DEFINITION = {
 
 RESPONSE_TASK_DEFINITION_2 = {
     u"taskDefinition": PAYLOAD_TASK_DEFINITION_2
+}
+
+RESPONSE_TASK_DEFINITIONS = {
+    TASK_DEFINITION_ARN_1: RESPONSE_TASK_DEFINITION,
+    TASK_DEFINITION_ARN_2: RESPONSE_TASK_DEFINITION_2,
+    u'test-task:1': RESPONSE_TASK_DEFINITION,
+    u'test-task:2': RESPONSE_TASK_DEFINITION_2,
+    u'test-task': RESPONSE_TASK_DEFINITION_2,
 }
 
 RESPONSE_LIST_TASKS_2 = {
@@ -411,6 +421,13 @@ def test_client_describe_services(client):
 def test_client_describe_task_definition(client):
     client.describe_task_definition(u'task_definition_arn')
     client.boto.describe_task_definition.assert_called_once_with(taskDefinition=u'task_definition_arn')
+
+
+def test_client_describe_unknown_task_definition(client):
+    error_response = {u'Error': {u'Code': u'ClientException', u'Message': u'Unable to describe task definition.'}}
+    client.boto.describe_task_definition.side_effect = ClientError(error_response, u'DescribeServices')
+    with pytest.raises(UnknownTaskDefinitionError):
+        client.describe_task_definition(u'task_definition_arn')
 
 
 def test_client_list_tasks(client):
@@ -689,7 +706,9 @@ class EcsTestClient(object):
         }
 
     def describe_task_definition(self, task_definition_arn):
-        return deepcopy(RESPONSE_TASK_DEFINITION)
+        if task_definition_arn in RESPONSE_TASK_DEFINITIONS:
+            return deepcopy(RESPONSE_TASK_DEFINITIONS[task_definition_arn])
+        raise UnknownTaskDefinitionError('Unknown task definition arn: %s' % task_definition_arn)
 
     def list_tasks(self, cluster_name, service_name):
         if self.wait_until <= datetime.datetime.now():
