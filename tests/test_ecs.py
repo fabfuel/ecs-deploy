@@ -1,8 +1,7 @@
 from copy import deepcopy
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import pytest
-import datetime
 
 from boto3.session import Session
 from botocore.exceptions import ClientError, NoCredentialsError
@@ -91,8 +90,8 @@ PAYLOAD_DEPLOYMENTS = [
         u'desiredCount': DESIRED_COUNT,
         u'runningCount': DESIRED_COUNT,
         u'taskDefinition': TASK_DEFINITION_ARN_1,
-        u'createdAt': datetime.datetime(2016, 3, 11, 12, 00, 00, 000000, tzinfo=tzlocal()),
-        u'updatedAt': datetime.datetime(2016, 3, 11, 12, 5, 00, 000000, tzinfo=tzlocal()),
+        u'createdAt': datetime(2016, 3, 11, 12, 0, 0, 000000, tzinfo=tzlocal()),
+        u'updatedAt': datetime(2016, 3, 11, 12, 5, 0, 000000, tzinfo=tzlocal()),
         u'id': u'ecs-svc/0000000000000000002',
     }
 ]
@@ -100,12 +99,12 @@ PAYLOAD_DEPLOYMENTS = [
 PAYLOAD_EVENTS = [
     {
         u'id': u'error',
-        u'createdAt': datetime.datetime(2016, 3, 11, 12, 5, 5, 000000, tzinfo=tzlocal()),
+        u'createdAt': datetime.now(tz=tzlocal()),
         u'message': u'Service was unable to Lorem Ipsum'
     },
     {
         u'id': u'older_error',
-        u'createdAt': datetime.datetime(2016, 3, 11, 12, 00, 5, 000000, tzinfo=tzlocal()),
+        u'createdAt': datetime(2016, 3, 11, 12, 0, 10, 000000, tzinfo=tzlocal()),
         u'message': u'Service was unable to Lorem Ipsum'
     }
 ]
@@ -220,23 +219,23 @@ def test_service_name(service):
 
 
 def test_service_deployment_created_at(service):
-    assert service.deployment_created_at == datetime.datetime(2016, 3, 11, 12, 00, 00, 000000, tzinfo=tzlocal())
+    assert service.deployment_created_at == datetime(2016, 3, 11, 12, 00, 00, 000000, tzinfo=tzlocal())
 
 
 def test_service_deployment_updated_at(service):
-    assert service.deployment_updated_at == datetime.datetime(2016, 3, 11, 12, 5, 00, 000000, tzinfo=tzlocal())
+    assert service.deployment_updated_at == datetime(2016, 3, 11, 12, 5, 00, 000000, tzinfo=tzlocal())
 
 
 def test_service_deployment_created_at_without_deployments(service_without_deployments):
-    now = datetime.datetime.now()
+    now = datetime.now()
     assert service_without_deployments.deployment_created_at >= now
-    assert service_without_deployments.deployment_created_at <= datetime.datetime.now()
+    assert service_without_deployments.deployment_created_at <= datetime.now()
 
 
 def test_service_deployment_updated_at_without_deployments(service_without_deployments):
-    now = datetime.datetime.now()
+    now = datetime.now()
     assert service_without_deployments.deployment_updated_at >= now
-    assert service_without_deployments.deployment_updated_at <= datetime.datetime.now()
+    assert service_without_deployments.deployment_updated_at <= datetime.now()
 
 
 def test_service_errors(service_with_errors):
@@ -637,6 +636,7 @@ def test_scale_action(client):
     client.update_service.assert_called_once_with(action.service.cluster, action.service.name,
                                                   5, action.service.task_definition)
 
+
 @patch.object(EcsClient, '__init__')
 def test_run_action(client):
     action = RunAction(client, CLUSTER_NAME)
@@ -668,7 +668,7 @@ class EcsTestClient(object):
         self.region = region
         self.profile = profile
         self.errors = errors
-        self.wait_until = datetime.datetime.now() + timedelta(seconds=wait)
+        self.wait_until = datetime.now() + timedelta(seconds=wait)
 
     def describe_services(self, cluster_name, service_name):
         if not self.access_key_id or not self.secret_access_key:
@@ -692,7 +692,7 @@ class EcsTestClient(object):
         return deepcopy(RESPONSE_TASK_DEFINITION)
 
     def list_tasks(self, cluster_name, service_name):
-        if self.wait_until <= datetime.datetime.now():
+        if self.wait_until <= datetime.now():
             return deepcopy(RESPONSE_LIST_TASKS_2)
         return deepcopy(RESPONSE_LIST_TASKS_0)
 

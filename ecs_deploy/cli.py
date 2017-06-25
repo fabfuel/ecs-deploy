@@ -8,11 +8,11 @@ import getpass
 from datetime import datetime, timedelta
 
 from ecs_deploy.ecs import DeployAction, ScaleAction, RunAction, EcsClient
-from ecs_deploy.newrelic import Deployment, NewRelicDeploymentException
+from ecs_deploy.newrelic import Deployment
 
 
 @click.group()
-def ecs(): # pragma: no cover
+def ecs():  # pragma: no cover
     pass
 
 
@@ -33,12 +33,13 @@ def get_client(access_key_id, secret_access_key, region, profile):
 @click.option('--secret-access-key', required=False, help='AWS secret access yey')
 @click.option('--profile', required=False, help='AWS configuration profile')
 @click.option('--timeout', required=False, default=300, type=int, help='Amount of seconds to wait for deployment before command fails (default: 300)')
+@click.option('--ignore-warnings', is_flag=True, help='Do not fail deployment, if warnings occur (e.g. unsufficient mempory, CPU or port already in use.')
 @click.option('--newrelic-apikey', required=False, help='New Relic API Key for recording the deployment')
 @click.option('--newrelic-appid', required=False, help='New Relic App ID for recording the deployment')
 @click.option('--comment', required=False, help='Description/comment for recording the deployment')
 @click.option('--user', required=False, help='User who executes the deployment (used for recording)')
 def deploy(cluster, service, tag, image, command, env, role, access_key_id, secret_access_key, region, profile, timeout,
-           newrelic_apikey, newrelic_appid, comment, user):
+           newrelic_apikey, newrelic_appid, comment, user, ignore_warnings):
     """
     Redeploy or modify a service.
 
@@ -73,7 +74,7 @@ def deploy(cluster, service, tag, image, command, env, role, access_key_id, secr
         click.secho('Successfully changed task definition to: %s:%s\n' %
                     (new_task_definition.family, new_task_definition.revision), fg='green')
 
-        wait_for_finish(deployment, timeout, 'Deploying task definition', 'Deployment successful', 'Deployment failed')
+        wait_for_finish(deployment, timeout, 'Deploying task definition', 'Deployment successful', 'Deployment failed', ignore_warnings)
 
     except Exception as e:
         click.secho('%s\n' % str(e), fg='red', err=True)
@@ -89,7 +90,8 @@ def deploy(cluster, service, tag, image, command, env, role, access_key_id, secr
 @click.option('--secret-access-key', help='AWS secret access yey')
 @click.option('--profile', help='AWS configuration profile')
 @click.option('--timeout', default=300, type=int, help='AWS configuration profile')
-def scale(cluster, service, desired_count, access_key_id, secret_access_key, region, profile, timeout):
+@click.option('--ignore-warnings', is_flag=True, help='Do not fail deployment, if warnings occur (e.g. unsufficient mempory, CPU or port already in use.')
+def scale(cluster, service, desired_count, access_key_id, secret_access_key, region, profile, timeout, ignore_warnings):
     """
     Scale a service up or down.
 
@@ -104,7 +106,7 @@ def scale(cluster, service, desired_count, access_key_id, secret_access_key, reg
         click.secho('Updating service')
         scaling.scale(desired_count)
         click.secho('Successfully changed desired count to: %s\n' % desired_count, fg='green')
-        wait_for_finish(scaling, timeout, 'Scaling service', 'Scaling successful', 'Scaling failed')
+        wait_for_finish(scaling, timeout, 'Scaling service', 'Scaling successful', 'Scaling failed', ignore_warnings)
 
     except Exception as e:
         click.secho('%s\n' % str(e), fg='red', err=True)
@@ -151,18 +153,20 @@ def run(cluster, task, count, command, env, region, access_key_id, secret_access
         exit(1)
 
 
-def wait_for_finish(action, timeout, title, success_message, failure_message):
+def wait_for_finish(action, timeout, title, success_message, failure_message, ignore_warnings):
     click.secho(title, nl=False)
     waiting = True
     waiting_timeout = datetime.now() + timedelta(seconds=timeout)
+    service = action.get_service()
+    inspected_until = None
     while waiting and datetime.now() < waiting_timeout:
-        sleep(1)
         click.secho('.', nl=False)
+        sleep(1)
         service = action.get_service()
-        inspect_errors(service, failure_message)
+        inspected_until = inspect_errors(service, failure_message, ignore_warnings, inspected_until)
         waiting = not action.is_deployed(service)
 
-    inspect_errors(service, failure_message, waiting)
+    inspect_errors(service, failure_message, ignore_warnings, inspected_until, waiting)
 
     click.secho('\n%s\n' % success_message, fg='green')
     exit(0)
@@ -195,15 +199,21 @@ def print_diff(task_definition, title='Updating task definition'):
         click.secho('')
 
 
-def inspect_errors(service, failure_message, was_timeout=False):
+def inspect_errors(service, failure_message, ignore_warnings, since, was_timeout=False):
     error = False
+    last_error_timestamp = since
 
-    for timestamp in service.errors:
-        message = service.errors[timestamp]
-        # print(message)
+    warnings = service.get_warnings(since)
+    for timestamp in warnings:
+        message = warnings[timestamp]
         click.secho('')
-        click.secho('%s\n%s\n' % (timestamp, message), fg='red', err=True)
-        error = True
+        if ignore_warnings:
+            last_error_timestamp = timestamp
+            click.secho('%s\nWARNING: %s' % (timestamp, message), fg='yellow', err=False)
+            click.secho('Continuing.', nl=False)
+        else:
+            click.secho('%s\nERROR: %s\n' % (timestamp, message), fg='red', err=True)
+            error = True
 
     if service.older_errors:
         click.secho('')
@@ -220,6 +230,8 @@ def inspect_errors(service, failure_message, was_timeout=False):
         click.secho('')
         click.secho('\n%s\n' % failure_message, fg='red', err=True)
         exit(1)
+
+    return last_error_timestamp
 
 
 ecs.add_command(deploy)

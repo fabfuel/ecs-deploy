@@ -172,6 +172,21 @@ def test_deploy_with_errors(get_client, runner):
     assert u"ERROR: Service was unable to Lorem Ipsum" in result.output
 
 
+@patch('ecs_deploy.cli.get_client')
+def test_deploy_ignore_warnings(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key', errors=True)
+    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '--ignore-warnings'))
+
+    assert result.exit_code == 0
+    assert not result.exception
+    assert u'Successfully created revision: 2' in result.output
+    assert u'Successfully deregistered revision: 1' in result.output
+    assert u'Successfully changed task definition to: test-task:2' in result.output
+    assert u"WARNING: Service was unable to Lorem Ipsum" in result.output
+    assert u"Continuing." in result.output
+    assert u'Deployment successful' in result.output
+
+
 @patch('ecs_deploy.newrelic.Deployment.deploy')
 @patch('ecs_deploy.cli.get_client')
 def test_deploy_with_newrelic_errors(get_client, deploy, runner):
@@ -222,6 +237,19 @@ def test_scale_with_errors(get_client, runner):
     assert result.exit_code == 1
     assert u"Scaling failed" in result.output
     assert u"ERROR: Service was unable to Lorem Ipsum" in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_scale_ignore_warnings(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key', errors=True)
+    result = runner.invoke(cli.scale, (CLUSTER_NAME, SERVICE_NAME, '2', '--ignore-warnings'))
+
+    assert not result.exception
+    assert result.exit_code == 0
+    assert u"Successfully changed desired count to: 2" in result.output
+    assert u"WARNING: Service was unable to Lorem Ipsum" in result.output
+    assert u"Continuing." in result.output
+    assert u"Scaling successful" in result.output
 
 
 @patch('ecs_deploy.cli.get_client')
