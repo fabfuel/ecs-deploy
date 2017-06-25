@@ -256,10 +256,6 @@ class EcsTaskDefinitionDiff(object):
             )
 
 
-class EcsActionError(Exception):
-    pass
-
-
 class EcsAction(object):
     def __init__(self, client, cluster_name, service_name):
         self._client = client
@@ -377,4 +373,8 @@ class ConnectionError(EcsError):
 
 
 class UnknownContainerError(EcsError):
+    pass
+
+
+class TaskPlacementError(EcsError):
     pass

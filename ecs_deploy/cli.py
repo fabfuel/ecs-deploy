@@ -8,7 +8,7 @@ import getpass
 from datetime import datetime, timedelta
 
 from ecs_deploy.ecs import DeployAction, ScaleAction, RunAction, EcsClient, \
-    EcsActionError
+    TaskPlacementError
 from ecs_deploy.newrelic import Deployment
 
 
@@ -238,7 +238,7 @@ def inspect_errors(service, failure_message, ignore_warnings, since, timeout):
         failure_message += ' (timeout)'
 
     if error:
-        raise EcsActionError(failure_message)
+        raise TaskPlacementError(failure_message)
 
     return last_error_timestamp
 
