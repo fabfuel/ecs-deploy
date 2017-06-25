@@ -256,6 +256,9 @@ class EcsTaskDefinitionDiff(object):
             )
 
 
+class EcsActionError(Exception):
+    pass
+
 
 class EcsAction(object):
     def __init__(self, client, cluster_name, service_name):

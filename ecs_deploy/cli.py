@@ -7,7 +7,8 @@ import click
 import getpass
 from datetime import datetime, timedelta
 
-from ecs_deploy.ecs import DeployAction, ScaleAction, RunAction, EcsClient
+from ecs_deploy.ecs import DeployAction, ScaleAction, RunAction, EcsClient, \
+    EcsActionError
 from ecs_deploy.newrelic import Deployment
 
 
@@ -163,13 +164,24 @@ def wait_for_finish(action, timeout, title, success_message, failure_message, ig
         click.secho('.', nl=False)
         sleep(1)
         service = action.get_service()
-        inspected_until = inspect_errors(service, failure_message, ignore_warnings, inspected_until)
+        inspected_until = inspect_errors(
+            service=service,
+            failure_message=failure_message,
+            ignore_warnings=ignore_warnings,
+            since=inspected_until,
+            timeout=False
+        )
         waiting = not action.is_deployed(service)
 
-    inspect_errors(service, failure_message, ignore_warnings, inspected_until, waiting)
+    inspect_errors(
+        service=service,
+        failure_message=failure_message,
+        ignore_warnings=ignore_warnings,
+        since=inspected_until,
+        timeout=waiting
+    )
 
     click.secho('\n%s\n' % success_message, fg='green')
-    exit(0)
 
 
 def record_deployment(revision, newrelic_apikey, newrelic_appid, comment, user):
@@ -199,7 +211,7 @@ def print_diff(task_definition, title='Updating task definition'):
         click.secho('')
 
 
-def inspect_errors(service, failure_message, ignore_warnings, since, was_timeout=False):
+def inspect_errors(service, failure_message, ignore_warnings, since, timeout):
     error = False
     last_error_timestamp = since
 
@@ -221,15 +233,12 @@ def inspect_errors(service, failure_message, ignore_warnings, since, was_timeout
         for timestamp in service.older_errors:
             click.secho('%s\n%s\n' % (timestamp, service.older_errors[timestamp]), fg='yellow', err=True)
 
-    if was_timeout:
-        click.secho('')
-        click.secho('\n%s (timeout)\n' % failure_message, fg='red', err=True)
-        exit(1)
+    if timeout:
+        error = True
+        failure_message += ' (timeout)'
 
     if error:
-        click.secho('')
-        click.secho('\n%s\n' % failure_message, fg='red', err=True)
-        exit(1)
+        raise EcsActionError(failure_message)
 
     return last_error_timestamp
 
