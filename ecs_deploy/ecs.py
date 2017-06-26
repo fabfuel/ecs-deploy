@@ -3,6 +3,7 @@ from json import dumps
 
 import boto3
 from botocore.exceptions import ClientError, NoCredentialsError
+from dateutil.tz.tz import tzlocal
 
 
 class EcsClient(object):
@@ -100,19 +101,19 @@ class EcsService(dict):
 
     @property
     def errors(self):
-        errors = {}
-        for event in self.get('events'):
-            if u'unable' in event[u'message'] and event[u'createdAt'] >= self.deployment_updated_at:
-                errors[event[u'createdAt'].isoformat()] = 'ERROR: %s' % event[u'message']
-        return errors
+        return self.get_warnings(self.deployment_updated_at)
 
     @property
     def older_errors(self):
+        return self.get_warnings(self.deployment_created_at, self.deployment_updated_at)
+
+    def get_warnings(self, since=None, until=None):
+        since = since or self.deployment_updated_at
+        until = until or datetime.now(tz=tzlocal())
         errors = {}
         for event in self.get('events'):
-            if u'unable' in event[u'message'] and \
-                                    self.deployment_created_at <= event[u'createdAt'] <= self.deployment_updated_at:
-                errors[event[u'createdAt'].isoformat()] = 'ERROR: %s' % event[u'message']
+            if u'unable' in event[u'message'] and since < event[u'createdAt'] < until:
+                errors[event[u'createdAt']] = event[u'message']
         return errors
 
 
@@ -258,7 +259,6 @@ class EcsTaskDefinitionDiff(object):
             )
 
 
-
 class EcsAction(object):
     def __init__(self, client, cluster_name, service_name):
         self._client = client
@@ -376,6 +376,10 @@ class ConnectionError(EcsError):
 
 
 class UnknownContainerError(EcsError):
+    pass
+
+
+class TaskPlacementError(EcsError):
     pass
 
 
