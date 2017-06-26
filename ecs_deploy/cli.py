@@ -52,8 +52,8 @@ def get_client(access_key_id, secret_access_key, region, profile):
               help='Amount of seconds to wait for deployment before '
                    'command fails (default: 300)')
 @click.option('--ignore-warnings', is_flag=True,
-              help='Do not fail deployment, if warnings occur (e.g. '
-                   'insufficient memory, CPU or port already in use.')
+              help='Do not fail deployment on warnings (port already in use '
+                   'or insufficient memory/CPU)')
 @click.option('--newrelic-apikey', required=False,
               help='New Relic API Key for recording the deployment')
 @click.option('--newrelic-appid', required=False,
@@ -141,8 +141,8 @@ def deploy(cluster, service, tag, image, command, env, role, task, region,
 @click.option('--timeout', default=300, type=int,
               help='AWS configuration profile')
 @click.option('--ignore-warnings', is_flag=True,
-              help='Do not fail deployment, if warnings occur (e.g. '
-                   'insufficient memory, CPU or port already in use.')
+              help='Do not fail deployment on warnings (port already in use '
+                   'or insufficient memory/CPU)')
 def scale(cluster, service, desired_count, access_key_id, secret_access_key,
           region, profile, timeout, ignore_warnings):
     """
