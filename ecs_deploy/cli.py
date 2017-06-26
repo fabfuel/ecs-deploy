@@ -24,22 +24,44 @@ def get_client(access_key_id, secret_access_key, region, profile):
 @click.command()
 @click.argument('cluster')
 @click.argument('service')
-@click.option('-t', '--tag', help='Changes the tag for ALL container images')
-@click.option('-i', '--image', type=(str, str), multiple=True, help='Overwrites the image for a container: <container> <image>')
-@click.option('-c', '--command', type=(str, str), multiple=True, help='Overwrites the command in a container: <container> <command>')
-@click.option('-e', '--env', type=(str, str, str), multiple=True, help='Adds or changes an environment variable: <container> <name> <value>')
-@click.option('-r', '--role', type=str, help='Sets the task\'s role ARN: <task role ARN>')
-@click.option('--task', type=str, help='Task definition to be deployed. Can be a task ARN or a task familiy with optional revision')
-@click.option('--region', required=False, help='AWS region')
-@click.option('--access-key-id', required=False, help='AWS access key id')
-@click.option('--secret-access-key', required=False, help='AWS secret access yey')
-@click.option('--profile', required=False, help='AWS configuration profile')
-@click.option('--timeout', required=False, default=300, type=int, help='Amount of seconds to wait for deployment before command fails (default: 300)')
-@click.option('--ignore-warnings', is_flag=True, help='Do not fail deployment, if warnings occur (e.g. insufficient mempory, CPU or port already in use.')
-@click.option('--newrelic-apikey', required=False, help='New Relic API Key for recording the deployment')
-@click.option('--newrelic-appid', required=False, help='New Relic App ID for recording the deployment')
-@click.option('--comment', required=False, help='Description/comment for recording the deployment')
-@click.option('--user', required=False, help='User who executes the deployment (used for recording)')
+@click.option('-t', '--tag',
+              help='Changes the tag for ALL container images')
+@click.option('-i', '--image', type=(str, str), multiple=True,
+              help='Overwrites the image for a container: '
+                   '<container> <image>')
+@click.option('-c', '--command', type=(str, str), multiple=True,
+              help='Overwrites the command in a container: '
+                   '<container> <command>')
+@click.option('-e', '--env', type=(str, str, str), multiple=True,
+              help='Adds or changes an environment variable: '
+                   '<container> <name> <value>')
+@click.option('-r', '--role', type=str,
+              help='Sets the task\'s role ARN: <task role ARN>')
+@click.option('--task', type=str,
+              help='Task definition to be deployed. Can be a task ARN '
+                   'or a task family with optional revision')
+@click.option('--region', required=False,
+              help='AWS region (e.g. eu-central-1)')
+@click.option('--access-key-id', required=False,
+              help='AWS access key id')
+@click.option('--secret-access-key', required=False,
+              help='AWS secret access key')
+@click.option('--profile', required=False,
+              help='AWS configuration profile name')
+@click.option('--timeout', required=False, default=300, type=int,
+              help='Amount of seconds to wait for deployment before '
+                   'command fails (default: 300)')
+@click.option('--ignore-warnings', is_flag=True,
+              help='Do not fail deployment, if warnings occur (e.g. '
+                   'insufficient memory, CPU or port already in use.')
+@click.option('--newrelic-apikey', required=False,
+              help='New Relic API Key for recording the deployment')
+@click.option('--newrelic-appid', required=False,
+              help='New Relic App ID for recording the deployment')
+@click.option('--comment', required=False,
+              help='Description/comment for recording the deployment')
+@click.option('--user', required=False,
+              help='User who executes the deployment (used for recording)')
 def deploy(cluster, service, tag, image, command, env, role, task, region,
            access_key_id, secret_access_key, profile, timeout, newrelic_apikey,
            newrelic_appid, comment, user, ignore_warnings):
@@ -50,8 +72,9 @@ def deploy(cluster, service, tag, image, command, env, role, task, region,
     CLUSTER is the name of your cluster (e.g. 'my-custer') within ECS.
     SERVICE is the name of your service (e.g. 'my-app') within ECS.
 
-    When not giving any other options, the task definition will not be changed. It will just be duplicated, so that
-    all container images will be pulled and redeployed.
+    When not giving any other options, the task definition will not be changed.
+    It will just be duplicated, so that all container images will be pulled
+    and redeployed.
     """
 
     try:
@@ -59,30 +82,44 @@ def deploy(cluster, service, tag, image, command, env, role, task, region,
         deployment = DeployAction(client, cluster, service)
 
         if task:
-            task_definition = deployment.get_task_definition(task)
+            td = deployment.get_task_definition(task)
             click.secho('Deploying based on task definition: %s' % task)
         else:
-            task_definition = deployment.get_current_task_definition(deployment.service)
+            td = deployment.get_current_task_definition(deployment.service)
 
-        task_definition.set_images(tag, **{key: value for (key, value) in image})
-        task_definition.set_commands(**{key: value for (key, value) in command})
-        task_definition.set_environment(env)
-        task_definition.set_role_arn(role)
-        print_diff(task_definition)
+        td.set_images(tag, **{key: value for (key, value) in image})
+        td.set_commands(**{key: value for (key, value) in command})
+        td.set_environment(env)
+        td.set_role_arn(role)
+        print_diff(td)
 
         click.secho('Creating new task definition revision')
-        new_task_definition = deployment.update_task_definition(task_definition)
-        click.secho('Successfully created revision: %d' % new_task_definition.revision, fg='green')
-        click.secho('Successfully deregistered revision: %d\n' % task_definition.revision, fg='green')
+        new_td = deployment.update_task_definition(td)
+
+        click.secho(
+            'Successfully created revision: %d' % new_td.revision,
+            fg='green'
+        )
+        click.secho(
+            'Successfully deregistered revision: %d\n' % td.revision,
+            fg='green'
+        )
 
         record_deployment(tag, newrelic_apikey, newrelic_appid, comment, user)
 
         click.secho('Updating service')
-        deployment.deploy(new_task_definition)
+        deployment.deploy(new_td)
         click.secho('Successfully changed task definition to: %s:%s\n' %
-                    (new_task_definition.family, new_task_definition.revision), fg='green')
+                    (new_td.family, new_td.revision), fg='green')
 
-        wait_for_finish(deployment, timeout, 'Deploying task definition', 'Deployment successful', 'Deployment failed', ignore_warnings)
+        wait_for_finish(
+            action=deployment,
+            timeout=timeout,
+            title='Deploying task definition',
+            success_message='Deployment successful',
+            failure_message='Deployment failed',
+            ignore_warnings=ignore_warnings
+        )
 
     except Exception as e:
         click.secho('%s\n' % str(e), fg='red', err=True)
@@ -93,13 +130,21 @@ def deploy(cluster, service, tag, image, command, env, role, task, region,
 @click.argument('cluster')
 @click.argument('service')
 @click.argument('desired_count', type=int)
-@click.option('--region', help='AWS region')
-@click.option('--access-key-id', help='AWS access key id')
-@click.option('--secret-access-key', help='AWS secret access yey')
-@click.option('--profile', help='AWS configuration profile')
-@click.option('--timeout', default=300, type=int, help='AWS configuration profile')
-@click.option('--ignore-warnings', is_flag=True, help='Do not fail deployment, if warnings occur (e.g. insufficient mempory, CPU or port already in use.')
-def scale(cluster, service, desired_count, access_key_id, secret_access_key, region, profile, timeout, ignore_warnings):
+@click.option('--region',
+              help='AWS region (e.g. eu-central-1)')
+@click.option('--access-key-id',
+              help='AWS access key id')
+@click.option('--secret-access-key',
+              help='AWS secret access key')
+@click.option('--profile',
+              help='AWS configuration profile name')
+@click.option('--timeout', default=300, type=int,
+              help='AWS configuration profile')
+@click.option('--ignore-warnings', is_flag=True,
+              help='Do not fail deployment, if warnings occur (e.g. '
+                   'insufficient memory, CPU or port already in use.')
+def scale(cluster, service, desired_count, access_key_id, secret_access_key,
+          region, profile, timeout, ignore_warnings):
     """
     Scale a service up or down.
 
@@ -113,8 +158,18 @@ def scale(cluster, service, desired_count, access_key_id, secret_access_key, reg
         scaling = ScaleAction(client, cluster, service)
         click.secho('Updating service')
         scaling.scale(desired_count)
-        click.secho('Successfully changed desired count to: %s\n' % desired_count, fg='green')
-        wait_for_finish(scaling, timeout, 'Scaling service', 'Scaling successful', 'Scaling failed', ignore_warnings)
+        click.secho(
+            'Successfully changed desired count to: %s\n' % desired_count,
+            fg='green'
+        )
+        wait_for_finish(
+            action=scaling,
+            timeout=timeout,
+            title='Scaling service',
+            success_message='Scaling successful',
+            failure_message='Scaling failed',
+            ignore_warnings=ignore_warnings
+        )
 
     except Exception as e:
         click.secho('%s\n' % str(e), fg='red', err=True)
@@ -125,33 +180,49 @@ def scale(cluster, service, desired_count, access_key_id, secret_access_key, reg
 @click.argument('cluster')
 @click.argument('task')
 @click.argument('count', required=False, default=1)
-@click.option('-c', '--command', type=(str, str), multiple=True, help='Overwrites the command in a container: <container> <command>')
-@click.option('-e', '--env', type=(str, str, str), multiple=True, help='Adds or changes an environment variable: <container> <name> <value>')
-@click.option('--region', help='AWS region')
-@click.option('--access-key-id', help='AWS access key id')
-@click.option('--secret-access-key', help='AWS secret access yey')
-@click.option('--profile', help='AWS configuration profile')
-def run(cluster, task, count, command, env, region, access_key_id, secret_access_key, profile):
+@click.option('-c', '--command', type=(str, str), multiple=True,
+              help='Overwrites the command in a container: '
+                   '<container> <command>')
+@click.option('-e', '--env', type=(str, str, str), multiple=True,
+              help='Adds or changes an environment variable: '
+                   '<container> <name> <value>')
+@click.option('--region',
+              help='AWS region (e.g. eu-central-1)')
+@click.option('--access-key-id',
+              help='AWS access key id')
+@click.option('--secret-access-key',
+              help='AWS secret access key')
+@click.option('--profile',
+              help='AWS configuration profile name')
+def run(cluster, task, count, command, env, region, access_key_id,
+        secret_access_key, profile):
     """
     Run a one-off task.
 
     \b
     CLUSTER is the name of your cluster (e.g. 'my-custer') within ECS.
-    TASK is the name of your task definintion (e.g. 'mytask') within ECS.
+    TASK is the name of your task definition (e.g. 'my-task') within ECS.
     COMMAND is the number of tasks your service should run.
     """
     try:
         client = get_client(access_key_id, secret_access_key, region, profile)
         action = RunAction(client, cluster)
 
-        task_definition = action.get_task_definition(task)
-        task_definition.set_commands(**{key: value for (key, value) in command})
-        task_definition.set_environment(env)
-        print_diff(task_definition, 'Using task definition: %s' % task)
+        td = action.get_task_definition(task)
+        td.set_commands(**{key: value for (key, value) in command})
+        td.set_environment(env)
+        print_diff(td, 'Using task definition: %s' % task)
 
-        action.run(task_definition, count, 'ECS Deploy')
+        action.run(td, count, 'ECS Deploy')
 
-        click.secho('Successfully started %d instances of task: %s' % (len(action.started_tasks), task_definition.family_revision), fg='green')
+        click.secho(
+            'Successfully started %d instances of task: %s' % (
+                len(action.started_tasks),
+                td.family_revision
+            ),
+            fg='green'
+        )
+
         for started_task in action.started_tasks:
             click.secho('- %s' % started_task['taskArn'], fg='green')
         click.secho(' ')
@@ -161,7 +232,8 @@ def run(cluster, task, count, command, env, region, access_key_id, secret_access
         exit(1)
 
 
-def wait_for_finish(action, timeout, title, success_message, failure_message, ignore_warnings):
+def wait_for_finish(action, timeout, title, success_message, failure_message,
+                    ignore_warnings):
     click.secho(title, nl=False)
     waiting = True
     waiting_timeout = datetime.now() + timedelta(seconds=timeout)
@@ -191,18 +263,18 @@ def wait_for_finish(action, timeout, title, success_message, failure_message, ig
     click.secho('\n%s\n' % success_message, fg='green')
 
 
-def record_deployment(revision, newrelic_apikey, newrelic_appid, comment, user):
-    newrelic_apikey = getenv('NEW_RELIC_API_KEY', newrelic_apikey)
-    newrelic_appid = getenv('NEW_RELIC_APP_ID', newrelic_appid)
+def record_deployment(revision, api_key, app_id, comment, user):
+    api_key = getenv('NEW_RELIC_API_KEY', api_key)
+    app_id = getenv('NEW_RELIC_APP_ID', app_id)
 
-    if not revision or not newrelic_apikey or not newrelic_appid:
+    if not revision or not api_key or not app_id:
         return False
 
     user = user or getpass.getuser()
 
     click.secho('Recording deployment in New Relic', nl=False)
 
-    deployment = Deployment(newrelic_apikey, newrelic_appid, user)
+    deployment = Deployment(api_key, app_id, user)
     deployment.deploy(revision, '', comment)
 
     click.secho('\nDone\n', fg='green')
@@ -228,17 +300,29 @@ def inspect_errors(service, failure_message, ignore_warnings, since, timeout):
         click.secho('')
         if ignore_warnings:
             last_error_timestamp = timestamp
-            click.secho('%s\nWARNING: %s' % (timestamp, message), fg='yellow', err=False)
+            click.secho(
+                text='%s\nWARNING: %s' % (timestamp, message),
+                fg='yellow',
+                err=False
+            )
             click.secho('Continuing.', nl=False)
         else:
-            click.secho('%s\nERROR: %s\n' % (timestamp, message), fg='red', err=True)
+            click.secho(
+                text='%s\nERROR: %s\n' % (timestamp, message),
+                fg='red',
+                err=True
+            )
             error = True
 
     if service.older_errors:
         click.secho('')
         click.secho('Older errors', fg='yellow', err=True)
         for timestamp in service.older_errors:
-            click.secho('%s\n%s\n' % (timestamp, service.older_errors[timestamp]), fg='yellow', err=True)
+            click.secho(
+                text='%s\n%s\n' % (timestamp, service.older_errors[timestamp]),
+                fg='yellow',
+                err=True
+            )
 
     if timeout:
         error = True
