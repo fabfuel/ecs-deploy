@@ -18,7 +18,10 @@ class EcsClient(object):
         return self.boto.describe_services(cluster=cluster_name, services=[service_name])
 
     def describe_task_definition(self, task_definition_arn):
-        return self.boto.describe_task_definition(taskDefinition=task_definition_arn)
+        try:
+            return self.boto.describe_task_definition(taskDefinition=task_definition_arn)
+        except ClientError:
+            raise UnknownTaskDefinitionError('Unknown task definition arn: %s' % task_definition_arn)
 
     def list_tasks(self, cluster_name, service_name):
         return self.boto.list_tasks(cluster=cluster_name, serviceName=service_name)
@@ -377,4 +380,8 @@ class UnknownContainerError(EcsError):
 
 
 class TaskPlacementError(EcsError):
+    pass
+
+
+class UnknownTaskDefinitionError(EcsError):
     pass

@@ -6,7 +6,8 @@ from ecs_deploy import cli
 from ecs_deploy.cli import get_client, record_deployment
 from ecs_deploy.ecs import EcsClient
 from ecs_deploy.newrelic import Deployment, NewRelicDeploymentException
-from tests.test_ecs import EcsTestClient, CLUSTER_NAME, SERVICE_NAME
+from tests.test_ecs import EcsTestClient, CLUSTER_NAME, SERVICE_NAME, \
+    TASK_DEFINITION_ARN_1
 
 
 @pytest.fixture
@@ -204,6 +205,35 @@ def test_deploy_with_newrelic_errors(get_client, deploy, runner):
 
 
 @patch('ecs_deploy.cli.get_client')
+def test_deploy_task_definition_arn(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '--task', TASK_DEFINITION_ARN_1))
+    assert result.exit_code == 0
+    assert not result.exception
+    assert u"Deploying based on task definition: %s" % TASK_DEFINITION_ARN_1 in result.output
+    assert u'Successfully created revision: 2' in result.output
+    assert u'Successfully deregistered revision: 1' in result.output
+    assert u'Successfully changed task definition to: test-task:2' in result.output
+    assert u'Deployment successful' in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_deploy_unknown_task_definition_arn(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '--task', u'arn:aws:ecs:eu-central-1:123456789012:task-definition/foobar:55'))
+    assert result.exit_code == 1
+    assert u"Unknown task definition arn: arn:aws:ecs:eu-central-1:123456789012:task-definition/foobar:55" in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_scale_without_credentials(get_client, runner):
+    get_client.return_value = EcsTestClient()
+    result = runner.invoke(cli.scale, (CLUSTER_NAME, SERVICE_NAME, '2'))
+    assert result.exit_code == 1
+    assert result.output == u'Unable to locate credentials. Configure credentials by running "aws configure".\n\n'
+
+
+@patch('ecs_deploy.cli.get_client')
 def test_scale_with_invalid_cluster(get_client, runner):
     get_client.return_value = EcsTestClient('acces_key', 'secret_key')
     result = runner.invoke(cli.scale, ('unknown-cluster', SERVICE_NAME, '2'))
@@ -276,7 +306,7 @@ def test_run_task(get_client, runner):
     assert not result.exception
     assert result.exit_code == 0
 
-    assert u"Successfully started 2 instances of task: test-task:1" in result.output
+    assert u"Successfully started 2 instances of task: test-task:2" in result.output
     assert u"- arn:foo:bar" in result.output
     assert u"- arn:lorem:ipsum" in result.output
 
@@ -291,7 +321,7 @@ def test_run_task_with_command(get_client, runner):
 
     assert u"Using task definition: test-task" in result.output
     assert u"Changed command of container 'webserver' to: \"date\" (was: \"run\")" in result.output
-    assert u"Successfully started 2 instances of task: test-task:1" in result.output
+    assert u"Successfully started 2 instances of task: test-task:2" in result.output
     assert u"- arn:foo:bar" in result.output
     assert u"- arn:lorem:ipsum" in result.output
 
@@ -306,7 +336,7 @@ def test_run_task_with_environment_var(get_client, runner):
 
     assert u"Using task definition: test-task" in result.output
     assert u'Changed environment of container \'application\' to: {"foo": "bar"} (was: {})' in result.output
-    assert u"Successfully started 2 instances of task: test-task:1" in result.output
+    assert u"Successfully started 2 instances of task: test-task:2" in result.output
     assert u"- arn:foo:bar" in result.output
     assert u"- arn:lorem:ipsum" in result.output
 
