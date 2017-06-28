@@ -123,7 +123,7 @@ This will change the **webserver**'s container image to "nginx:1.9" and the **ap
 
 Deploy a custom task definition
 ===============================
-To deploy any task definition (independent of which is currently used in the service), you can use the `--task` parameter. The value can be:
+To deploy any task definition (independent of which is currently used in the service), you can use the ``--task`` parameter. The value can be:
 
 A fully qualified task ARN::
 
@@ -136,6 +136,11 @@ A task family name with revision::
 Or just a task family name. It this case, the most recent revision is used::
 
     $ ecs deploy my-cluster my-service --task my-task
+    
+.. important::
+   ``ecs`` will still create a new task definition, which then is used in the service. 
+   This is done, to retain consistent behaviour and to ensure the ECS agent e.g. pulls all images.
+   But the newly created task definition will be based on the given task, not the currently used task.
 
 
 Set an environment variable
