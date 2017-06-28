@@ -379,7 +379,7 @@ def test_task_get_overrides_command(task_definition):
 
 
 def test_task_get_overrides_environment(task_definition):
-    environment = task_definition.get_overrides_environment(dict(foo='bar'))
+    environment = task_definition.get_overrides_env(dict(foo='bar'))
     assert isinstance(environment, list)
     assert len(environment) == 1
     assert environment[0] == dict(name='foo', value='bar')
@@ -530,7 +530,9 @@ def test_ecs_action_get_current_task_definition(client, service):
     action = EcsAction(client, u'test-cluster', u'test-service')
     task_definition = action.get_current_task_definition(service)
 
-    client.describe_task_definition.assert_called_once_with(service.task_definition)
+    client.describe_task_definition.assert_called_once_with(
+        task_definition_arn=service.task_definition
+    )
 
     assert isinstance(task_definition, EcsTaskDefinition)
     assert task_definition.family == u'test-task'
@@ -547,10 +549,10 @@ def test_update_task_definition(client, task_definition):
 
     assert isinstance(new_task_definition, EcsTaskDefinition)
     client.register_task_definition.assert_called_once_with(
-        task_definition.family,
-        task_definition.containers,
-        task_definition.volumes,
-        task_definition.role_arn,
+        family=task_definition.family,
+        containers=task_definition.containers,
+        volumes=task_definition.volumes,
+        role_arn=task_definition.role_arn,
     )
     client.deregister_task_definition.assert_called_once_with(
         task_definition.arn
@@ -565,8 +567,12 @@ def test_update_service(client, service):
     new_service = action.update_service(service)
 
     assert isinstance(new_service, EcsService)
-    client.update_service.assert_called_once_with(service.cluster, service.name, service.desired_count,
-                                                  service.task_definition)
+    client.update_service.assert_called_once_with(
+        cluster=service.cluster,
+        service=service.name,
+        desired_count=service.desired_count,
+        task_definition=service.task_definition
+    )
 
 
 @patch.object(EcsClient, '__init__')
@@ -578,7 +584,10 @@ def test_is_deployed(client, service):
     is_deployed = action.is_deployed(service)
 
     assert is_deployed is True
-    client.list_tasks.assert_called_once_with(service.cluster, service.name)
+    client.list_tasks.assert_called_once_with(
+        cluster_name=service.cluster,
+        service_name=service.name
+    )
 
 
 @patch.object(EcsClient, '__init__')
@@ -636,9 +645,16 @@ def test_deploy_action(client, task_definition_revision_2):
     assert action.service.task_definition == task_definition_revision_2.arn
     assert isinstance(updated_service, EcsService)
 
-    client.describe_services.assert_called_once_with(CLUSTER_NAME, SERVICE_NAME)
-    client.update_service.assert_called_once_with(action.service.cluster, action.service.name,
-                                                  action.service.desired_count, task_definition_revision_2.arn)
+    client.describe_services.assert_called_once_with(
+        cluster_name=CLUSTER_NAME,
+        service_name=SERVICE_NAME
+    )
+    client.update_service.assert_called_once_with(
+        cluster=action.service.cluster,
+        service=action.service.name,
+        desired_count=action.service.desired_count,
+        task_definition=task_definition_revision_2.arn
+    )
 
 
 @patch.object(EcsClient, '__init__')
@@ -649,9 +665,16 @@ def test_scale_action(client):
     assert action.service.desired_count == 5
     assert isinstance(updated_service, EcsService)
 
-    client.describe_services.assert_called_once_with(CLUSTER_NAME, SERVICE_NAME)
-    client.update_service.assert_called_once_with(action.service.cluster, action.service.name,
-                                                  5, action.service.task_definition)
+    client.describe_services.assert_called_once_with(
+        cluster_name=CLUSTER_NAME,
+        service_name=SERVICE_NAME
+    )
+    client.update_service.assert_called_once_with(
+        cluster=action.service.cluster,
+        service=action.service.name,
+        desired_count=5,
+        task_definition=action.service.task_definition
+    )
 
 
 @patch.object(EcsClient, '__init__')
