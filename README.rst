@@ -175,7 +175,7 @@ To change or set the role, the service's task should run as, use the following c
 
 This will set the task role to "MySpecialEcsTaskRole".
 
-Ignore capaticy issues
+Ignore capacity issues
 ======================
 If your cluster is undersized or the service's deployment options are not optimally set, the cluster
 might be incapable to run blue-green-deployments. In this case, you might see errors like these:
@@ -187,7 +187,7 @@ might be incapable to run blue-green-deployments. In this case, you might see er
 
 There might also be warnings about insufficient memory or CPU.
 
-To ignore these warnings, you can run `ecs deploy` with the flag `--ignore-warnings`::
+To ignore these warnings, you can run the deployment with the flag ``--ignore-warnings``::
 
     $ ecs deploy my-cluster my-service --ignore-warnings
 
