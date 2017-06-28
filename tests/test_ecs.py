@@ -10,7 +10,7 @@ from mock.mock import patch
 
 from ecs_deploy.ecs import EcsService, EcsTaskDefinition, \
     UnknownContainerError, EcsTaskDefinitionDiff, EcsClient, \
-    EcsAction, ConnectionError, DeployAction, ScaleAction, RunAction, \
+    EcsAction, EcsConnectionError, DeployAction, ScaleAction, RunAction, \
     UnknownTaskDefinitionError
 
 CLUSTER_NAME = u'test-cluster'
@@ -494,7 +494,7 @@ def test_ecs_action_init(client):
 
 
 def test_ecs_action_init_with_invalid_cluster():
-    with pytest.raises(ConnectionError) as excinfo:
+    with pytest.raises(EcsConnectionError) as excinfo:
         client = EcsTestClient(u'access_key',  u'secret_key')
         EcsAction(client, u'invliad-cluster', u'test-service')
     assert str(excinfo.value) == u'An error occurred (ClusterNotFoundException) when calling the DescribeServices ' \
@@ -502,14 +502,14 @@ def test_ecs_action_init_with_invalid_cluster():
 
 
 def test_ecs_action_init_with_invalid_service():
-    with pytest.raises(ConnectionError) as excinfo:
+    with pytest.raises(EcsConnectionError) as excinfo:
         client = EcsTestClient(u'access_key',  u'secret_key')
         EcsAction(client, u'test-cluster', u'invalid-service')
     assert str(excinfo.value) == u'An error occurred when calling the DescribeServices operation: Service not found.'
 
 
 def test_ecs_action_init_without_credentials():
-    with pytest.raises(ConnectionError) as excinfo:
+    with pytest.raises(EcsConnectionError) as excinfo:
         client = EcsTestClient()
         EcsAction(client, u'test-cluster', u'invalid-service')
     assert str(excinfo.value) == u'Unable to locate credentials. Configure credentials by running "aws configure".'
@@ -754,9 +754,9 @@ class EcsTestClient(object):
 
     def run_task(self, cluster, task_definition, count, started_by, overrides):
         if not self.access_key_id or not self.secret_access_key:
-            raise ConnectionError(u'Unable to locate credentials. Configure credentials by running "aws configure".')
+            raise EcsConnectionError(u'Unable to locate credentials. Configure credentials by running "aws configure".')
         if cluster == 'unknown-cluster':
-            raise ConnectionError(u'An error occurred (ClusterNotFoundException) when calling the RunTask operation: Cluster not found.')
+            raise EcsConnectionError(u'An error occurred (ClusterNotFoundException) when calling the RunTask operation: Cluster not found.')
         if self.errors:
             error = dict(Error=dict(Code=123, Message="Something went wrong"))
             raise ClientError(error, 'fake_error')

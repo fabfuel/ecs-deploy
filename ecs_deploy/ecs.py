@@ -324,14 +324,14 @@ class EcsAction(object):
             if service_name:
                 self._service = self.get_service()
         except IndexError:
-            raise ConnectionError(
+            raise EcsConnectionError(
                 u'An error occurred when calling the DescribeServices '
                 u'operation: Service not found.'
             )
         except ClientError as e:
-            raise ConnectionError(str(e))
+            raise EcsConnectionError(str(e))
         except NoCredentialsError:
-            raise ConnectionError(
+            raise EcsConnectionError(
                 u'Unable to locate credentials. Configure credentials '
                 u'by running "aws configure".'
             )
@@ -464,7 +464,7 @@ class EcsError(Exception):
     pass
 
 
-class ConnectionError(EcsError):
+class EcsConnectionError(EcsError):
     pass
 
 
