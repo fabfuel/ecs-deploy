@@ -121,6 +121,22 @@ The `-i` or `--image` option can also be passed several times::
      
 This will change the **webserver**'s container image to "nginx:1.9" and the **application**'s image to "my-app:1.2.3".
 
+Deploy a custom task definition
+===============================
+To deploy any task definition (independent of which is currently used in the service), you can use the `--task` parameter. The value can be:
+
+A fully qualified task ARN::
+
+    $ ecs deploy my-cluster my-service --task arn:aws:ecs:eu-central-1:123456789012:task-definition/my-task:20
+
+A task family name with revision::
+
+    $ ecs deploy my-cluster my-service --task my-task:20
+
+Or just a task family name. It this case, the most recent revision is used::
+
+    $ ecs deploy my-cluster my-service --task my-task
+
 
 Set an environment variable
 ===========================
@@ -158,6 +174,25 @@ To change or set the role, the service's task should run as, use the following c
     $ ecs deploy my-cluster my-service -r arn:aws:iam::123456789012:role/MySpecialEcsTaskRole
 
 This will set the task role to "MySpecialEcsTaskRole".
+
+Ignore capaticy issues
+======================
+If your cluster is undersized or the service's deployment options are not optimally set, the cluster
+might be incapable to run blue-green-deployments. In this case, you might see errors like these:
+
+    ERROR: (service my-service) was unable to place a task because no container instance met all of
+    its requirements. The closest matching (container-instance 123456-1234-1234-1234-1234567890) is 
+    already using a port required by your task. For more information, see the Troubleshooting 
+    section of the Amazon ECS Developer Guide.
+
+There might also be warnings about insufficient memory or CPU.
+
+To ignore these warnings, you can run `ecs deploy` with the flag `--ignore-warnings`::
+
+    $ ecs deploy my-cluster my-service --ignore-warnings
+
+In that case, the warning is printed, but the script continues and waits for a successful 
+deployment until it times out.
 
 Scaling
 -------
