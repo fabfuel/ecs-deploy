@@ -1,16 +1,17 @@
 from copy import deepcopy
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import pytest
-import datetime
 
 from boto3.session import Session
 from botocore.exceptions import ClientError, NoCredentialsError
 from dateutil.tz import tzlocal
 from mock.mock import patch
 
-from ecs_deploy.ecs import EcsService, EcsTaskDefinition, UnknownContainerError, EcsTaskDefinitionDiff, EcsClient, \
-    EcsAction, ConnectionError, DeployAction, ScaleAction, RunAction
+from ecs_deploy.ecs import EcsService, EcsTaskDefinition, \
+    UnknownContainerError, EcsTaskDefinitionDiff, EcsClient, \
+    EcsAction, EcsConnectionError, DeployAction, ScaleAction, RunAction, \
+    UnknownTaskDefinitionError
 
 CLUSTER_NAME = u'test-cluster'
 CLUSTER_ARN = u'arn:aws:ecs:eu-central-1:123456789012:cluster/%s' % CLUSTER_NAME
@@ -91,8 +92,8 @@ PAYLOAD_DEPLOYMENTS = [
         u'desiredCount': DESIRED_COUNT,
         u'runningCount': DESIRED_COUNT,
         u'taskDefinition': TASK_DEFINITION_ARN_1,
-        u'createdAt': datetime.datetime(2016, 3, 11, 12, 00, 00, 000000, tzinfo=tzlocal()),
-        u'updatedAt': datetime.datetime(2016, 3, 11, 12, 5, 00, 000000, tzinfo=tzlocal()),
+        u'createdAt': datetime(2016, 3, 11, 12, 0, 0, 000000, tzinfo=tzlocal()),
+        u'updatedAt': datetime(2016, 3, 11, 12, 5, 0, 000000, tzinfo=tzlocal()),
         u'id': u'ecs-svc/0000000000000000002',
     }
 ]
@@ -100,12 +101,12 @@ PAYLOAD_DEPLOYMENTS = [
 PAYLOAD_EVENTS = [
     {
         u'id': u'error',
-        u'createdAt': datetime.datetime(2016, 3, 11, 12, 5, 5, 000000, tzinfo=tzlocal()),
+        u'createdAt': datetime.now(tz=tzlocal()),
         u'message': u'Service was unable to Lorem Ipsum'
     },
     {
         u'id': u'older_error',
-        u'createdAt': datetime.datetime(2016, 3, 11, 12, 00, 5, 000000, tzinfo=tzlocal()),
+        u'createdAt': datetime(2016, 3, 11, 12, 0, 10, 000000, tzinfo=tzlocal()),
         u'message': u'Service was unable to Lorem Ipsum'
     }
 ]
@@ -152,6 +153,14 @@ RESPONSE_TASK_DEFINITION = {
 
 RESPONSE_TASK_DEFINITION_2 = {
     u"taskDefinition": PAYLOAD_TASK_DEFINITION_2
+}
+
+RESPONSE_TASK_DEFINITIONS = {
+    TASK_DEFINITION_ARN_1: RESPONSE_TASK_DEFINITION,
+    TASK_DEFINITION_ARN_2: RESPONSE_TASK_DEFINITION_2,
+    u'test-task:1': RESPONSE_TASK_DEFINITION,
+    u'test-task:2': RESPONSE_TASK_DEFINITION_2,
+    u'test-task': RESPONSE_TASK_DEFINITION_2,
 }
 
 RESPONSE_LIST_TASKS_2 = {
@@ -220,23 +229,23 @@ def test_service_name(service):
 
 
 def test_service_deployment_created_at(service):
-    assert service.deployment_created_at == datetime.datetime(2016, 3, 11, 12, 00, 00, 000000, tzinfo=tzlocal())
+    assert service.deployment_created_at == datetime(2016, 3, 11, 12, 00, 00, 000000, tzinfo=tzlocal())
 
 
 def test_service_deployment_updated_at(service):
-    assert service.deployment_updated_at == datetime.datetime(2016, 3, 11, 12, 5, 00, 000000, tzinfo=tzlocal())
+    assert service.deployment_updated_at == datetime(2016, 3, 11, 12, 5, 00, 000000, tzinfo=tzlocal())
 
 
 def test_service_deployment_created_at_without_deployments(service_without_deployments):
-    now = datetime.datetime.now()
+    now = datetime.now()
     assert service_without_deployments.deployment_created_at >= now
-    assert service_without_deployments.deployment_created_at <= datetime.datetime.now()
+    assert service_without_deployments.deployment_created_at <= datetime.now()
 
 
 def test_service_deployment_updated_at_without_deployments(service_without_deployments):
-    now = datetime.datetime.now()
+    now = datetime.now()
     assert service_without_deployments.deployment_updated_at >= now
-    assert service_without_deployments.deployment_updated_at <= datetime.datetime.now()
+    assert service_without_deployments.deployment_updated_at <= datetime.now()
 
 
 def test_service_errors(service_with_errors):
@@ -370,7 +379,7 @@ def test_task_get_overrides_command(task_definition):
 
 
 def test_task_get_overrides_environment(task_definition):
-    environment = task_definition.get_overrides_environment(dict(foo='bar'))
+    environment = task_definition.get_overrides_env(dict(foo='bar'))
     assert isinstance(environment, list)
     assert len(environment) == 1
     assert environment[0] == dict(name='foo', value='bar')
@@ -411,6 +420,13 @@ def test_client_describe_services(client):
 def test_client_describe_task_definition(client):
     client.describe_task_definition(u'task_definition_arn')
     client.boto.describe_task_definition.assert_called_once_with(taskDefinition=u'task_definition_arn')
+
+
+def test_client_describe_unknown_task_definition(client):
+    error_response = {u'Error': {u'Code': u'ClientException', u'Message': u'Unable to describe task definition.'}}
+    client.boto.describe_task_definition.side_effect = ClientError(error_response, u'DescribeServices')
+    with pytest.raises(UnknownTaskDefinitionError):
+        client.describe_task_definition(u'task_definition_arn')
 
 
 def test_client_list_tasks(client):
@@ -478,7 +494,7 @@ def test_ecs_action_init(client):
 
 
 def test_ecs_action_init_with_invalid_cluster():
-    with pytest.raises(ConnectionError) as excinfo:
+    with pytest.raises(EcsConnectionError) as excinfo:
         client = EcsTestClient(u'access_key',  u'secret_key')
         EcsAction(client, u'invliad-cluster', u'test-service')
     assert str(excinfo.value) == u'An error occurred (ClusterNotFoundException) when calling the DescribeServices ' \
@@ -486,14 +502,14 @@ def test_ecs_action_init_with_invalid_cluster():
 
 
 def test_ecs_action_init_with_invalid_service():
-    with pytest.raises(ConnectionError) as excinfo:
+    with pytest.raises(EcsConnectionError) as excinfo:
         client = EcsTestClient(u'access_key',  u'secret_key')
         EcsAction(client, u'test-cluster', u'invalid-service')
     assert str(excinfo.value) == u'An error occurred when calling the DescribeServices operation: Service not found.'
 
 
 def test_ecs_action_init_without_credentials():
-    with pytest.raises(ConnectionError) as excinfo:
+    with pytest.raises(EcsConnectionError) as excinfo:
         client = EcsTestClient()
         EcsAction(client, u'test-cluster', u'invalid-service')
     assert str(excinfo.value) == u'Unable to locate credentials. Configure credentials by running "aws configure".'
@@ -514,7 +530,9 @@ def test_ecs_action_get_current_task_definition(client, service):
     action = EcsAction(client, u'test-cluster', u'test-service')
     task_definition = action.get_current_task_definition(service)
 
-    client.describe_task_definition.assert_called_once_with(service.task_definition)
+    client.describe_task_definition.assert_called_once_with(
+        task_definition_arn=service.task_definition
+    )
 
     assert isinstance(task_definition, EcsTaskDefinition)
     assert task_definition.family == u'test-task'
@@ -531,10 +549,10 @@ def test_update_task_definition(client, task_definition):
 
     assert isinstance(new_task_definition, EcsTaskDefinition)
     client.register_task_definition.assert_called_once_with(
-        task_definition.family,
-        task_definition.containers,
-        task_definition.volumes,
-        task_definition.role_arn,
+        family=task_definition.family,
+        containers=task_definition.containers,
+        volumes=task_definition.volumes,
+        role_arn=task_definition.role_arn,
     )
     client.deregister_task_definition.assert_called_once_with(
         task_definition.arn
@@ -549,8 +567,12 @@ def test_update_service(client, service):
     new_service = action.update_service(service)
 
     assert isinstance(new_service, EcsService)
-    client.update_service.assert_called_once_with(service.cluster, service.name, service.desired_count,
-                                                  service.task_definition)
+    client.update_service.assert_called_once_with(
+        cluster=service.cluster,
+        service=service.name,
+        desired_count=service.desired_count,
+        task_definition=service.task_definition
+    )
 
 
 @patch.object(EcsClient, '__init__')
@@ -562,7 +584,10 @@ def test_is_deployed(client, service):
     is_deployed = action.is_deployed(service)
 
     assert is_deployed is True
-    client.list_tasks.assert_called_once_with(service.cluster, service.name)
+    client.list_tasks.assert_called_once_with(
+        cluster_name=service.cluster,
+        service_name=service.name
+    )
 
 
 @patch.object(EcsClient, '__init__')
@@ -620,9 +645,16 @@ def test_deploy_action(client, task_definition_revision_2):
     assert action.service.task_definition == task_definition_revision_2.arn
     assert isinstance(updated_service, EcsService)
 
-    client.describe_services.assert_called_once_with(CLUSTER_NAME, SERVICE_NAME)
-    client.update_service.assert_called_once_with(action.service.cluster, action.service.name,
-                                                  action.service.desired_count, task_definition_revision_2.arn)
+    client.describe_services.assert_called_once_with(
+        cluster_name=CLUSTER_NAME,
+        service_name=SERVICE_NAME
+    )
+    client.update_service.assert_called_once_with(
+        cluster=action.service.cluster,
+        service=action.service.name,
+        desired_count=action.service.desired_count,
+        task_definition=task_definition_revision_2.arn
+    )
 
 
 @patch.object(EcsClient, '__init__')
@@ -633,9 +665,17 @@ def test_scale_action(client):
     assert action.service.desired_count == 5
     assert isinstance(updated_service, EcsService)
 
-    client.describe_services.assert_called_once_with(CLUSTER_NAME, SERVICE_NAME)
-    client.update_service.assert_called_once_with(action.service.cluster, action.service.name,
-                                                  5, action.service.task_definition)
+    client.describe_services.assert_called_once_with(
+        cluster_name=CLUSTER_NAME,
+        service_name=SERVICE_NAME
+    )
+    client.update_service.assert_called_once_with(
+        cluster=action.service.cluster,
+        service=action.service.name,
+        desired_count=5,
+        task_definition=action.service.task_definition
+    )
+
 
 @patch.object(EcsClient, '__init__')
 def test_run_action(client):
@@ -668,7 +708,7 @@ class EcsTestClient(object):
         self.region = region
         self.profile = profile
         self.errors = errors
-        self.wait_until = datetime.datetime.now() + timedelta(seconds=wait)
+        self.wait_until = datetime.now() + timedelta(seconds=wait)
 
     def describe_services(self, cluster_name, service_name):
         if not self.access_key_id or not self.secret_access_key:
@@ -689,10 +729,12 @@ class EcsTestClient(object):
         }
 
     def describe_task_definition(self, task_definition_arn):
-        return deepcopy(RESPONSE_TASK_DEFINITION)
+        if task_definition_arn in RESPONSE_TASK_DEFINITIONS:
+            return deepcopy(RESPONSE_TASK_DEFINITIONS[task_definition_arn])
+        raise UnknownTaskDefinitionError('Unknown task definition arn: %s' % task_definition_arn)
 
     def list_tasks(self, cluster_name, service_name):
-        if self.wait_until <= datetime.datetime.now():
+        if self.wait_until <= datetime.now():
             return deepcopy(RESPONSE_LIST_TASKS_2)
         return deepcopy(RESPONSE_LIST_TASKS_0)
 
@@ -712,9 +754,9 @@ class EcsTestClient(object):
 
     def run_task(self, cluster, task_definition, count, started_by, overrides):
         if not self.access_key_id or not self.secret_access_key:
-            raise ConnectionError(u'Unable to locate credentials. Configure credentials by running "aws configure".')
+            raise EcsConnectionError(u'Unable to locate credentials. Configure credentials by running "aws configure".')
         if cluster == 'unknown-cluster':
-            raise ConnectionError(u'An error occurred (ClusterNotFoundException) when calling the RunTask operation: Cluster not found.')
+            raise EcsConnectionError(u'An error occurred (ClusterNotFoundException) when calling the RunTask operation: Cluster not found.')
         if self.errors:
             error = dict(Error=dict(Code=123, Message="Something went wrong"))
             raise ClientError(error, 'fake_error')

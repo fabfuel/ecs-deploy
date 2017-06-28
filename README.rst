@@ -10,18 +10,30 @@ ECS Deploy
 .. image:: https://scrutinizer-ci.com/g/fabfuel/ecs-deploy/badges/quality-score.png?b=develop
     :target: https://scrutinizer-ci.com/g/fabfuel/ecs-deploy
 
+`ecs-deploy` simplifies deployments on Amazon ECS by providing a convinience CLI tool for complex actions, which are executed pretty often.
 
-Redeploying a service in Amazon ECS causes some effort, even if you just want to pull the most recent image versions.
-You have to create a new revision of the task definition and update the service to use the newly created revision. 
-
-This project simplyfies deployments on Amazon ECS by providing a convinience CLI tool for actions, which are executed
-pretty often.
+Key Features
+------------
+- support for complex task definitions (e.g. multiple containers & task role)
+- easily redeploy the current task definition (including `docker pull` of eventually updated images) 
+- deploy new versions/tags or all containers or just a single container in your task definition
+- scale up or down by adjusting the desired count of running tasks
+- add or adjust containers environment variables
+- run one-off tasks from the CLI
+- automatically monitor deployments in New Relic
 
 TL;DR
 -----
-Redeploy or scale a service in Amazon ECS as simple as this::
+Deploy a new version of your service::
+ 
+    $ ecs deploy my-cluster my-service --tag 1.2.3
 
-    $ ecs deploy my-cluster my-service --tag latest
+Redeploy the current version of a service::
+ 
+    $ ecs deploy my-cluster my-service
+
+Scale up or down a service::
+
     $ ecs scale my-cluster my-service 4
 
 
@@ -68,6 +80,7 @@ For detailed information about the available actions, arguments and options, run
 
     $ ecs deploy --help
     $ ecs scale --help
+    $ ecs run --help
 
 Examples
 --------
@@ -95,18 +108,39 @@ Deploy a new image
 ==================
 To change the image of a specific container, run the following command::
 
-    $ ecs deploy my-cluster my-service --image webserver nginx:latest
+    $ ecs deploy my-cluster my-service --image webserver nginx:1.11.8
      
-This will modify the **webserver** container only and change its image to "nginx:latest".
+This will modify the **webserver** container only and change its image to "nginx:1.11.8".
 
 
 Deploy several new images
 =========================
 The `-i` or `--image` option can also be passed several times::
 
-    $ ecs deploy my-cluster my-service -i webserver nginx:1.9 -i application django:latest
+    $ ecs deploy my-cluster my-service -i webserver nginx:1.9 -i application my-app:1.2.3
      
-This will change the **webserver**'s container image to "nginx:1.9" and the **application**'s image to "django:latest".
+This will change the **webserver**'s container image to "nginx:1.9" and the **application**'s image to "my-app:1.2.3".
+
+Deploy a custom task definition
+===============================
+To deploy any task definition (independent of which is currently used in the service), you can use the ``--task`` parameter. The value can be:
+
+A fully qualified task ARN::
+
+    $ ecs deploy my-cluster my-service --task arn:aws:ecs:eu-central-1:123456789012:task-definition/my-task:20
+
+A task family name with revision::
+
+    $ ecs deploy my-cluster my-service --task my-task:20
+
+Or just a task family name. It this case, the most recent revision is used::
+
+    $ ecs deploy my-cluster my-service --task my-task
+    
+.. important::
+   ``ecs`` will still create a new task definition, which then is used in the service. 
+   This is done, to retain consistent behaviour and to ensure the ECS agent e.g. pulls all images.
+   But the newly created task definition will be based on the given task, not the currently used task.
 
 
 Set an environment variable
@@ -145,6 +179,25 @@ To change or set the role, the service's task should run as, use the following c
     $ ecs deploy my-cluster my-service -r arn:aws:iam::123456789012:role/MySpecialEcsTaskRole
 
 This will set the task role to "MySpecialEcsTaskRole".
+
+Ignore capacity issues
+======================
+If your cluster is undersized or the service's deployment options are not optimally set, the cluster
+might be incapable to run blue-green-deployments. In this case, you might see errors like these:
+
+    ERROR: (service my-service) was unable to place a task because no container instance met all of
+    its requirements. The closest matching (container-instance 123456-1234-1234-1234-1234567890) is 
+    already using a port required by your task. For more information, see the Troubleshooting 
+    section of the Amazon ECS Developer Guide.
+
+There might also be warnings about insufficient memory or CPU.
+
+To ignore these warnings, you can run the deployment with the flag ``--ignore-warnings``::
+
+    $ ecs deploy my-cluster my-service --ignore-warnings
+
+In that case, the warning is printed, but the script continues and waits for a successful 
+deployment until it times out.
 
 Scaling
 -------
