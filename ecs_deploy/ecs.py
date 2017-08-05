@@ -187,14 +187,10 @@ class EcsTaskDefinition(dict):
                 override = dict(name=diff.container)
                 overrides.append(override)
             if diff.field == 'command':
-                override['command'] = self.get_overrides_command(diff.value)
+                override['command'] = diff.value
             elif diff.field == 'environment':
                 override['environment'] = self.get_overrides_env(diff.value)
         return overrides
-
-    @staticmethod
-    def get_overrides_command(command):
-        return command.split(' ')
 
     @staticmethod
     def get_overrides_env(env):
