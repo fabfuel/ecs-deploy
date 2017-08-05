@@ -340,7 +340,7 @@ def test_task_get_overrides_with_command(task_definition):
     task_definition.set_commands(webserver='/usr/bin/python script.py')
     overrides = task_definition.get_overrides()
     assert len(overrides) == 1
-    assert overrides[0]['command'] == ['/usr/bin/python','script.py']
+    assert overrides[0]['command'] == ['/usr/bin/python script.py']
 
 
 def test_task_get_overrides_with_environment(task_definition):
@@ -357,7 +357,7 @@ def test_task_get_overrides_with_commandand_environment(task_definition):
     overrides = task_definition.get_overrides()
     assert len(overrides) == 1
     assert overrides[0]['name'] == 'webserver'
-    assert overrides[0]['command'] == ['/usr/bin/python','script.py']
+    assert overrides[0]['command'] == ['/usr/bin/python script.py']
     assert dict(name='foo', value='baz') in overrides[0]['environment']
 
 
@@ -367,15 +367,9 @@ def test_task_get_overrides_with_commandand_environment_for_multiple_containers(
     overrides = task_definition.get_overrides()
     assert len(overrides) == 2
     assert overrides[0]['name'] == 'application'
-    assert overrides[0]['command'] == ['/usr/bin/python','script.py']
+    assert overrides[0]['command'] == ['/usr/bin/python script.py']
     assert overrides[1]['name'] == 'webserver'
     assert dict(name='foo', value='baz') in overrides[1]['environment']
-
-
-def test_task_get_overrides_command(task_definition):
-    command = task_definition.get_overrides_command('/usr/bin/python script.py')
-    assert isinstance(command, list)
-    assert command == ['/usr/bin/python','script.py']
 
 
 def test_task_get_overrides_environment(task_definition):
