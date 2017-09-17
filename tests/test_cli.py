@@ -81,7 +81,7 @@ def test_deploy_with_role_arn(get_client, runner):
     assert u'Successfully changed task definition to: test-task:2' in result.output
     assert u'Deployment successful' in result.output
     assert u"Updating task definition" in result.output
-    assert u"Changed role_arn to: \"arn:new:role\" (was: \"arn:test:role:1\")" in result.output
+    assert u'Changed role_arn to: "arn:new:role" (was: "arn:test:role:1")' in result.output
 
 
 @patch('ecs_deploy.cli.get_client')
@@ -91,8 +91,8 @@ def test_deploy_new_tag(get_client, runner):
     assert result.exit_code == 0
     assert not result.exception
     assert u"Updating task definition" in result.output
-    assert u"Changed image of container 'webserver' to: \"webserver:latest\" (was: \"webserver:123\")" in result.output
-    assert u"Changed image of container 'application' to: \"application:latest\" (was: \"application:123\")" in result.output
+    assert u'Changed image of container "webserver" to: "webserver:latest" (was: "webserver:123")' in result.output
+    assert u'Changed image of container "application" to: "application:latest" (was: "application:123")' in result.output
     assert u'Successfully created revision: 2' in result.output
     assert u'Successfully deregistered revision: 1' in result.output
     assert u'Successfully changed task definition to: test-task:2' in result.output
@@ -106,7 +106,7 @@ def test_deploy_one_new_image(get_client, runner):
     assert result.exit_code == 0
     assert not result.exception
     assert u"Updating task definition" in result.output
-    assert u"Changed image of container 'application' to: \"application:latest\" (was: \"application:123\")" in result.output
+    assert u'Changed image of container "application" to: "application:latest" (was: "application:123")' in result.output
     assert u'Successfully created revision: 2' in result.output
     assert u'Successfully deregistered revision: 1' in result.output
     assert u'Successfully changed task definition to: test-task:2' in result.output
@@ -121,8 +121,8 @@ def test_deploy_two_new_images(get_client, runner):
     assert result.exit_code == 0
     assert not result.exception
     assert u"Updating task definition" in result.output
-    assert u"Changed image of container 'webserver' to: \"webserver:latest\" (was: \"webserver:123\")" in result.output
-    assert u"Changed image of container 'application' to: \"application:latest\" (was: \"application:123\")" in result.output
+    assert u'Changed image of container "webserver" to: "webserver:latest" (was: "webserver:123")' in result.output
+    assert u'Changed image of container "application" to: "application:latest" (was: "application:123")' in result.output
     assert u'Successfully created revision: 2' in result.output
     assert u'Successfully deregistered revision: 1' in result.output
     assert u'Successfully changed task definition to: test-task:2' in result.output
@@ -136,7 +136,7 @@ def test_deploy_one_new_command(get_client, runner):
     assert result.exit_code == 0
     assert not result.exception
     assert u"Updating task definition" in result.output
-    assert u"Changed command of container 'application' to: \"foobar\" (was: \"run\")" in result.output
+    assert u'Changed command of container "application" to: "foobar" (was: "run")' in result.output
     assert u'Successfully created revision: 2' in result.output
     assert u'Successfully deregistered revision: 1' in result.output
     assert u'Successfully changed task definition to: test-task:2' in result.output
@@ -154,10 +154,25 @@ def test_deploy_one_new_environment_variable(get_client, runner):
     assert not result.exception
 
     assert u"Updating task definition" in result.output
-    assert u'Changed environment of container \'application\' to: {"foo": "bar"} (was: {})' in result.output
-    assert u'Changed environment of container \'webserver\' to: ' in result.output
-    assert u'"foo": "baz"' in result.output
-    assert u'"lorem": "ipsum"' in result.output
+    assert u'Changed environment "foo" of container "application" to: "bar"' in result.output
+    assert u'Changed environment "foo" of container "webserver" to: "baz"' in result.output
+    assert u'Changed environment "lorem" of container "webserver" to: "ipsum"' not in result.output
+    assert u'Successfully created revision: 2' in result.output
+    assert u'Successfully deregistered revision: 1' in result.output
+    assert u'Successfully changed task definition to: test-task:2' in result.output
+    assert u'Deployment successful' in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_deploy_without_changing_environment_variable(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '-e', 'webserver', 'foo', 'bar'))
+
+    assert result.exit_code == 0
+    assert not result.exception
+
+    assert u"Updating task definition" in result.output
+    assert u'Changed environment' not in result.output
     assert u'Successfully created revision: 2' in result.output
     assert u'Successfully deregistered revision: 1' in result.output
     assert u'Successfully changed task definition to: test-task:2' in result.output
@@ -320,7 +335,7 @@ def test_run_task_with_command(get_client, runner):
     assert result.exit_code == 0
 
     assert u"Using task definition: test-task" in result.output
-    assert u"Changed command of container 'webserver' to: \"date\" (was: \"run\")" in result.output
+    assert u'Changed command of container "webserver" to: "date" (was: "run")' in result.output
     assert u"Successfully started 2 instances of task: test-task:2" in result.output
     assert u"- arn:foo:bar" in result.output
     assert u"- arn:lorem:ipsum" in result.output
@@ -335,7 +350,7 @@ def test_run_task_with_environment_var(get_client, runner):
     assert result.exit_code == 0
 
     assert u"Using task definition: test-task" in result.output
-    assert u'Changed environment of container \'application\' to: {"foo": "bar"} (was: {})' in result.output
+    assert u'Changed environment "foo" of container "application" to: "bar"' in result.output
     assert u"Successfully started 2 instances of task: test-task:2" in result.output
     assert u"- arn:foo:bar" in result.output
     assert u"- arn:lorem:ipsum" in result.output

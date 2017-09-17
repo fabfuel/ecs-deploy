@@ -1,5 +1,4 @@
 from datetime import datetime
-from json import dumps
 
 from boto3.session import Session
 from botocore.exceptions import ClientError, NoCredentialsError
@@ -299,19 +298,36 @@ class EcsTaskDefinitionDiff(object):
         self.old_value = old_value
 
     def __repr__(self):
-        if self.container:
-            return u"Changed %s of container '%s' to: %s (was: %s)" % (
+        if self.field == u'environment':
+            return '\n'.join(self._get_environment_diffs(
+                self.container,
+                self.value,
+                self.old_value,
+            ))
+        elif self.container:
+            return u'Changed %s of container "%s" to: "%s" (was: "%s")' % (
                 self.field,
                 self.container,
-                dumps(self.value),
-                dumps(self.old_value)
+                self.value,
+                self.old_value
             )
         else:
-            return u"Changed %s to: %s (was: %s)" % (
+            return u'Changed %s to: "%s" (was: "%s")' % (
                 self.field,
-                dumps(self.value),
-                dumps(self.old_value)
+                self.value,
+                self.old_value
             )
+
+    @staticmethod
+    def _get_environment_diffs(container, env, old_env):
+        msg = u'Changed environment "%s" of container "%s" to: "%s"'
+        diffs = []
+        for name, value in env.items():
+            old_value = old_env.get(name)
+            if value != old_value or not old_value:
+                message = msg % (name, container, value)
+                diffs.append(message)
+        return diffs
 
 
 class EcsAction(object):
