@@ -164,7 +164,7 @@ def test_deploy_one_new_environment_variable(get_client, runner):
 
 
 @patch('ecs_deploy.cli.get_client')
-def test_deploy_without_changing_environment_variable(get_client, runner):
+def test_deploy_without_changing_environment_value(get_client, runner):
     get_client.return_value = EcsTestClient('acces_key', 'secret_key')
     result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '-e', 'webserver', 'foo', 'bar'))
 
@@ -172,6 +172,22 @@ def test_deploy_without_changing_environment_variable(get_client, runner):
     assert not result.exception
 
     assert u"Updating task definition" in result.output
+    assert u'Changed environment' not in result.output
+    assert u'Successfully created revision: 2' in result.output
+    assert u'Successfully deregistered revision: 1' in result.output
+    assert u'Successfully changed task definition to: test-task:2' in result.output
+    assert u'Deployment successful' in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_deploy_without_diff(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '-t', 'latest', '-e', 'webserver', 'foo', 'barz', '--no-diff'))
+
+    assert result.exit_code == 0
+    assert not result.exception
+
+    assert u"Updating task definition" not in result.output
     assert u'Changed environment' not in result.output
     assert u'Successfully created revision: 2' in result.output
     assert u'Successfully deregistered revision: 1' in result.output
@@ -351,6 +367,21 @@ def test_run_task_with_environment_var(get_client, runner):
 
     assert u"Using task definition: test-task" in result.output
     assert u'Changed environment "foo" of container "application" to: "bar"' in result.output
+    assert u"Successfully started 2 instances of task: test-task:2" in result.output
+    assert u"- arn:foo:bar" in result.output
+    assert u"- arn:lorem:ipsum" in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_run_task_without_diff(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.run, (CLUSTER_NAME, 'test-task', '2', '-e', 'application', 'foo', 'bar', '--no-diff'))
+
+    assert not result.exception
+    assert result.exit_code == 0
+
+    assert u"Using task definition: test-task" not in result.output
+    assert u'Changed environment' not in result.output
     assert u"Successfully started 2 instances of task: test-task:2" in result.output
     assert u"- arn:foo:bar" in result.output
     assert u"- arn:lorem:ipsum" in result.output
