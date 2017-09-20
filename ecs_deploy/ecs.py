@@ -142,33 +142,21 @@ class EcsTaskDefinition(object):
     def __init__(self, containerDefinitions, volumes, family, revision,
                  taskRoleArn, status, taskDefinitionArn, requiresAttributes,
                  **kwargs):
-        self.containerDefinitions = containerDefinitions
+        self.containers = containerDefinitions
         self.volumes = volumes
         self.family = family
         self.revision = revision
-        self.taskRoleArn = taskRoleArn
-        self.taskDefinitionArn = taskDefinitionArn
+        self.role_arn = taskRoleArn
+        self.arn = taskDefinitionArn
         self.status = status
-        self.requiresAttributes = requiresAttributes
+        self.requires_attributes = requiresAttributes
         self.additional_properties = kwargs
         self._diff = []
 
     @property
-    def containers(self):
-        return self.containerDefinitions
-
-    @property
     def container_names(self):
-        for container in self.containerDefinitions:
+        for container in self.containers:
             yield container[u'name']
-
-    @property
-    def arn(self):
-        return self.taskDefinitionArn
-
-    @property
-    def role_arn(self):
-        return self.taskRoleArn
 
     @property
     def family_revision(self):
@@ -284,9 +272,9 @@ class EcsTaskDefinition(object):
                 container=None,
                 field=u'role_arn',
                 value=role_arn,
-                old_value=self.taskRoleArn
+                old_value=self.role_arn
             )
-            self.taskRoleArn = role_arn
+            self.role_arn = role_arn
             self._diff.append(diff)
 
 

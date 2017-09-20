@@ -49,6 +49,8 @@ PAYLOAD_TASK_DEFINITION_1 = {
     u'containerDefinitions': deepcopy(TASK_DEFINITION_CONTAINERS_1),
     u'status': u'active',
     u'requiresAttributes': {},
+    u'networkMode': u'host',
+    u'placementConstraints': {},
     u'unknownProperty': u'lorem-ipsum',
 }
 
@@ -61,7 +63,7 @@ PAYLOAD_TASK_DEFINITION_2 = {
     u'containerDefinitions': deepcopy(TASK_DEFINITION_CONTAINERS_2),
     u'status': u'active',
     u'requiresAttributes': {},
-    u'undefinedProperty': u'lorem-ipsum',
+    u'unknownProperty': u'lorem-ipsum',
 }
 
 TASK_ARN_1 = u'arn:aws:ecs:eu-central-1:123456789012:task/12345678-1234-1234-1234-123456789011'
@@ -579,7 +581,11 @@ def test_update_task_definition(client, task_definition):
         containers=task_definition.containers,
         volumes=task_definition.volumes,
         role_arn=task_definition.role_arn,
-        additional_properties={u'unknownProperty': u'lorem-ipsum'}
+        additional_properties={
+            u'networkMode': u'host',
+            u'placementConstraints': {},
+            u'unknownProperty': u'lorem-ipsum'
+        }
     )
     client.deregister_task_definition.assert_called_once_with(
         task_definition.arn
