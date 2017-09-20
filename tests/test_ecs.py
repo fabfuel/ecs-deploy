@@ -59,7 +59,6 @@ PAYLOAD_TASK_DEFINITION_2 = {
     u'family': TASK_DEFINITION_FAMILY_2,
     u'revision': TASK_DEFINITION_REVISION_2,
     u'volumes': deepcopy(TASK_DEFINITION_VOLUMES_2),
-    u'taskRoleArn': '',
     u'containerDefinitions': deepcopy(TASK_DEFINITION_CONTAINERS_2),
     u'status': u'active',
     u'requiresAttributes': {},

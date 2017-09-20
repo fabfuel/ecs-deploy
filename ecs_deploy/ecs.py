@@ -45,7 +45,7 @@ class EcsClient(object):
             family=family,
             containerDefinitions=containers,
             volumes=volumes,
-            taskRoleArn=role_arn or u'',
+            taskRoleArn=role_arn,
             **additional_properties
         )
 
@@ -140,16 +140,16 @@ class EcsService(dict):
 
 class EcsTaskDefinition(object):
     def __init__(self, containerDefinitions, volumes, family, revision,
-                 taskRoleArn, status, taskDefinitionArn, requiresAttributes,
-                 **kwargs):
+                 status, taskDefinitionArn, requiresAttributes,
+                 taskRoleArn=None, **kwargs):
         self.containers = containerDefinitions
         self.volumes = volumes
         self.family = family
         self.revision = revision
-        self.role_arn = taskRoleArn
-        self.arn = taskDefinitionArn
         self.status = status
+        self.arn = taskDefinitionArn
         self.requires_attributes = requiresAttributes
+        self.role_arn = taskRoleArn or u''
         self.additional_properties = kwargs
         self._diff = []
 
