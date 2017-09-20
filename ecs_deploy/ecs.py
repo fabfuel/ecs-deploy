@@ -1,5 +1,4 @@
 from datetime import datetime
-from json import dumps
 
 from boto3.session import Session
 from botocore.exceptions import ClientError, NoCredentialsError
@@ -40,12 +39,14 @@ class EcsClient(object):
     def describe_tasks(self, cluster_name, task_arns):
         return self.boto.describe_tasks(cluster=cluster_name, tasks=task_arns)
 
-    def register_task_definition(self, family, containers, volumes, role_arn):
+    def register_task_definition(self, family, containers, volumes, role_arn,
+                                 additional_properties):
         return self.boto.register_task_definition(
             family=family,
             containerDefinitions=containers,
             volumes=volumes,
-            taskRoleArn=role_arn or u''
+            taskRoleArn=role_arn or u'',
+            **additional_properties
         )
 
     def deregister_task_definition(self, task_definition_arn):
@@ -137,43 +138,29 @@ class EcsService(dict):
         return errors
 
 
-class EcsTaskDefinition(dict):
-    def __init__(self, task_definition=None, **kwargs):
-        super(EcsTaskDefinition, self).__init__(task_definition, **kwargs)
+class EcsTaskDefinition(object):
+    def __init__(self, containerDefinitions, volumes, family, revision,
+                 taskRoleArn, status, taskDefinitionArn, requiresAttributes,
+                 **kwargs):
+        self.containers = containerDefinitions
+        self.volumes = volumes
+        self.family = family
+        self.revision = revision
+        self.role_arn = taskRoleArn
+        self.arn = taskDefinitionArn
+        self.status = status
+        self.requires_attributes = requiresAttributes
+        self.additional_properties = kwargs
         self._diff = []
 
     @property
-    def containers(self):
-        return self.get(u'containerDefinitions')
-
-    @property
     def container_names(self):
-        for container in self.get(u'containerDefinitions'):
+        for container in self.containers:
             yield container[u'name']
 
     @property
-    def volumes(self):
-        return self.get(u'volumes')
-
-    @property
-    def arn(self):
-        return self.get(u'taskDefinitionArn')
-
-    @property
-    def family(self):
-        return self.get(u'family')
-
-    @property
-    def role_arn(self):
-        return self.get(u'taskRoleArn')
-
-    @property
-    def revision(self):
-        return self.get(u'revision')
-
-    @property
     def family_revision(self):
-        return '%s:%d' % (self.get(u'family'), self.get(u'revision'))
+        return '%s:%d' % (self.family, self.revision)
 
     @property
     def diff(self):
@@ -260,6 +247,9 @@ class EcsTaskDefinition(dict):
         merged = old_environment.copy()
         merged.update(new_environment)
 
+        if old_environment == merged:
+            return
+
         diff = EcsTaskDefinitionDiff(
             container=container[u'name'],
             field=u'environment',
@@ -285,9 +275,9 @@ class EcsTaskDefinition(dict):
                 container=None,
                 field=u'role_arn',
                 value=role_arn,
-                old_value=self[u'taskRoleArn']
+                old_value=self.role_arn
             )
-            self[u'taskRoleArn'] = role_arn
+            self.role_arn = role_arn
             self._diff.append(diff)
 
 
@@ -299,19 +289,36 @@ class EcsTaskDefinitionDiff(object):
         self.old_value = old_value
 
     def __repr__(self):
-        if self.container:
-            return u"Changed %s of container '%s' to: %s (was: %s)" % (
+        if self.field == u'environment':
+            return '\n'.join(self._get_environment_diffs(
+                self.container,
+                self.value,
+                self.old_value,
+            ))
+        elif self.container:
+            return u'Changed %s of container "%s" to: "%s" (was: "%s")' % (
                 self.field,
                 self.container,
-                dumps(self.value),
-                dumps(self.old_value)
+                self.value,
+                self.old_value
             )
         else:
-            return u"Changed %s to: %s (was: %s)" % (
+            return u'Changed %s to: "%s" (was: "%s")' % (
                 self.field,
-                dumps(self.value),
-                dumps(self.old_value)
+                self.value,
+                self.old_value
             )
+
+    @staticmethod
+    def _get_environment_diffs(container, env, old_env):
+        msg = u'Changed environment "%s" of container "%s" to: "%s"'
+        diffs = []
+        for name, value in env.items():
+            old_value = old_env.get(name)
+            if value != old_value or not old_value:
+                message = msg % (name, container, value)
+                diffs.append(message)
+        return diffs
 
 
 class EcsAction(object):
@@ -347,20 +354,15 @@ class EcsAction(object):
         )
 
     def get_current_task_definition(self, service):
-        task_definition_payload = self._client.describe_task_definition(
-            task_definition_arn=service.task_definition
-        )
-        task_definition = EcsTaskDefinition(
-            task_definition=task_definition_payload[u'taskDefinition']
-        )
-        return task_definition
+        return self.get_task_definition(service.task_definition)
 
     def get_task_definition(self, task_definition):
         task_definition_payload = self._client.describe_task_definition(
             task_definition_arn=task_definition
         )
+
         task_definition = EcsTaskDefinition(
-            task_definition=task_definition_payload[u'taskDefinition']
+            **task_definition_payload[u'taskDefinition']
         )
         return task_definition
 
@@ -369,9 +371,10 @@ class EcsAction(object):
             family=task_definition.family,
             containers=task_definition.containers,
             volumes=task_definition.volumes,
-            role_arn=task_definition.role_arn
+            role_arn=task_definition.role_arn,
+            additional_properties=task_definition.additional_properties
         )
-        new_task_definition = EcsTaskDefinition(response[u'taskDefinition'])
+        new_task_definition = EcsTaskDefinition(**response[u'taskDefinition'])
         self._client.deregister_task_definition(task_definition.arn)
         return new_task_definition
 

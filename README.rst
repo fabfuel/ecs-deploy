@@ -251,3 +251,14 @@ Or implicitly via environment variables ``NEW_RELIC_API_KEY`` and ``NEW_RELIC_AP
     $ ecs deploy my-cluster my-service 
 
 Optionally you can provide an additional comment to the deployment via ``--comment "New feature X"`` and the name of the user who deployed with ``--user john.doe``
+
+
+Alternative Implementation
+--------------------------
+There are some other libraries/tools available on GitHub, which also handle the deployment of containers in AWS ECS. If you prefer another language over Python, have a look at these projects:
+
+Shell
+  ecs-deploy - https://github.com/silinternational/ecs-deploy
+  
+Ruby
+  broadside - https://github.com/lumoslabs/broadside
