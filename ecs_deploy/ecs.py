@@ -247,6 +247,9 @@ class EcsTaskDefinition(object):
         merged = old_environment.copy()
         merged.update(new_environment)
 
+        if old_environment == merged:
+            return
+
         diff = EcsTaskDefinitionDiff(
             container=container[u'name'],
             field=u'environment',
