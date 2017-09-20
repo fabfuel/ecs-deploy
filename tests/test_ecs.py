@@ -47,6 +47,9 @@ PAYLOAD_TASK_DEFINITION_1 = {
     u'taskRoleArn': TASK_DEFINITION_ROLE_ARN_1,
     u'volumes': deepcopy(TASK_DEFINITION_VOLUMES_1),
     u'containerDefinitions': deepcopy(TASK_DEFINITION_CONTAINERS_1),
+    u'status': u'active',
+    u'requiresAttributes': {},
+    u'unknownProperty': u'lorem-ipsum',
 }
 
 PAYLOAD_TASK_DEFINITION_2 = {
@@ -56,6 +59,9 @@ PAYLOAD_TASK_DEFINITION_2 = {
     u'volumes': deepcopy(TASK_DEFINITION_VOLUMES_2),
     u'taskRoleArn': '',
     u'containerDefinitions': deepcopy(TASK_DEFINITION_CONTAINERS_2),
+    u'status': u'active',
+    u'requiresAttributes': {},
+    u'undefinedProperty': u'lorem-ipsum',
 }
 
 TASK_ARN_1 = u'arn:aws:ecs:eu-central-1:123456789012:task/12345678-1234-1234-1234-123456789011'
@@ -182,12 +188,12 @@ RESPONSE_DESCRIBE_TASKS = {
 
 @pytest.fixture()
 def task_definition():
-    return EcsTaskDefinition(deepcopy(PAYLOAD_TASK_DEFINITION_1))
+    return EcsTaskDefinition(**deepcopy(PAYLOAD_TASK_DEFINITION_1))
 
 
 @pytest.fixture
 def task_definition_revision_2():
-    return EcsTaskDefinition(deepcopy(PAYLOAD_TASK_DEFINITION_2))
+    return EcsTaskDefinition(**deepcopy(PAYLOAD_TASK_DEFINITION_2))
 
 
 @pytest.fixture
@@ -443,12 +449,32 @@ def test_client_register_task_definition(client):
     containers = [{u'name': u'foo'}]
     volumes = [{u'foo': u'bar'}]
     role_arn = 'arn:test:role'
-    client.register_task_definition(u'family', containers, volumes, role_arn)
+    task_definition = EcsTaskDefinition(
+        containerDefinitions=containers,
+        volumes=volumes,
+        family=u'family',
+        revision=1,
+        taskRoleArn=role_arn,
+        status='active',
+        taskDefinitionArn='arn:task',
+        requiresAttributes={},
+        unkownProperty='foobar'
+    )
+
+    client.register_task_definition(
+        family=task_definition.family,
+        containers=task_definition.containers,
+        volumes=task_definition.volumes,
+        role_arn=task_definition.role_arn,
+        additional_properties=task_definition.additional_properties
+    )
+
     client.boto.register_task_definition.assert_called_once_with(
         family=u'family',
         containerDefinitions=containers,
         volumes=volumes,
-        taskRoleArn=role_arn
+        taskRoleArn=role_arn,
+        unkownProperty='foobar'
     )
 
 
@@ -553,6 +579,7 @@ def test_update_task_definition(client, task_definition):
         containers=task_definition.containers,
         volumes=task_definition.volumes,
         role_arn=task_definition.role_arn,
+        additional_properties={u'unknownProperty': u'lorem-ipsum'}
     )
     client.deregister_task_definition.assert_called_once_with(
         task_definition.arn
@@ -741,7 +768,7 @@ class EcsTestClient(object):
     def describe_tasks(self, cluster_name, task_arns):
         return deepcopy(RESPONSE_DESCRIBE_TASKS)
 
-    def register_task_definition(self, family, containers, volumes, role_arn):
+    def register_task_definition(self, family, containers, volumes, role_arn, additional_properties):
         return deepcopy(RESPONSE_TASK_DEFINITION_2)
 
     def deregister_task_definition(self, task_definition_arn):
