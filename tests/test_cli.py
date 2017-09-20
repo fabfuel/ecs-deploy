@@ -171,7 +171,7 @@ def test_deploy_without_changing_environment_value(get_client, runner):
     assert result.exit_code == 0
     assert not result.exception
 
-    assert u"Updating task definition" in result.output
+    assert u"Updating task definition" not in result.output
     assert u'Changed environment' not in result.output
     assert u'Successfully created revision: 2' in result.output
     assert u'Successfully deregistered revision: 1' in result.output
