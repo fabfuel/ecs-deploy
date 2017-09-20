@@ -62,9 +62,11 @@ def get_client(access_key_id, secret_access_key, region, profile):
               help='Description/comment for recording the deployment')
 @click.option('--user', required=False,
               help='User who executes the deployment (used for recording)')
+@click.option('--diff/--no-diff', default=True,
+              help='Print what values were changed in the task definition')
 def deploy(cluster, service, tag, image, command, env, role, task, region,
            access_key_id, secret_access_key, profile, timeout, newrelic_apikey,
-           newrelic_appid, comment, user, ignore_warnings):
+           newrelic_appid, comment, user, ignore_warnings, diff):
     """
     Redeploy or modify a service.
 
@@ -91,7 +93,9 @@ def deploy(cluster, service, tag, image, command, env, role, task, region,
         td.set_commands(**{key: value for (key, value) in command})
         td.set_environment(env)
         td.set_role_arn(role)
-        print_diff(td)
+
+        if diff:
+            print_diff(td)
 
         click.secho('Creating new task definition revision')
         new_td = deployment.update_task_definition(td)
@@ -194,8 +198,10 @@ def scale(cluster, service, desired_count, access_key_id, secret_access_key,
               help='AWS secret access key')
 @click.option('--profile',
               help='AWS configuration profile name')
+@click.option('--diff/--no-diff', default=True,
+              help='Print what values were changed in the task definition')
 def run(cluster, task, count, command, env, region, access_key_id,
-        secret_access_key, profile):
+        secret_access_key, profile, diff):
     """
     Run a one-off task.
 
@@ -211,7 +217,9 @@ def run(cluster, task, count, command, env, region, access_key_id,
         td = action.get_task_definition(task)
         td.set_commands(**{key: value for (key, value) in command})
         td.set_environment(env)
-        print_diff(td, 'Using task definition: %s' % task)
+
+        if diff:
+            print_diff(td, 'Using task definition: %s' % task)
 
         action.run(td, count, 'ECS Deploy')
 

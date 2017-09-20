@@ -387,7 +387,7 @@ def test_task_get_overrides_environment(task_definition):
 
 def test_task_definition_diff():
     diff = EcsTaskDefinitionDiff(u'webserver', u'image', u'new', u'old')
-    assert str(diff) == u"Changed image of container 'webserver' to: \"new\" (was: \"old\")"
+    assert str(diff) == u'Changed image of container "webserver" to: "new" (was: "old")'
 
 
 @patch.object(Session, 'client')
