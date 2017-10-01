@@ -63,6 +63,7 @@ def test_deploy(get_client, runner):
     result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME))
     assert result.exit_code == 0
     assert not result.exception
+    assert u"Deploying based on task definition: test-task:1" in result.output
     assert u'Successfully created revision: 2' in result.output
     assert u'Successfully deregistered revision: 1' in result.output
     assert u'Successfully changed task definition to: test-task:2' in result.output
@@ -76,6 +77,7 @@ def test_deploy_without_deregister(get_client, runner):
     result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '--no-deregister'))
     assert result.exit_code == 0
     assert not result.exception
+    assert u"Deploying based on task definition: test-task:1" in result.output
     assert u'Successfully created revision: 2' in result.output
     assert u'Successfully deregistered revision: 1' not in result.output
     assert u'Successfully changed task definition to: test-task:2' in result.output
@@ -89,6 +91,7 @@ def test_deploy_with_role_arn(get_client, runner):
     result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '-r', 'arn:new:role'))
     assert result.exit_code == 0
     assert not result.exception
+    assert u"Deploying based on task definition: test-task:1" in result.output
     assert u'Successfully created revision: 2' in result.output
     assert u'Successfully deregistered revision: 1' in result.output
     assert u'Successfully changed task definition to: test-task:2' in result.output
@@ -103,6 +106,7 @@ def test_deploy_new_tag(get_client, runner):
     result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '-t', 'latest'))
     assert result.exit_code == 0
     assert not result.exception
+    assert u"Deploying based on task definition: test-task:1" in result.output
     assert u"Updating task definition" in result.output
     assert u'Changed image of container "webserver" to: "webserver:latest" (was: "webserver:123")' in result.output
     assert u'Changed image of container "application" to: "application:latest" (was: "application:123")' in result.output
@@ -118,6 +122,7 @@ def test_deploy_one_new_image(get_client, runner):
     result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '-i', 'application', 'application:latest'))
     assert result.exit_code == 0
     assert not result.exception
+    assert u"Deploying based on task definition: test-task:1" in result.output
     assert u"Updating task definition" in result.output
     assert u'Changed image of container "application" to: "application:latest" (was: "application:123")' in result.output
     assert u'Successfully created revision: 2' in result.output
@@ -133,6 +138,7 @@ def test_deploy_two_new_images(get_client, runner):
                                         '-i', 'webserver', 'webserver:latest'))
     assert result.exit_code == 0
     assert not result.exception
+    assert u"Deploying based on task definition: test-task:1" in result.output
     assert u"Updating task definition" in result.output
     assert u'Changed image of container "webserver" to: "webserver:latest" (was: "webserver:123")' in result.output
     assert u'Changed image of container "application" to: "application:latest" (was: "application:123")' in result.output
@@ -148,6 +154,7 @@ def test_deploy_one_new_command(get_client, runner):
     result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '-c', 'application', 'foobar'))
     assert result.exit_code == 0
     assert not result.exception
+    assert u"Deploying based on task definition: test-task:1" in result.output
     assert u"Updating task definition" in result.output
     assert u'Changed command of container "application" to: "foobar" (was: "run")' in result.output
     assert u'Successfully created revision: 2' in result.output
@@ -166,6 +173,7 @@ def test_deploy_one_new_environment_variable(get_client, runner):
     assert result.exit_code == 0
     assert not result.exception
 
+    assert u"Deploying based on task definition: test-task:1" in result.output
     assert u"Updating task definition" in result.output
     assert u'Changed environment "foo" of container "application" to: "bar"' in result.output
     assert u'Changed environment "foo" of container "webserver" to: "baz"' in result.output
@@ -184,6 +192,7 @@ def test_deploy_without_changing_environment_value(get_client, runner):
     assert result.exit_code == 0
     assert not result.exception
 
+    assert u"Deploying based on task definition: test-task:1" in result.output
     assert u"Updating task definition" not in result.output
     assert u'Changed environment' not in result.output
     assert u'Successfully created revision: 2' in result.output
@@ -200,6 +209,7 @@ def test_deploy_without_diff(get_client, runner):
     assert result.exit_code == 0
     assert not result.exception
 
+    assert u"Deploying based on task definition: test-task:1" in result.output
     assert u"Updating task definition" not in result.output
     assert u'Changed environment' not in result.output
     assert u'Successfully created revision: 2' in result.output
@@ -224,12 +234,38 @@ def test_deploy_ignore_warnings(get_client, runner):
 
     assert result.exit_code == 0
     assert not result.exception
+    assert u"Deploying based on task definition: test-task:1" in result.output
     assert u'Successfully created revision: 2' in result.output
     assert u'Successfully deregistered revision: 1' in result.output
     assert u'Successfully changed task definition to: test-task:2' in result.output
     assert u"WARNING: Service was unable to Lorem Ipsum" in result.output
     assert u"Continuing." in result.output
     assert u'Deployment successful' in result.output
+
+
+@patch('ecs_deploy.newrelic.Deployment.deploy')
+@patch('ecs_deploy.cli.get_client')
+def test_deploy_with_newrelic(get_client, newrelic, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME,
+                                        '-t', 'my-tag',
+                                        '--newrelic-apikey', 'test',
+                                        '--newrelic-appid', 'test',
+                                        '--comment', 'Lorem Ipsum'))
+    assert result.exit_code == 0
+    assert not result.exception
+    assert u"Deploying based on task definition: test-task:1" in result.output
+    assert u'Successfully created revision: 2' in result.output
+    assert u'Successfully deregistered revision: 1' in result.output
+    assert u'Successfully changed task definition to: test-task:2' in result.output
+    assert u'Deployment successful' in result.output
+    assert u"Recording deployment in New Relic" in result.output
+
+    newrelic.assert_called_once_with(
+        'my-tag',
+        '',
+        'Lorem Ipsum'
+    )
 
 
 @patch('ecs_deploy.newrelic.Deployment.deploy')
