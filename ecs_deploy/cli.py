@@ -64,9 +64,11 @@ def get_client(access_key_id, secret_access_key, region, profile):
               help='User who executes the deployment (used for recording)')
 @click.option('--diff/--no-diff', default=True,
               help='Print what values were changed in the task definition')
+@click.option('--deregister/--no-deregister', default=True,
+              help='Deregister (default) or keep the old task definition')
 def deploy(cluster, service, tag, image, command, env, role, task, region,
            access_key_id, secret_access_key, profile, timeout, newrelic_apikey,
-           newrelic_appid, comment, user, ignore_warnings, diff):
+           newrelic_appid, comment, user, ignore_warnings, diff, deregister):
     """
     Redeploy or modify a service.
 
@@ -101,13 +103,17 @@ def deploy(cluster, service, tag, image, command, env, role, task, region,
         new_td = deployment.update_task_definition(td)
 
         click.secho(
-            'Successfully created revision: %d' % new_td.revision,
+            'Successfully created revision: %d\n' % new_td.revision,
             fg='green'
         )
-        click.secho(
-            'Successfully deregistered revision: %d\n' % td.revision,
-            fg='green'
-        )
+
+        if deregister:
+            click.secho('Deregister old task definition revision')
+            deployment.deregister_task_definition(td)
+            click.secho(
+                'Successfully deregistered revision: %d\n' % td.revision,
+                fg='green'
+            )
 
         record_deployment(tag, newrelic_apikey, newrelic_appid, comment, user)
 
