@@ -85,12 +85,7 @@ def deploy(cluster, service, tag, image, command, env, role, task, region,
         client = get_client(access_key_id, secret_access_key, region, profile)
         deployment = DeployAction(client, cluster, service)
 
-        if task:
-            td = deployment.get_task_definition(task)
-            click.secho('Deploying based on task definition: %s' % task)
-        else:
-            td = deployment.get_current_task_definition(deployment.service)
-
+        td = get_task_definition(deployment, task)
         td.set_images(tag, **{key: value for (key, value) in image})
         td.set_commands(**{key: value for (key, value) in command})
         td.set_environment(env)
@@ -99,28 +94,9 @@ def deploy(cluster, service, tag, image, command, env, role, task, region,
         if diff:
             print_diff(td)
 
-        click.secho('Creating new task definition revision')
-        new_td = deployment.update_task_definition(td)
-
-        click.secho(
-            'Successfully created revision: %d\n' % new_td.revision,
-            fg='green'
-        )
-
-        if deregister:
-            click.secho('Deregister old task definition revision')
-            deployment.deregister_task_definition(td)
-            click.secho(
-                'Successfully deregistered revision: %d\n' % td.revision,
-                fg='green'
-            )
-
+        new_task_definition = create_task_definition(deployment, td)
         record_deployment(tag, newrelic_apikey, newrelic_appid, comment, user)
-
-        click.secho('Updating service')
-        deployment.deploy(new_td)
-        click.secho('Successfully changed task definition to: %s:%s\n' %
-                    (new_td.family, new_td.revision), fg='green')
+        deploy_task_definition(deployment, new_task_definition)
 
         wait_for_finish(
             action=deployment,
@@ -130,6 +106,9 @@ def deploy(cluster, service, tag, image, command, env, role, task, region,
             failure_message='Deployment failed',
             ignore_warnings=ignore_warnings
         )
+
+        if deregister:
+            deregister_task_definition(deployment, td)
 
     except Exception as e:
         click.secho('%s\n' % str(e), fg='red', err=True)
@@ -275,6 +254,49 @@ def wait_for_finish(action, timeout, title, success_message, failure_message,
     )
 
     click.secho('\n%s\n' % success_message, fg='green')
+
+
+def deploy_task_definition(deployment, task_definition):
+    click.secho('Updating service')
+    deployment.deploy(task_definition)
+
+    message = 'Successfully changed task definition to: %s:%s\n' % (
+        task_definition.family,
+        task_definition.revision
+    )
+
+    click.secho(message, fg='green')
+
+
+def get_task_definition(action, task):
+    if task:
+        task_definition = action.get_task_definition(task)
+        click.secho('Deploying based on task definition: %s' % task)
+    else:
+        task_definition = action.get_current_task_definition(action.service)
+
+    return task_definition
+
+
+def create_task_definition(action, task_definition):
+    click.secho('Creating new task definition revision')
+    new_td = action.update_task_definition(task_definition)
+
+    click.secho(
+        'Successfully created revision: %d\n' % new_td.revision,
+        fg='green'
+    )
+
+    return new_td
+
+
+def deregister_task_definition(action, task_definition):
+    click.secho('Deregister old task definition revision')
+    action.deregister_task_definition(task_definition)
+    click.secho(
+        'Successfully deregistered revision: %d\n' % task_definition.revision,
+        fg='green'
+    )
 
 
 def record_deployment(revision, api_key, app_id, comment, user):
