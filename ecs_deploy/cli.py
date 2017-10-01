@@ -234,7 +234,6 @@ def wait_for_finish(action, timeout, title, success_message, failure_message,
     inspected_until = None
     while waiting and datetime.now() < waiting_timeout:
         click.secho('.', nl=False)
-        sleep(1)
         service = action.get_service()
         inspected_until = inspect_errors(
             service=service,
@@ -244,6 +243,9 @@ def wait_for_finish(action, timeout, title, success_message, failure_message,
             timeout=False
         )
         waiting = not action.is_deployed(service)
+
+        if waiting:
+            sleep(1)
 
     inspect_errors(
         service=service,
