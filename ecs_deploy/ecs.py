@@ -375,8 +375,10 @@ class EcsAction(object):
             additional_properties=task_definition.additional_properties
         )
         new_task_definition = EcsTaskDefinition(**response[u'taskDefinition'])
-        self._client.deregister_task_definition(task_definition.arn)
         return new_task_definition
+
+    def deregister_task_definition(self, task_definition):
+        self._client.deregister_task_definition(task_definition.arn)
 
     def update_service(self, service):
         response = self._client.update_service(

@@ -586,6 +586,13 @@ def test_update_task_definition(client, task_definition):
             u'unknownProperty': u'lorem-ipsum'
         }
     )
+
+
+@patch.object(EcsClient, '__init__')
+def test_deregister_task_definition(client, task_definition):
+    action = EcsAction(client, u'test-cluster', u'test-service')
+    action.deregister_task_definition(task_definition)
+
     client.deregister_task_definition.assert_called_once_with(
         task_definition.arn
     )
