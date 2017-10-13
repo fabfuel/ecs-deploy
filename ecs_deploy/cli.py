@@ -340,7 +340,8 @@ def inspect_errors(service, failure_message, ignore_warnings, since, timeout):
 
     if timeout:
         error = True
-        failure_message += ' (timeout)'
+        failure_message += ' due to timeout. Please see: ' \
+                           'https://github.com/fabfuel/ecs-deploy#timeout'
 
     if error:
         raise TaskPlacementError(failure_message)
