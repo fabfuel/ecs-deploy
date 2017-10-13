@@ -267,6 +267,7 @@ This time includes the full cycle of stopping all old containers and (re)startin
 You can increase the time (in seconds) to wait for finishing the deployment via the ``--timeout`` parameter. Different stacks require different timeout values, the default is 300 seconds.
 
 The overall deployment time depends on different things:
+
 - the type of the application. For example node.js containers tend to take a long time to get stopped. But nginx containers tend to stop immediately, etc.
 - are old and new containers able to run in parallel (e.g. using dynamic ports)?
 - the deployment options and strategy (Maximum percent > 100)?
