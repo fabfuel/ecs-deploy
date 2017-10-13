@@ -262,6 +262,15 @@ def test_deploy_task_definition_arn(get_client, runner):
 
 
 @patch('ecs_deploy.cli.get_client')
+def test_deploy_with_timeout(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key', wait=2)
+    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '--timeout', '1'))
+    assert result.exit_code == 1
+    assert u"Deployment failed due to timeout. Please see: " \
+           u"https://github.com/fabfuel/ecs-deploy#timeout" in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
 def test_deploy_unknown_task_definition_arn(get_client, runner):
     get_client.return_value = EcsTestClient('acces_key', 'secret_key')
     result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '--task', u'arn:aws:ecs:eu-central-1:123456789012:task-definition/foobar:55'))
@@ -331,7 +340,8 @@ def test_scale_with_timeout(get_client, runner):
     get_client.return_value = EcsTestClient('acces_key', 'secret_key', wait=2)
     result = runner.invoke(cli.scale, (CLUSTER_NAME, SERVICE_NAME, '2', '--timeout', '1'))
     assert result.exit_code == 1
-    assert u"Scaling failed (timeout)" in result.output
+    assert u"Scaling failed due to timeout. Please see: " \
+           u"https://github.com/fabfuel/ecs-deploy#timeout" in result.output
 
 
 @patch('ecs_deploy.cli.get_client')
