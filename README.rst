@@ -260,11 +260,9 @@ timeout or other errors during the deployment.
 
 Timeout
 =======
-The timeout error means, that AWS ECS takes longer for the full deployment cycle then ecs-deploy is told to wait. The deployment itself still might finish successfully, if there are not other problems with the deployed containers.
+The timeout error means, that AWS ECS takes longer for the full deployment cycle then ecs-deploy is told to wait. The deployment itself still might finish successfully, if there are no other problems with the deployed containers.
 
-This time includes the full cycle of stopping all old containers and (re)starting all new containers.
-
-You can increase the time (in seconds) to wait for finishing the deployment via the ``--timeout`` parameter. Different stacks require different timeout values, the default is 300 seconds.
+You can increase the time (in seconds) to wait for finishing the deployment via the ``--timeout`` parameter. This time includes the full cycle of stopping all old containers and (re)starting all new containers. Different stacks require different timeout values, the default is 300 seconds.
 
 The overall deployment time depends on different things:
 
