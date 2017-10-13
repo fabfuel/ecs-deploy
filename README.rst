@@ -253,6 +253,27 @@ Or implicitly via environment variables ``NEW_RELIC_API_KEY`` and ``NEW_RELIC_AP
 Optionally you can provide an additional comment to the deployment via ``--comment "New feature X"`` and the name of the user who deployed with ``--user john.doe``
 
 
+Troubleshooting
+---------------
+If the service configuration in ECS is not optimally set, you might be seeing
+timeout or other errors during the deployment.
+
+Timeout
+=======
+The timeout error means, that AWS ECS takes longer for the full deployment cycle then ecs-deploy is told to wait. The deployment itself still might finish successfully, if there are not other problems with the deployed containers.
+
+This time includes the full cycle of stopping all old containers and (re)starting all new containers.
+
+You can increase the time (in seconds) to wait for finishing the deployment via the ``--timeout`` parameter. Different stacks require different timeout values, the default is 300 seconds.
+
+The overall deployment time depends on different things:
+- the type of the application. For example node.js containers tend to take a long time to get stopped. But nginx containers tend to stop immediately, etc.
+- are old and new containers able to run in parallel (e.g. using dynamic ports)?
+- the deployment options and strategy (Maximum percent > 100)?
+- the desired count of running tasks, compared to
+- the number of ECS instances in the cluster
+
+
 Alternative Implementation
 --------------------------
 There are some other libraries/tools available on GitHub, which also handle the deployment of containers in AWS ECS. If you prefer another language over Python, have a look at these projects:
