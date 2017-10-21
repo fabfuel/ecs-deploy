@@ -436,14 +436,20 @@ class EcsAction(object):
 
 class DeployAction(EcsAction):
     def deploy(self, task_definition):
-        self._service.set_task_definition(task_definition)
-        return self.update_service(self._service)
+        try:
+            self._service.set_task_definition(task_definition)
+            return self.update_service(self._service)
+        except ClientError as e:
+            raise EcsError(str(e))
 
 
 class ScaleAction(EcsAction):
     def scale(self, desired_count):
-        self._service.set_desired_count(desired_count)
-        return self.update_service(self._service)
+        try:
+            self._service.set_desired_count(desired_count)
+            return self.update_service(self._service)
+        except ClientError as e:
+            raise EcsError(str(e))
 
 
 class RunAction(EcsAction):
@@ -454,15 +460,18 @@ class RunAction(EcsAction):
         self.started_tasks = []
 
     def run(self, task_definition, count, started_by):
-        result = self._client.run_task(
-            cluster=self._cluster_name,
-            task_definition=task_definition.family_revision,
-            count=count,
-            started_by=started_by,
-            overrides=dict(containerOverrides=task_definition.get_overrides())
-        )
-        self.started_tasks = result['tasks']
-        return True
+        try:
+            result = self._client.run_task(
+                cluster=self._cluster_name,
+                task_definition=task_definition.family_revision,
+                count=count,
+                started_by=started_by,
+                overrides=dict(containerOverrides=task_definition.get_overrides())
+            )
+            self.started_tasks = result['tasks']
+            return True
+        except ClientError as e:
+            raise EcsError(str(e))
 
 
 class EcsError(Exception):
