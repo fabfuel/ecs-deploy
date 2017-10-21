@@ -68,7 +68,7 @@ def get_client(access_key_id, secret_access_key, region, profile):
 @click.option('--deregister/--no-deregister', default=True,
               help='Deregister or keep the old task definition '
                    '(default: --deregister)')
-@click.option('--rollback/--no-rollback', default=True,
+@click.option('--rollback/--no-rollback', default=False,
               help='Rollback to previous revision, if deployment failed '
                    '(default: --rollback)')
 def deploy(cluster, service, tag, image, command, env, role, task, region,
