@@ -220,7 +220,7 @@ def test_deploy_without_diff(get_client, runner):
 
 @patch('ecs_deploy.cli.get_client')
 def test_deploy_with_errors(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key', errors=True)
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key', deployment_errors=True)
     result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME))
     assert result.exit_code == 1
     assert u"Deployment failed" in result.output
@@ -228,8 +228,16 @@ def test_deploy_with_errors(get_client, runner):
 
 
 @patch('ecs_deploy.cli.get_client')
+def test_deploy_with_client_errors(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key', client_errors=True)
+    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME))
+    assert result.exit_code == 1
+    assert u"Something went wrong" in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
 def test_deploy_ignore_warnings(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key', errors=True)
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key', deployment_errors=True)
     result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '--ignore-warnings'))
 
     assert result.exit_code == 0
@@ -351,7 +359,7 @@ def test_scale(get_client, runner):
 
 @patch('ecs_deploy.cli.get_client')
 def test_scale_with_errors(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key', errors=True)
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key', deployment_errors=True)
     result = runner.invoke(cli.scale, (CLUSTER_NAME, SERVICE_NAME, '2'))
     assert result.exit_code == 1
     assert u"Scaling failed" in result.output
@@ -359,8 +367,16 @@ def test_scale_with_errors(get_client, runner):
 
 
 @patch('ecs_deploy.cli.get_client')
+def test_scale_with_client_errors(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key', client_errors=True)
+    result = runner.invoke(cli.scale, (CLUSTER_NAME, SERVICE_NAME, '2'))
+    assert result.exit_code == 1
+    assert u"Something went wrong" in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
 def test_scale_ignore_warnings(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key', errors=True)
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key', deployment_errors=True)
     result = runner.invoke(cli.scale, (CLUSTER_NAME, SERVICE_NAME, '2', '--ignore-warnings'))
 
     assert not result.exception
@@ -448,8 +464,9 @@ def test_run_task_without_diff(get_client, runner):
 
 @patch('ecs_deploy.cli.get_client')
 def test_run_task_with_errors(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key', errors=True)
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key', deployment_errors=True)
     result = runner.invoke(cli.run, (CLUSTER_NAME, 'test-task'))
+    assert result.exception
     assert result.exit_code == 1
     assert u"An error occurred (123) when calling the fake_error operation: Something went wrong" in result.output
 

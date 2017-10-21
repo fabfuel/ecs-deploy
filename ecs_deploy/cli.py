@@ -8,8 +8,8 @@ import getpass
 from datetime import datetime, timedelta
 
 from ecs_deploy.ecs import DeployAction, ScaleAction, RunAction, EcsClient, \
-    TaskPlacementError
-from ecs_deploy.newrelic import Deployment
+    TaskPlacementError, EcsError
+from ecs_deploy.newrelic import Deployment, NewRelicException
 
 
 @click.group()
@@ -127,7 +127,7 @@ def deploy(cluster, service, tag, image, command, env, role, task, region,
 
         record_deployment(tag, newrelic_apikey, newrelic_appid, comment, user)
 
-    except Exception as e:
+    except (EcsError, NewRelicException) as e:
         click.secho('%s\n' % str(e), fg='red', err=True)
         exit(1)
 
@@ -177,7 +177,7 @@ def scale(cluster, service, desired_count, access_key_id, secret_access_key,
             ignore_warnings=ignore_warnings
         )
 
-    except Exception as e:
+    except EcsError as e:
         click.secho('%s\n' % str(e), fg='red', err=True)
         exit(1)
 
@@ -237,7 +237,7 @@ def run(cluster, task, count, command, env, region, access_key_id,
             click.secho('- %s' % started_task['taskArn'], fg='green')
         click.secho(' ')
 
-    except Exception as e:
+    except EcsError as e:
         click.secho('%s\n' % str(e), fg='red', err=True)
         exit(1)
 
