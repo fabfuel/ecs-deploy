@@ -72,6 +72,25 @@ def test_deploy(get_client, runner):
 
 
 @patch('ecs_deploy.cli.get_client')
+def test_deploy_with_rollback(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key', wait=2)
+    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '--timeout=1', '--rollback'))
+
+    print(result.output)
+    assert result.exit_code == 1
+    assert result.exception
+    assert u"Deploying based on task definition: test-task:1" in result.output
+
+    assert u"Deployment failed" in result.output
+    assert u"Rolling back to task definition: test-task:1" in result.output
+    assert u'Successfully changed task definition to: test-task:1' in result.output
+
+    assert u"Rollback successful" in result.output
+    assert u'Deployment failed, but service has been rolled back to ' \
+           u'previous task definition: test-task:1' in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
 def test_deploy_without_deregister(get_client, runner):
     get_client.return_value = EcsTestClient('acces_key', 'secret_key')
     result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '--no-deregister'))
