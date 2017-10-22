@@ -7,8 +7,9 @@ import click
 import getpass
 from datetime import datetime, timedelta
 
+from ecs_deploy import VERSION
 from ecs_deploy.ecs import DeployAction, ScaleAction, RunAction, EcsClient, \
-    TaskPlacementError, EcsError, VERSION
+    TaskPlacementError, EcsError
 from ecs_deploy.newrelic import Deployment, NewRelicException
 
 
