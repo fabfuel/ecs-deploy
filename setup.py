@@ -3,13 +3,15 @@ Simplify AWS ECS deployments
 """
 from setuptools import find_packages, setup
 
+from ecs_deploy.ecs import VERSION
+
 dependencies = ['click', 'botocore', 'boto3>=1.4.7', 'future', 'requests']
 
 setup(
     name='ecs-deploy',
-    version='1.3.1',
+    version=VERSION,
     url='https://github.com/fabfuel/ecs-deploy',
-    download_url='https://github.com/fabfuel/ecs-deploy/archive/1.3.1.tar.gz',
+    download_url='https://github.com/fabfuel/ecs-deploy/archive/%s.tar.gz' % VERSION,
     license='BSD',
     author='Fabian Fuelling',
     author_email='pypi@fabfuel.de',
