@@ -35,7 +35,6 @@ setup(
         'coverage'
     ],
     classifiers=[
-        'Development Status :: 3 - Alpha',
         'Environment :: Console',
         'Intended Audience :: Developers',
         'License :: OSI Approved :: BSD License',
