@@ -8,8 +8,8 @@ import getpass
 from datetime import datetime, timedelta
 
 from ecs_deploy.ecs import DeployAction, ScaleAction, RunAction, EcsClient, \
-    TaskPlacementError
-from ecs_deploy.newrelic import Deployment
+    TaskPlacementError, EcsError
+from ecs_deploy.newrelic import Deployment, NewRelicException
 
 
 @click.group()
@@ -24,51 +24,26 @@ def get_client(access_key_id, secret_access_key, region, profile):
 @click.command()
 @click.argument('cluster')
 @click.argument('service')
-@click.option('-t', '--tag',
-              help='Changes the tag for ALL container images')
-@click.option('-i', '--image', type=(str, str), multiple=True,
-              help='Overwrites the image for a container: '
-                   '<container> <image>')
-@click.option('-c', '--command', type=(str, str), multiple=True,
-              help='Overwrites the command in a container: '
-                   '<container> <command>')
-@click.option('-e', '--env', type=(str, str, str), multiple=True,
-              help='Adds or changes an environment variable: '
-                   '<container> <name> <value>')
-@click.option('-r', '--role', type=str,
-              help='Sets the task\'s role ARN: <task role ARN>')
-@click.option('--task', type=str,
-              help='Task definition to be deployed. Can be a task ARN '
-                   'or a task family with optional revision')
-@click.option('--region', required=False,
-              help='AWS region (e.g. eu-central-1)')
-@click.option('--access-key-id', required=False,
-              help='AWS access key id')
-@click.option('--secret-access-key', required=False,
-              help='AWS secret access key')
-@click.option('--profile', required=False,
-              help='AWS configuration profile name')
-@click.option('--timeout', required=False, default=300, type=int,
-              help='Amount of seconds to wait for deployment before '
-                   'command fails (default: 300)')
-@click.option('--ignore-warnings', is_flag=True,
-              help='Do not fail deployment on warnings (port already in use '
-                   'or insufficient memory/CPU)')
-@click.option('--newrelic-apikey', required=False,
-              help='New Relic API Key for recording the deployment')
-@click.option('--newrelic-appid', required=False,
-              help='New Relic App ID for recording the deployment')
-@click.option('--comment', required=False,
-              help='Description/comment for recording the deployment')
-@click.option('--user', required=False,
-              help='User who executes the deployment (used for recording)')
-@click.option('--diff/--no-diff', default=True,
-              help='Print what values were changed in the task definition')
-@click.option('--deregister/--no-deregister', default=True,
-              help='Deregister (default) or keep the old task definition')
-def deploy(cluster, service, tag, image, command, env, role, task, region,
-           access_key_id, secret_access_key, profile, timeout, newrelic_apikey,
-           newrelic_appid, comment, user, ignore_warnings, diff, deregister):
+@click.option('-t', '--tag', help='Changes the tag for ALL container images')
+@click.option('-i', '--image', type=(str, str), multiple=True, help='Overwrites the image for a container: <container> <image>')
+@click.option('-c', '--command', type=(str, str), multiple=True, help='Overwrites the command in a container: <container> <command>')
+@click.option('-e', '--env', type=(str, str, str), multiple=True, help='Adds or changes an environment variable: <container> <name> <value>')
+@click.option('-r', '--role', type=str, help='Sets the task\'s role ARN: <task role ARN>')
+@click.option('--task', type=str, help='Task definition to be deployed. Can be a task ARN or a task family with optional revision')
+@click.option('--region', required=False, help='AWS region (e.g. eu-central-1)')
+@click.option('--access-key-id', required=False, help='AWS access key id')
+@click.option('--secret-access-key', required=False, help='AWS secret access key')
+@click.option('--profile', required=False, help='AWS configuration profile name')
+@click.option('--timeout', required=False, default=300, type=int, help='Amount of seconds to wait for deployment before command fails (default: 300)')
+@click.option('--ignore-warnings', is_flag=True, help='Do not fail deployment on warnings (port already in use or insufficient memory/CPU)')
+@click.option('--newrelic-apikey', required=False, help='New Relic API Key for recording the deployment')
+@click.option('--newrelic-appid', required=False, help='New Relic App ID for recording the deployment')
+@click.option('--comment', required=False, help='Description/comment for recording the deployment')
+@click.option('--user', required=False, help='User who executes the deployment (used for recording)')
+@click.option('--diff/--no-diff', default=True, help='Print which values were changed in the task definition (default: --diff)')
+@click.option('--deregister/--no-deregister', default=True, help='Deregister or keep the old task definition (default: --deregister)')
+@click.option('--rollback/--no-rollback', default=False, help='Rollback to previous revision, if deployment failed (default: --rollback)')
+def deploy(cluster, service, tag, image, command, env, role, task, region, access_key_id, secret_access_key, profile, timeout, newrelic_apikey, newrelic_appid, comment, user, ignore_warnings, diff, deregister, rollback):
     """
     Redeploy or modify a service.
 
@@ -85,12 +60,7 @@ def deploy(cluster, service, tag, image, command, env, role, task, region,
         client = get_client(access_key_id, secret_access_key, region, profile)
         deployment = DeployAction(client, cluster, service)
 
-        if task:
-            td = deployment.get_task_definition(task)
-            click.secho('Deploying based on task definition: %s' % task)
-        else:
-            td = deployment.get_current_task_definition(deployment.service)
-
+        td = get_task_definition(deployment, task)
         td.set_images(tag, **{key: value for (key, value) in image})
         td.set_commands(**{key: value for (key, value) in command})
         td.set_environment(env)
@@ -99,39 +69,32 @@ def deploy(cluster, service, tag, image, command, env, role, task, region,
         if diff:
             print_diff(td)
 
-        click.secho('Creating new task definition revision')
-        new_td = deployment.update_task_definition(td)
+        new_td = create_task_definition(deployment, td)
 
-        click.secho(
-            'Successfully created revision: %d\n' % new_td.revision,
-            fg='green'
-        )
-
-        if deregister:
-            click.secho('Deregister old task definition revision')
-            deployment.deregister_task_definition(td)
-            click.secho(
-                'Successfully deregistered revision: %d\n' % td.revision,
-                fg='green'
+        try:
+            deploy_task_definition(
+                deployment=deployment,
+                task_definition=new_td,
+                title='Deploying new task definition',
+                success_message='Deployment successful',
+                failure_message='Deployment failed',
+                timeout=timeout,
+                deregister=deregister,
+                previous_task_definition=td,
+                ignore_warnings=ignore_warnings,
             )
+
+        except TaskPlacementError as e:
+            if rollback:
+                click.secho('%s\n' % str(e), fg='red', err=True)
+                rollback_task_definition(deployment, td, new_td)
+                exit(1)
+            else:
+                raise
 
         record_deployment(tag, newrelic_apikey, newrelic_appid, comment, user)
 
-        click.secho('Updating service')
-        deployment.deploy(new_td)
-        click.secho('Successfully changed task definition to: %s:%s\n' %
-                    (new_td.family, new_td.revision), fg='green')
-
-        wait_for_finish(
-            action=deployment,
-            timeout=timeout,
-            title='Deploying task definition',
-            success_message='Deployment successful',
-            failure_message='Deployment failed',
-            ignore_warnings=ignore_warnings
-        )
-
-    except Exception as e:
+    except (EcsError, NewRelicException) as e:
         click.secho('%s\n' % str(e), fg='red', err=True)
         exit(1)
 
@@ -140,21 +103,13 @@ def deploy(cluster, service, tag, image, command, env, role, task, region,
 @click.argument('cluster')
 @click.argument('service')
 @click.argument('desired_count', type=int)
-@click.option('--region',
-              help='AWS region (e.g. eu-central-1)')
-@click.option('--access-key-id',
-              help='AWS access key id')
-@click.option('--secret-access-key',
-              help='AWS secret access key')
-@click.option('--profile',
-              help='AWS configuration profile name')
-@click.option('--timeout', default=300, type=int,
-              help='AWS configuration profile')
-@click.option('--ignore-warnings', is_flag=True,
-              help='Do not fail deployment on warnings (port already in use '
-                   'or insufficient memory/CPU)')
-def scale(cluster, service, desired_count, access_key_id, secret_access_key,
-          region, profile, timeout, ignore_warnings):
+@click.option('--region', help='AWS region (e.g. eu-central-1)')
+@click.option('--access-key-id', help='AWS access key id')
+@click.option('--secret-access-key', help='AWS secret access key')
+@click.option('--profile', help='AWS configuration profile name')
+@click.option('--timeout', default=300, type=int, help='AWS configuration profile')
+@click.option('--ignore-warnings', is_flag=True, help='Do not fail deployment on warnings (port already in use or insufficient memory/CPU)')
+def scale(cluster, service, desired_count, access_key_id, secret_access_key, region, profile, timeout, ignore_warnings):
     """
     Scale a service up or down.
 
@@ -181,7 +136,7 @@ def scale(cluster, service, desired_count, access_key_id, secret_access_key,
             ignore_warnings=ignore_warnings
         )
 
-    except Exception as e:
+    except EcsError as e:
         click.secho('%s\n' % str(e), fg='red', err=True)
         exit(1)
 
@@ -190,24 +145,14 @@ def scale(cluster, service, desired_count, access_key_id, secret_access_key,
 @click.argument('cluster')
 @click.argument('task')
 @click.argument('count', required=False, default=1)
-@click.option('-c', '--command', type=(str, str), multiple=True,
-              help='Overwrites the command in a container: '
-                   '<container> <command>')
-@click.option('-e', '--env', type=(str, str, str), multiple=True,
-              help='Adds or changes an environment variable: '
-                   '<container> <name> <value>')
-@click.option('--region',
-              help='AWS region (e.g. eu-central-1)')
-@click.option('--access-key-id',
-              help='AWS access key id')
-@click.option('--secret-access-key',
-              help='AWS secret access key')
-@click.option('--profile',
-              help='AWS configuration profile name')
-@click.option('--diff/--no-diff', default=True,
-              help='Print what values were changed in the task definition')
-def run(cluster, task, count, command, env, region, access_key_id,
-        secret_access_key, profile, diff):
+@click.option('-c', '--command', type=(str, str), multiple=True, help='Overwrites the command in a container: <container> <command>')
+@click.option('-e', '--env', type=(str, str, str), multiple=True, help='Adds or changes an environment variable: <container> <name> <value>')
+@click.option('--region', help='AWS region (e.g. eu-central-1)')
+@click.option('--access-key-id', help='AWS access key id')
+@click.option('--secret-access-key', help='AWS secret access key')
+@click.option('--profile', help='AWS configuration profile name')
+@click.option('--diff/--no-diff', default=True, help='Print what values were changed in the task definition')
+def run(cluster, task, count, command, env, region, access_key_id, secret_access_key, profile, diff):
     """
     Run a one-off task.
 
@@ -241,7 +186,7 @@ def run(cluster, task, count, command, env, region, access_key_id,
             click.secho('- %s' % started_task['taskArn'], fg='green')
         click.secho(' ')
 
-    except Exception as e:
+    except EcsError as e:
         click.secho('%s\n' % str(e), fg='red', err=True)
         exit(1)
 
@@ -255,7 +200,6 @@ def wait_for_finish(action, timeout, title, success_message, failure_message,
     inspected_until = None
     while waiting and datetime.now() < waiting_timeout:
         click.secho('.', nl=False)
-        sleep(1)
         service = action.get_service()
         inspected_until = inspect_errors(
             service=service,
@@ -266,6 +210,9 @@ def wait_for_finish(action, timeout, title, success_message, failure_message,
         )
         waiting = not action.is_deployed(service)
 
+        if waiting:
+            sleep(1)
+
     inspect_errors(
         service=service,
         failure_message=failure_message,
@@ -275,6 +222,87 @@ def wait_for_finish(action, timeout, title, success_message, failure_message,
     )
 
     click.secho('\n%s\n' % success_message, fg='green')
+
+
+def deploy_task_definition(deployment, task_definition, title, success_message,
+                           failure_message, timeout, deregister,
+                           previous_task_definition, ignore_warnings):
+    click.secho('Updating service')
+    deployment.deploy(task_definition)
+
+    message = 'Successfully changed task definition to: %s:%s\n' % (
+        task_definition.family,
+        task_definition.revision
+    )
+
+    click.secho(message, fg='green')
+
+    wait_for_finish(
+        action=deployment,
+        timeout=timeout,
+        title=title,
+        success_message=success_message,
+        failure_message=failure_message,
+        ignore_warnings=ignore_warnings
+    )
+
+    if deregister:
+        deregister_task_definition(deployment, previous_task_definition)
+
+
+def get_task_definition(action, task):
+    if task:
+        task_definition = action.get_task_definition(task)
+    else:
+        task_definition = action.get_current_task_definition(action.service)
+        task = task_definition.family_revision
+
+    click.secho('Deploying based on task definition: %s\n' % task)
+
+    return task_definition
+
+
+def create_task_definition(action, task_definition):
+    click.secho('Creating new task definition revision')
+    new_td = action.update_task_definition(task_definition)
+
+    click.secho(
+        'Successfully created revision: %d\n' % new_td.revision,
+        fg='green'
+    )
+
+    return new_td
+
+
+def deregister_task_definition(action, task_definition):
+    click.secho('Deregister task definition revision')
+    action.deregister_task_definition(task_definition)
+    click.secho(
+        'Successfully deregistered revision: %d\n' % task_definition.revision,
+        fg='green'
+    )
+
+
+def rollback_task_definition(deployment, old, new, timeout=600):
+    click.secho(
+        'Rolling back to task definition: %s\n' % old.family_revision,
+        fg='yellow',
+    )
+    deploy_task_definition(
+        deployment=deployment,
+        task_definition=old,
+        title='Deploying previous task definition',
+        success_message='Rollback successful',
+        failure_message='Rollback failed. Please check ECS Console',
+        timeout=timeout,
+        deregister=True,
+        previous_task_definition=new,
+        ignore_warnings=False
+    )
+    click.secho(
+        'Deployment failed, but service has been rolled back to previous '
+        'task definition: %s\n' % old.family_revision, fg='yellow', err=True
+    )
 
 
 def record_deployment(revision, api_key, app_id, comment, user):
@@ -340,7 +368,9 @@ def inspect_errors(service, failure_message, ignore_warnings, since, timeout):
 
     if timeout:
         error = True
-        failure_message += ' (timeout)'
+        failure_message += ' due to timeout. Please see: ' \
+                           'https://github.com/fabfuel/ecs-deploy#timeout'
+        click.secho('')
 
     if error:
         raise TaskPlacementError(failure_message)
