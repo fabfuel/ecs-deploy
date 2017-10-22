@@ -5,7 +5,7 @@ from botocore.exceptions import ClientError, NoCredentialsError
 from dateutil.tz.tz import tzlocal
 
 
-VERSION = '1.3.1'
+VERSION = '1.4.0'
 
 
 class EcsClient(object):
