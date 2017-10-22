@@ -43,7 +43,7 @@ def get_client(access_key_id, secret_access_key, region, profile):
 @click.option('--user', required=False, help='User who executes the deployment (used for recording)')
 @click.option('--diff/--no-diff', default=True, help='Print which values were changed in the task definition (default: --diff)')
 @click.option('--deregister/--no-deregister', default=True, help='Deregister or keep the old task definition (default: --deregister)')
-@click.option('--rollback/--no-rollback', default=False, help='Rollback to previous revision, if deployment failed (default: --rollback)')
+@click.option('--rollback/--no-rollback', default=False, help='Rollback to previous revision, if deployment failed (default: --no-rollback)')
 def deploy(cluster, service, tag, image, command, env, role, task, region, access_key_id, secret_access_key, profile, timeout, newrelic_apikey, newrelic_appid, comment, user, ignore_warnings, diff, deregister, rollback):
     """
     Redeploy or modify a service.
