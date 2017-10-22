@@ -76,7 +76,6 @@ def test_deploy_with_rollback(get_client, runner):
     get_client.return_value = EcsTestClient('acces_key', 'secret_key', wait=2)
     result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '--timeout=1', '--rollback'))
 
-    print(result.output)
     assert result.exit_code == 1
     assert result.exception
     assert u"Deploying based on task definition: test-task:1" in result.output

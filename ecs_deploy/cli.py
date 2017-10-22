@@ -72,15 +72,16 @@ def deploy(cluster, service, tag, image, command, env, role, task, region, acces
         new_td = create_task_definition(deployment, td)
 
         try:
-            deploy_task_definition(deployment, new_td)
-
-            wait_for_finish(
-                action=deployment,
-                timeout=timeout,
+            deploy_task_definition(
+                deployment=deployment,
+                task_definition=new_td,
                 title='Deploying new task definition',
                 success_message='Deployment successful',
                 failure_message='Deployment failed',
-                ignore_warnings=ignore_warnings
+                timeout=timeout,
+                deregister=deregister,
+                previous_task_definition=td,
+                ignore_warnings=ignore_warnings,
             )
 
         except TaskPlacementError as e:
@@ -90,9 +91,6 @@ def deploy(cluster, service, tag, image, command, env, role, task, region, acces
                 exit(1)
             else:
                 raise
-
-        if deregister:
-            deregister_task_definition(deployment, td)
 
         record_deployment(tag, newrelic_apikey, newrelic_appid, comment, user)
 
@@ -226,7 +224,9 @@ def wait_for_finish(action, timeout, title, success_message, failure_message,
     click.secho('\n%s\n' % success_message, fg='green')
 
 
-def deploy_task_definition(deployment, task_definition):
+def deploy_task_definition(deployment, task_definition, title, success_message,
+                           failure_message, timeout, deregister,
+                           previous_task_definition, ignore_warnings):
     click.secho('Updating service')
     deployment.deploy(task_definition)
 
@@ -236,6 +236,18 @@ def deploy_task_definition(deployment, task_definition):
     )
 
     click.secho(message, fg='green')
+
+    wait_for_finish(
+        action=deployment,
+        timeout=timeout,
+        title=title,
+        success_message=success_message,
+        failure_message=failure_message,
+        ignore_warnings=ignore_warnings
+    )
+
+    if deregister:
+        deregister_task_definition(deployment, previous_task_definition)
 
 
 def get_task_definition(action, task):
@@ -276,17 +288,17 @@ def rollback_task_definition(deployment, old, new, timeout=600):
         'Rolling back to task definition: %s\n' % old.family_revision,
         fg='yellow',
     )
-    deploy_task_definition(deployment, old)
-    wait_for_finish(
-        action=deployment,
-        timeout=timeout,
+    deploy_task_definition(
+        deployment=deployment,
+        task_definition=old,
         title='Deploying previous task definition',
         success_message='Rollback successful',
         failure_message='Rollback failed. Please check ECS Console',
+        timeout=timeout,
+        deregister=True,
+        previous_task_definition=new,
         ignore_warnings=False
     )
-    deregister_task_definition(deployment, new)
-
     click.secho(
         'Deployment failed, but service has been rolled back to previous '
         'task definition: %s\n' % old.family_revision, fg='yellow', err=True
