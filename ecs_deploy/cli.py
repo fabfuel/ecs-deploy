@@ -8,11 +8,12 @@ import getpass
 from datetime import datetime, timedelta
 
 from ecs_deploy.ecs import DeployAction, ScaleAction, RunAction, EcsClient, \
-    TaskPlacementError, EcsError
+    TaskPlacementError, EcsError, VERSION
 from ecs_deploy.newrelic import Deployment, NewRelicException
 
 
 @click.group()
+@click.version_option(version=VERSION, prog_name='ecs-deploy')
 def ecs():  # pragma: no cover
     pass
 
