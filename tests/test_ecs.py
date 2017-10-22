@@ -586,6 +586,13 @@ def test_update_task_definition(client, task_definition):
             u'unknownProperty': u'lorem-ipsum'
         }
     )
+
+
+@patch.object(EcsClient, '__init__')
+def test_deregister_task_definition(client, task_definition):
+    action = EcsAction(client, u'test-cluster', u'test-service')
+    action.deregister_task_definition(task_definition)
+
     client.deregister_task_definition.assert_called_once_with(
         task_definition.arn
     )
@@ -733,13 +740,16 @@ def test_run_action_run(client, task_definition):
 
 
 class EcsTestClient(object):
-    def __init__(self, access_key_id=None, secret_access_key=None, region=None, profile=None, errors=False, wait=0):
+    def __init__(self, access_key_id=None, secret_access_key=None, region=None,
+                 profile=None, deployment_errors=False, client_errors=False,
+                 wait=0):
         super(EcsTestClient, self).__init__()
         self.access_key_id = access_key_id
         self.secret_access_key = secret_access_key
         self.region = region
         self.profile = profile
-        self.errors = errors
+        self.deployment_errors = deployment_errors
+        self.client_errors = client_errors
         self.wait_until = datetime.now() + timedelta(seconds=wait)
 
     def describe_services(self, cluster_name, service_name):
@@ -750,7 +760,7 @@ class EcsTestClient(object):
             raise ClientError(error_response, u'DescribeServices')
         if service_name != u'test-service':
             return {u'services': []}
-        if self.errors:
+        if self.deployment_errors:
             return {
                 u"services": [PAYLOAD_SERVICE_WITH_ERRORS],
                 u"failures": []
@@ -780,7 +790,10 @@ class EcsTestClient(object):
         return deepcopy(RESPONSE_TASK_DEFINITION)
 
     def update_service(self, cluster, service, desired_count, task_definition):
-        if self.errors:
+        if self.client_errors:
+            error = dict(Error=dict(Code=123, Message="Something went wrong"))
+            raise ClientError(error, 'fake_error')
+        if self.deployment_errors:
             return deepcopy(RESPONSE_SERVICE_WITH_ERRORS)
         return deepcopy(RESPONSE_SERVICE)
 
@@ -789,7 +802,7 @@ class EcsTestClient(object):
             raise EcsConnectionError(u'Unable to locate credentials. Configure credentials by running "aws configure".')
         if cluster == 'unknown-cluster':
             raise EcsConnectionError(u'An error occurred (ClusterNotFoundException) when calling the RunTask operation: Cluster not found.')
-        if self.errors:
+        if self.deployment_errors:
             error = dict(Error=dict(Code=123, Message="Something went wrong"))
             raise ClientError(error, 'fake_error')
         return dict(tasks=[dict(taskArn='arn:foo:bar'), dict(taskArn='arn:lorem:ipsum')])
