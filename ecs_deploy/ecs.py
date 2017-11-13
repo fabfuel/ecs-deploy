@@ -2,7 +2,7 @@ from datetime import datetime
 
 from boto3.session import Session
 from botocore.exceptions import ClientError, NoCredentialsError
-from dateutil.tz.tz import tzlocal
+from dateutil.tz import tzlocal
 
 
 class EcsClient(object):
