@@ -52,6 +52,7 @@ PAYLOAD_TASK_DEFINITION_1 = {
     u'networkMode': u'host',
     u'placementConstraints': {},
     u'unknownProperty': u'lorem-ipsum',
+    u'compatibilities': [u'EC2'],
 }
 
 PAYLOAD_TASK_DEFINITION_2 = {
@@ -62,6 +63,7 @@ PAYLOAD_TASK_DEFINITION_2 = {
     u'containerDefinitions': deepcopy(TASK_DEFINITION_CONTAINERS_2),
     u'status': u'active',
     u'unknownProperty': u'lorem-ipsum',
+    u'compatibilities': [u'EC2'],
 }
 
 TASK_ARN_1 = u'arn:aws:ecs:eu-central-1:123456789012:task/12345678-1234-1234-1234-123456789011'
