@@ -141,7 +141,7 @@ class EcsService(dict):
 class EcsTaskDefinition(object):
     def __init__(self, containerDefinitions, volumes, family, revision,
                  status, taskDefinitionArn, requiresAttributes=None,
-                 taskRoleArn=None, **kwargs):
+                 taskRoleArn=None, compatibilities=None, **kwargs):
         self.containers = containerDefinitions
         self.volumes = volumes
         self.family = family
@@ -152,6 +152,11 @@ class EcsTaskDefinition(object):
         self.role_arn = taskRoleArn or u''
         self.additional_properties = kwargs
         self._diff = []
+
+        # the compatibilities parameter is returned from the ECS API, when
+        # describing a task, but may not be included, when registering a new
+        # task definition. Just storing it for now.
+        self.compatibilities = compatibilities
 
     @property
     def container_names(self):
