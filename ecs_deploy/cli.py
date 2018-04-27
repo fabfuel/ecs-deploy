@@ -154,14 +154,15 @@ def scale(cluster, service, desired_count, access_key_id, secret_access_key, reg
 @click.option('--secret-access-key', help='AWS secret access key')
 @click.option('--profile', help='AWS configuration profile name')
 @click.option('--diff/--no-diff', default=True, help='Print what values were changed in the task definition')
-def run(cluster, task, count, command, env, region, access_key_id, secret_access_key, profile, diff):
+@click.option('--override/--no-override', default=True, help='Override changes in the task definition (default: --override)')
+def run(cluster, task, count, command, env, region, access_key_id, secret_access_key, profile, diff, override):
     """
     Run a one-off task.
 
     \b
     CLUSTER is the name of your cluster (e.g. 'my-custer') within ECS.
     TASK is the name of your task definition (e.g. 'my-task') within ECS.
-    COMMAND is the number of tasks your service should run.
+    COMMAND is the command your one-off task should run.
     """
     try:
         client = get_client(access_key_id, secret_access_key, region, profile)
@@ -171,15 +172,21 @@ def run(cluster, task, count, command, env, region, access_key_id, secret_access
         td.set_commands(**{key: value for (key, value) in command})
         td.set_environment(env)
 
-        if diff:
-            print_diff(td, 'Using task definition: %s' % task)
+        if override:
+            run_td = td
+            if diff:
+                print_diff(td, 'Using task definition: %s' % task)
+        else:
+            if diff:
+                print_diff(td)
+            run_td = create_task_definition(action, td)
 
-        action.run(td, count, 'ECS Deploy')
+        action.run(run_td, count, 'ECS Deploy')
 
         click.secho(
             'Successfully started %d instances of task: %s' % (
                 len(action.started_tasks),
-                td.family_revision
+                run_td.family_revision
             ),
             fg='green'
         )
@@ -187,6 +194,9 @@ def run(cluster, task, count, command, env, region, access_key_id, secret_access
         for started_task in action.started_tasks:
             click.secho('- %s' % started_task['taskArn'], fg='green')
         click.secho(' ')
+
+        if not override:
+            deregister_task_definition(action, td)
 
     except EcsError as e:
         click.secho('%s\n' % str(e), fg='red', err=True)
