@@ -33,7 +33,8 @@ class SlackLogger(object):
 
 
     def get_deploy_start_payload(self, service, task_definition):
-        return "Deploying service %s on cluster %s" % (service.name, service.cluster)
+        #import pdb;pdb.set_trace()
+        return "Deploying service %s on cluster %s \nImage: %s" % (service.name, service.cluster, ",".join( [c['image'] for c in task_definition.containers]) )
 
     def get_deploy_progress_payload(self, service, task_definition):
         primary = [dep for dep in service['deployments'] if dep['status']=='PRIMARY'][0]
@@ -71,7 +72,7 @@ class SlackLogger(object):
         }
         attachments = [primary_message]
 
-        messg = "Deploy finished for service %s on cluster %s" % (service.name, service.cluster)
+        messg = "Deploy finished for service %s on cluster %s\nImage: %s" % (service.name, service.cluster, ",".join( [c['image'] for c in task_definition.containers]))
         return messg, attachments
 
     def log_deploy_start(self, service, task_definition):
