@@ -9,6 +9,7 @@ class SlackException(Exception):
 class SlackDeploymentException(SlackException):
     pass
 
+
 class SlackLogger(object):
     SLACK_ENDPOINT = getenv('SLACK_ENDPOINT')
 
@@ -55,8 +56,6 @@ class SlackLogger(object):
               "title": "ACTIVE",
               "text": self.progress_bar(run, pend, des) + "\tRunning: %s Pending: %s  Desired: %s" % (run, pend, des)
             })
-
-        #attachments.extend(active_message)
 
         messg = self.get_deploy_start_payload(service, task_definition)
         return messg, attachments
