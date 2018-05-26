@@ -1,0 +1,4 @@
+click
+boto3
+requests
+slacker
