@@ -2,7 +2,7 @@ from datetime import datetime
 
 from boto3.session import Session
 from botocore.exceptions import ClientError, NoCredentialsError
-from dateutil.tz.tz import tzlocal
+from dateutil.tz import tzlocal
 
 
 class EcsClient(object):
@@ -54,12 +54,13 @@ class EcsClient(object):
             taskDefinition=task_definition_arn
         )
 
-    def update_service(self, cluster, service, desired_count, task_definition):
+    def update_service(self, cluster, service, desired_count, task_definition, force_new_deployment=False):
         return self.boto.update_service(
             cluster=cluster,
             service=service,
             desiredCount=desired_count,
-            taskDefinition=task_definition
+            taskDefinition=task_definition,
+            forceNewDeployment=force_new_deployment
         )
 
     def run_task(self, cluster, task_definition, count, started_by, overrides):
@@ -391,12 +392,13 @@ class EcsAction(object):
     def deregister_task_definition(self, task_definition):
         self._client.deregister_task_definition(task_definition.arn)
 
-    def update_service(self, service):
+    def update_service(self, service, force_new_deployment=False):
         response = self._client.update_service(
             cluster=service.cluster,
             service=service.name,
             desired_count=service.desired_count,
-            task_definition=service.task_definition
+            task_definition=service.task_definition,
+            force_new_deployment=force_new_deployment,
         )
         return EcsService(self._cluster_name, response[u'service'])
 
@@ -446,10 +448,10 @@ class EcsAction(object):
 
 
 class DeployAction(EcsAction):
-    def deploy(self, task_definition):
+    def deploy(self, task_definition, force_new_deployment=False):
         try:
             self._service.set_task_definition(task_definition)
-            return self.update_service(self._service)
+            return self.update_service(self._service, force_new_deployment=force_new_deployment)
         except ClientError as e:
             raise EcsError(str(e))
 
