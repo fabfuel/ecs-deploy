@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 from ecs_deploy import VERSION
 from ecs_deploy.ecs import DeployAction, ScaleAction, RunAction, EcsClient, \
     TaskPlacementError, EcsError
-from ecs_deploy.newrelic import Deployment, NewRelicException
+from ecs_deploy.slack import SlackLogger, SlackException
 
 
 @click.group()
@@ -24,8 +24,8 @@ def get_client(access_key_id, secret_access_key, region, profile):
 
 
 @click.command()
-@click.argument('cluster')
-@click.argument('service')
+@click.option('--cluster', required=True)
+@click.option('--service', required=True)
 @click.option('-t', '--tag', help='Changes the tag for ALL container images')
 @click.option('-i', '--image', type=(str, str), multiple=True, help='Overwrites the image for a container: <container> <image>')
 @click.option('-c', '--command', type=(str, str), multiple=True, help='Overwrites the command in a container: <container> <command>')
@@ -96,7 +96,7 @@ def deploy(cluster, service, tag, image, command, env, role, task, region, acces
 
         record_deployment(tag, newrelic_apikey, newrelic_appid, comment, user)
 
-    except (EcsError, NewRelicException) as e:
+    except (EcsError, SlackException) as e:
         click.secho('%s\n' % str(e), fg='red', err=True)
         exit(1)
 
@@ -143,63 +143,14 @@ def scale(cluster, service, desired_count, access_key_id, secret_access_key, reg
         exit(1)
 
 
-@click.command()
-@click.argument('cluster')
-@click.argument('task')
-@click.argument('count', required=False, default=1)
-@click.option('-c', '--command', type=(str, str), multiple=True, help='Overwrites the command in a container: <container> <command>')
-@click.option('-e', '--env', type=(str, str, str), multiple=True, help='Adds or changes an environment variable: <container> <name> <value>')
-@click.option('--region', help='AWS region (e.g. eu-central-1)')
-@click.option('--access-key-id', help='AWS access key id')
-@click.option('--secret-access-key', help='AWS secret access key')
-@click.option('--profile', help='AWS configuration profile name')
-@click.option('--diff/--no-diff', default=True, help='Print what values were changed in the task definition')
-def run(cluster, task, count, command, env, region, access_key_id, secret_access_key, profile, diff):
-    """
-    Run a one-off task.
-
-    \b
-    CLUSTER is the name of your cluster (e.g. 'my-custer') within ECS.
-    TASK is the name of your task definition (e.g. 'my-task') within ECS.
-    COMMAND is the number of tasks your service should run.
-    """
-    try:
-        client = get_client(access_key_id, secret_access_key, region, profile)
-        action = RunAction(client, cluster)
-
-        td = action.get_task_definition(task)
-        td.set_commands(**{key: value for (key, value) in command})
-        td.set_environment(env)
-
-        if diff:
-            print_diff(td, 'Using task definition: %s' % task)
-
-        action.run(td, count, 'ECS Deploy')
-
-        click.secho(
-            'Successfully started %d instances of task: %s' % (
-                len(action.started_tasks),
-                td.family_revision
-            ),
-            fg='green'
-        )
-
-        for started_task in action.started_tasks:
-            click.secho('- %s' % started_task['taskArn'], fg='green')
-        click.secho(' ')
-
-    except EcsError as e:
-        click.secho('%s\n' % str(e), fg='red', err=True)
-        exit(1)
-
-
 def wait_for_finish(action, timeout, title, success_message, failure_message,
-                    ignore_warnings):
+                    ignore_warnings, task_definition=None):
     click.secho(title, nl=False)
     waiting = True
     waiting_timeout = datetime.now() + timedelta(seconds=timeout)
     service = action.get_service()
     inspected_until = None
+    slack = SlackLogger()
     while waiting and datetime.now() < waiting_timeout:
         click.secho('.', nl=False)
         service = action.get_service()
@@ -211,9 +162,10 @@ def wait_for_finish(action, timeout, title, success_message, failure_message,
             timeout=False
         )
         waiting = not action.is_deployed(service)
+        slack.log_deploy_progress(service, task_definition)
 
         if waiting:
-            sleep(1)
+            sleep(10)
 
     inspect_errors(
         service=service,
@@ -230,6 +182,7 @@ def deploy_task_definition(deployment, task_definition, title, success_message,
                            failure_message, timeout, deregister,
                            previous_task_definition, ignore_warnings):
     click.secho('Updating service')
+    SlackLogger().log_deploy_start(deployment.service, task_definition)
     deployment.deploy(task_definition)
 
     message = 'Successfully changed task definition to: %s:%s\n' % (
@@ -241,6 +194,7 @@ def deploy_task_definition(deployment, task_definition, title, success_message,
 
     wait_for_finish(
         action=deployment,
+        task_definition=task_definition,
         timeout=timeout,
         title=title,
         success_message=success_message,
@@ -248,6 +202,7 @@ def deploy_task_definition(deployment, task_definition, title, success_message,
         ignore_warnings=ignore_warnings
     )
 
+    SlackLogger().log_deploy_finish(deployment.service, task_definition)
     if deregister:
         deregister_task_definition(deployment, previous_task_definition)
 
@@ -308,18 +263,16 @@ def rollback_task_definition(deployment, old, new, timeout=600):
 
 
 def record_deployment(revision, api_key, app_id, comment, user):
-    api_key = getenv('NEW_RELIC_API_KEY', api_key)
-    app_id = getenv('NEW_RELIC_APP_ID', app_id)
+    # api_key = getenv('NEW_RELIC_API_KEY', api_key)
+    # app_id = getenv('NEW_RELIC_APP_ID', app_id)
 
-    if not revision or not api_key or not app_id:
-        return False
+    # if not revision or not api_key or not app_id:
+    #     return False
 
-    user = user or getpass.getuser()
-
-    click.secho('Recording deployment in New Relic', nl=False)
-
-    deployment = Deployment(api_key, app_id, user)
-    deployment.deploy(revision, '', comment)
+    #user = user or getpass.getuser()
+    #click.secho('Recording deployment in New Relic', nl=False)
+    #deployment = SlackLogger()
+    #deployment.deploy(revision, '', comment)
 
     click.secho('\nDone\n', fg='green')
 
@@ -382,7 +335,6 @@ def inspect_errors(service, failure_message, ignore_warnings, since, timeout):
 
 ecs.add_command(deploy)
 ecs.add_command(scale)
-ecs.add_command(run)
 
 if __name__ == '__main__':  # pragma: no cover
     ecs()

@@ -114,6 +114,12 @@ class EcsService(dict):
         return datetime.now()
 
     @property
+    def deployments(self):
+        for deployment in self.get(u'deployments'):
+            if deployment.get(u'status') == u'PRIMARY':
+                return deployment.get(u'createdAt')
+
+    @property
     def errors(self):
         return self.get_warnings(
             since=self.deployment_updated_at
