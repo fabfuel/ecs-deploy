@@ -3,6 +3,7 @@ from __future__ import print_function, absolute_import
 from os import getenv
 from time import sleep
 
+import copy
 import click
 import getpass
 from datetime import datetime, timedelta
@@ -65,17 +66,16 @@ def deploy(cluster, service, tag, image, command, env, role, task, region, acces
         deployment = DeployAction(client, cluster, service)
 
         td = get_task_definition(deployment, task)
+        new_td = copy.deepcopy(td) # Make a copy if nothing need to be updated.
 
         td.set_images(tag, **{key: value for (key, value) in image})
         td.set_commands(**{key: value for (key, value) in command})
         td.set_environment(env)
         td.set_role_arn(role)
 
-        if diff:
+        if td.diff != []:
             print_diff(td)
             new_td = create_task_definition(deployment, td)
-        else:
-            new_td = td
 
         try:
             deploy_task_definition(
