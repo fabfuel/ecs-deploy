@@ -201,17 +201,25 @@ class EcsTaskDefinition(object):
 
     def set_images(self, tag=None, **images):
         self.validate_container_options(**images)
+
         for container in self.containers:
-            if container[u'name'] in images:
-                new_image = images[container[u'name']]
-                diff = EcsTaskDefinitionDiff(
-                    container=container[u'name'],
-                    field=u'image',
-                    value=new_image,
-                    old_value=container[u'image']
-                )
-                self._diff.append(diff)
-                container[u'image'] = new_image
+            if (container[u'name'] in images) or (len(self.containers) == 1 and (u'default' in  images)):
+                found = False
+                if container[u'name'] in images:
+                    new_image = images[container[u'name']]
+                    found = True
+                elif len(self.containers) == 1 and (u'default' in  images):
+                    new_image = images[u'default']
+                    found = True
+                if found:
+                    diff = EcsTaskDefinitionDiff(
+                        container=container[u'name'],
+                        field=u'image',
+                        value=new_image,
+                        old_value=container[u'image']
+                    )
+                    self._diff.append(diff)
+                    container[u'image'] = new_image
             elif tag:
                 image_definition = container[u'image'].rsplit(u':', 1)
                 new_image = u'%s:%s' % (image_definition[0], tag.strip())
@@ -227,8 +235,15 @@ class EcsTaskDefinition(object):
     def set_commands(self, **commands):
         self.validate_container_options(**commands)
         for container in self.containers:
+            replace = False
             if container[u'name'] in commands:
                 new_command = commands[container[u'name']]
+                replace = True
+            elif len(self.containers) == 1 and (u'default' in  commands):
+                new_command = commands[u'default']
+                replace = True
+
+            if replace:
                 diff = EcsTaskDefinitionDiff(
                     container=container[u'name'],
                     field=u'command',
@@ -276,10 +291,11 @@ class EcsTaskDefinition(object):
 
     def validate_container_options(self, **container_options):
         for container_name in container_options:
-            if container_name not in self.container_names:
-                raise UnknownContainerError(
-                    u'Unknown container: %s' % container_name
-                )
+            if (container_name not in self.container_names):
+                if u'default' not in container_options:
+                    raise UnknownContainerError(
+                        u'Unknown container: %s' % container_name
+                    )
 
     def set_role_arn(self, role_arn):
         if role_arn:
