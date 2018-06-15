@@ -66,10 +66,12 @@ class SlackLogger(object):
         run = primary['runningCount']
         pend = primary['pendingCount']
         des = primary['desiredCount']
+
         primary_message = {
-        "title": "PRIMARY",
-        "text": self.progress_bar(run, pend, des) + "\tRunning: %s Pending: %s  Desired: %s" % (run, pend, des)
-        }
+            "title": "Deploy finished!",
+            "color": "#7CD197",
+            "text": "Running: %s Pending: %s  Desired: %s" % (run, pend, des)
+            }
         attachments = [primary_message]
 
         messg = "Deploy finished for service %s on cluster %s\nImage: %s" % (service.name, service.cluster, ",".join( [c['image'] for c in task_definition.containers]))
