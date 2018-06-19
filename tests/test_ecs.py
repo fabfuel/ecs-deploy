@@ -409,7 +409,8 @@ def test_client_init(mocked_init, mocked_client):
                                         aws_secret_access_key=u'secret_access_key',
                                         profile_name=u'profile',
                                         region_name=u'region')
-    mocked_client.assert_called_once_with(u'ecs')
+    mocked_client.assert_any_call(u'ecs')
+    mocked_client.assert_any_call(u'events')
 
 
 @pytest.fixture
