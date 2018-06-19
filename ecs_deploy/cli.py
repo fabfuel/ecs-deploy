@@ -124,12 +124,12 @@ def deploy(cluster, service, tag, image, command, env, role, task, region, acces
 @click.option('--rollback/--no-rollback', default=False, help='Rollback to previous revision, if deployment failed (default: --no-rollback)')
 def update_task_and_rule(cluster, task, rule, image, tag, command, env, role, region, access_key_id, secret_access_key, timeout, ignore_warnings, newrelic_apikey, newrelic_appid, comment, user, profile, diff, deregister, rollback):
     """
-    Update a task.
+    Update a task definition, and update the `rule` to use the new task definition.
 
     \b
     CLUSTER is the name of your cluster (e.g. 'my-custer') within ECS.
     TASK is the name of your task definition (e.g. 'my-task') within ECS.
-    COMMAND is the number of tasks your service should run.
+    RULE is the name of the rule to use the new task definition.
     """
     try:
         client = get_client(access_key_id, secret_access_key, region, profile)
