@@ -1,7 +1,6 @@
 from __future__ import print_function, absolute_import
 
 from os import getenv
-import subprocess
 from time import sleep
 
 import click
@@ -104,6 +103,7 @@ def deploy(cluster, service, tag, image, command, env, role, task, region, acces
 @click.command()
 @click.argument('cluster')
 @click.argument('task')
+@click.argument('rule')
 @click.option('-i', '--image', type=(str, str), multiple=True, help='Overwrites the image for a container: <container> <image>')
 @click.option('-t', '--tag', help='Changes the tag for ALL container images')
 @click.option('-c', '--command', type=(str, str), multiple=True, help='Overwrites the command in a container: <container> <command>')
@@ -122,7 +122,7 @@ def deploy(cluster, service, tag, image, command, env, role, task, region, acces
 @click.option('--diff/--no-diff', default=True, help='Print what values were changed in the task definition')
 @click.option('--deregister/--no-deregister', default=True, help='Deregister or keep the old task definition (default: --deregister)')
 @click.option('--rollback/--no-rollback', default=False, help='Rollback to previous revision, if deployment failed (default: --no-rollback)')
-def update_task(cluster, task, image, tag, command, env, role, region, access_key_id, secret_access_key, timeout, ignore_warnings, newrelic_apikey, newrelic_appid, comment, user, profile, diff, deregister, rollback):
+def update_task_and_rule(cluster, task, rule, image, tag, command, env, role, region, access_key_id, secret_access_key, timeout, ignore_warnings, newrelic_apikey, newrelic_appid, comment, user, profile, diff, deregister, rollback):
     """
     Update a task.
 
@@ -145,23 +145,12 @@ def update_task(cluster, task, image, tag, command, env, role, region, access_ke
             print_diff(td)
 
         new_td = create_task_definition(action, td)
-        subprocess.check_output([
-            'aws',
-            'events',
-            'put-targets',
-            '--rule',
-            'MyRule1',
-            '--targets',
-            'Id="1",'
-            'Arn="%scluster/%s",'
-            'RoleArn="%s",'
-            'EcsParameters={TaskDefinitionArn="%s",TaskCount= 1}' % (
-                new_td.arn.partition('task-definition')[0],
-                cluster,
-                new_td.role_arn,
-                new_td.arn
-            )
-        ])
+        client.update_rule(
+            rule=rule,
+            arn=new_td.arn.partition('task-definition')[0] + 'cluster/' + cluster,
+            role_arn=new_td.role_arn,
+            task_definition_arn=new_td.arn
+        )
         click.secho('Updated scheduled task %s' % new_td.arn)
 
     except EcsError as e:
@@ -451,7 +440,7 @@ def inspect_errors(service, failure_message, ignore_warnings, since, timeout):
 ecs.add_command(deploy)
 ecs.add_command(scale)
 ecs.add_command(run)
-ecs.add_command(update_task)
+ecs.add_command(update_task_and_rule)
 
 if __name__ == '__main__':  # pragma: no cover
     ecs()
