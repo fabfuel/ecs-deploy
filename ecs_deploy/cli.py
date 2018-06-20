@@ -122,7 +122,7 @@ def deploy(cluster, service, tag, image, command, env, role, task, region, acces
 @click.option('--diff/--no-diff', default=True, help='Print what values were changed in the task definition')
 @click.option('--deregister/--no-deregister', default=True, help='Deregister or keep the old task definition (default: --deregister)')
 @click.option('--rollback/--no-rollback', default=False, help='Rollback to previous revision, if deployment failed (default: --no-rollback)')
-def update_task_and_rule(cluster, task, rule, image, tag, command, env, role, region, access_key_id, secret_access_key, timeout, ignore_warnings, newrelic_apikey, newrelic_appid, comment, user, profile, diff, deregister, rollback):
+def cron(cluster, task, rule, image, tag, command, env, role, region, access_key_id, secret_access_key, timeout, ignore_warnings, newrelic_apikey, newrelic_appid, comment, user, profile, diff, deregister, rollback):
     """
     Update a task definition, and update the `rule` to use the new task definition.
 
@@ -440,7 +440,7 @@ def inspect_errors(service, failure_message, ignore_warnings, since, timeout):
 ecs.add_command(deploy)
 ecs.add_command(scale)
 ecs.add_command(run)
-ecs.add_command(update_task_and_rule)
+ecs.add_command(cron)
 
 if __name__ == '__main__':  # pragma: no cover
     ecs()
