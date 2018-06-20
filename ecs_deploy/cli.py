@@ -31,6 +31,7 @@ def get_client(access_key_id, secret_access_key, region, profile):
 @click.option('-e', '--env', type=(str, str, str), multiple=True, help='Adds or changes an environment variable: <container> <name> <value>')
 @click.option('-r', '--role', type=str, help='Sets the task\'s role ARN: <task role ARN>')
 @click.option('--task', type=str, help='Task definition to be deployed. Can be a task ARN or a task family with optional revision')
+@click.option('--rule', required=False, type=str, help='Rule to update')
 @click.option('--region', required=False, help='AWS region (e.g. eu-central-1)')
 @click.option('--access-key-id', required=False, help='AWS access key id')
 @click.option('--secret-access-key', required=False, help='AWS secret access key')
@@ -44,7 +45,7 @@ def get_client(access_key_id, secret_access_key, region, profile):
 @click.option('--diff/--no-diff', default=True, help='Print which values were changed in the task definition (default: --diff)')
 @click.option('--deregister/--no-deregister', default=True, help='Deregister or keep the old task definition (default: --deregister)')
 @click.option('--rollback/--no-rollback', default=False, help='Rollback to previous revision, if deployment failed (default: --no-rollback)')
-def deploy(cluster, service, tag, image, command, env, role, task, region, access_key_id, secret_access_key, profile, timeout, newrelic_apikey, newrelic_appid, comment, user, ignore_warnings, diff, deregister, rollback):
+def deploy(cluster, service, tag, image, command, env, role, task, rule, region, access_key_id, secret_access_key, profile, timeout, newrelic_apikey, newrelic_appid, comment, user, ignore_warnings, diff, deregister, rollback):
     """
     Redeploy or modify a service.
 
@@ -84,6 +85,14 @@ def deploy(cluster, service, tag, image, command, env, role, task, region, acces
                 previous_task_definition=td,
                 ignore_warnings=ignore_warnings,
             )
+            if rule:
+                client.update_rule(
+                    rule=rule,
+                    arn=new_td.arn.partition('task-definition')[0] + 'cluster/' + cluster,
+                    role_arn=new_td.role_arn,
+                    task_definition_arn=new_td.arn
+                )
+                click.secho('Updated scheduled task %s' % new_td.arn)
 
         except TaskPlacementError as e:
             if rollback:
@@ -96,64 +105,6 @@ def deploy(cluster, service, tag, image, command, env, role, task, region, acces
         record_deployment(tag, newrelic_apikey, newrelic_appid, comment, user)
 
     except (EcsError, NewRelicException) as e:
-        click.secho('%s\n' % str(e), fg='red', err=True)
-        exit(1)
-
-
-@click.command()
-@click.argument('cluster')
-@click.argument('task')
-@click.argument('rule')
-@click.option('-i', '--image', type=(str, str), multiple=True, help='Overwrites the image for a container: <container> <image>')
-@click.option('-t', '--tag', help='Changes the tag for ALL container images')
-@click.option('-c', '--command', type=(str, str), multiple=True, help='Overwrites the command in a container: <container> <command>')
-@click.option('-e', '--env', type=(str, str, str), multiple=True, help='Adds or changes an environment variable: <container> <name> <value>')
-@click.option('-r', '--role', type=str, help='Sets the task\'s role ARN: <task role ARN>')
-@click.option('--region', help='AWS region (e.g. eu-central-1)')
-@click.option('--access-key-id', help='AWS access key id')
-@click.option('--secret-access-key', help='AWS secret access key')
-@click.option('--timeout', required=False, default=300, type=int, help='Amount of seconds to wait for deployment before command fails (default: 300)')
-@click.option('--ignore-warnings', is_flag=True, help='Do not fail deployment on warnings (port already in use or insufficient memory/CPU)')
-@click.option('--newrelic-apikey', required=False, help='New Relic API Key for recording the deployment')
-@click.option('--newrelic-appid', required=False, help='New Relic App ID for recording the deployment')
-@click.option('--comment', required=False, help='Description/comment for recording the deployment')
-@click.option('--user', required=False, help='User who executes the deployment (used for recording)')
-@click.option('--profile', help='AWS configuration profile name')
-@click.option('--diff/--no-diff', default=True, help='Print what values were changed in the task definition')
-@click.option('--deregister/--no-deregister', default=True, help='Deregister or keep the old task definition (default: --deregister)')
-@click.option('--rollback/--no-rollback', default=False, help='Rollback to previous revision, if deployment failed (default: --no-rollback)')
-def update_task_and_rule(cluster, task, rule, image, tag, command, env, role, region, access_key_id, secret_access_key, timeout, ignore_warnings, newrelic_apikey, newrelic_appid, comment, user, profile, diff, deregister, rollback):
-    """
-    Update a task definition, and update the `rule` to use the new task definition.
-
-    \b
-    CLUSTER is the name of your cluster (e.g. 'my-custer') within ECS.
-    TASK is the name of your task definition (e.g. 'my-task') within ECS.
-    RULE is the name of the rule to use the new task definition.
-    """
-    try:
-        client = get_client(access_key_id, secret_access_key, region, profile)
-        action = RunAction(client, cluster)
-
-        td = action.get_task_definition(task)
-        td.set_images(tag, **{key: value for (key, value) in image})
-        td.set_commands(**{key: value for (key, value) in command})
-        td.set_environment(env)
-        td.set_role_arn(role)
-
-        if diff:
-            print_diff(td)
-
-        new_td = create_task_definition(action, td)
-        client.update_rule(
-            rule=rule,
-            arn=new_td.arn.partition('task-definition')[0] + 'cluster/' + cluster,
-            role_arn=new_td.role_arn,
-            task_definition_arn=new_td.arn
-        )
-        click.secho('Updated scheduled task %s' % new_td.arn)
-
-    except EcsError as e:
         click.secho('%s\n' % str(e), fg='red', err=True)
         exit(1)
 
@@ -440,7 +391,6 @@ def inspect_errors(service, failure_message, ignore_warnings, since, timeout):
 ecs.add_command(deploy)
 ecs.add_command(scale)
 ecs.add_command(run)
-ecs.add_command(update_task_and_rule)
 
 if __name__ == '__main__':  # pragma: no cover
     ecs()
