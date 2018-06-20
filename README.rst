@@ -36,9 +36,9 @@ Scale up or down a service::
 
     $ ecs scale my-cluster my-service 4
 
-Updating a task and rule::
+Updating a cron job::
 
-    $ ecs update_task_and_rule my-cluster my-task my-rule
+    $ ecs cron my-cluster my-task my-rule
 
 
 Installation
