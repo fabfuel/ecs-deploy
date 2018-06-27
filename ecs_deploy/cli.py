@@ -145,10 +145,11 @@ def cron(cluster, task, rule, image, tag, command, env, role, region, access_key
             print_diff(td)
 
         new_td = create_task_definition(action, td)
+        role_arn = client.events.list_targets_by_rule(Rule=rule)['Targets'][0]['RoleArn']
         client.update_rule(
             rule=rule,
             arn=new_td.arn.partition('task-definition')[0] + 'cluster/' + cluster,
-            role_arn=new_td.role_arn,
+            role_arn=role_arn,
             task_definition_arn=new_td.arn
         )
         click.secho('Updated scheduled task %s' % new_td.arn)
