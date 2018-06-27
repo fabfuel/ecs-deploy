@@ -72,11 +72,11 @@ class EcsClient(object):
             overrides=overrides
         )
 
-    def update_rule(self, rule, arn, role_arn, task_definition_arn):
+    def update_rule(self, rule, arn, target_id, role_arn, task_definition_arn):
         self.events.put_targets(
             Rule=rule,
             Targets=[{
-                'Id': '1',
+                'Id': target_id,
                 'Arn': arn,
                 'RoleArn': role_arn,
                 'EcsParameters': {'TaskDefinitionArn': task_definition_arn, 'TaskCount': 1}
