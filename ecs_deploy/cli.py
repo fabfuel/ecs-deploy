@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 
 from ecs_deploy import VERSION
 from ecs_deploy.ecs import DeployAction, ScaleAction, RunAction, EcsClient, \
-    TaskPlacementError, EcsError
+    TaskPlacementError, EcsError, UpdateAction
 from ecs_deploy.newrelic import Deployment, NewRelicException
 
 
@@ -154,6 +154,49 @@ def cron(cluster, task, rule, image, tag, command, env, role, region, access_key
             task_definition_arn=new_td.arn
         )
         click.secho('Updated scheduled task %s' % new_td.arn)
+
+    except EcsError as e:
+        click.secho('%s\n' % str(e), fg='red', err=True)
+        exit(1)
+
+
+@click.command()
+@click.argument('cluster')
+@click.argument('task')
+@click.option('-i', '--image', type=(str, str), multiple=True, help='Overwrites the image for a container: <container> <image>')
+@click.option('-t', '--tag', help='Changes the tag for ALL container images')
+@click.option('-c', '--command', type=(str, str), multiple=True, help='Overwrites the command in a container: <container> <command>')
+@click.option('-e', '--env', type=(str, str, str), multiple=True, help='Adds or changes an environment variable: <container> <name> <value>')
+@click.option('-r', '--role', type=str, help='Sets the task\'s role ARN: <task role ARN>')
+@click.option('--region', help='AWS region (e.g. eu-central-1)')
+@click.option('--access-key-id', help='AWS access key id')
+@click.option('--secret-access-key', help='AWS secret access key')
+@click.option('--profile', help='AWS configuration profile name')
+@click.option('--diff/--no-diff', default=True, help='Print what values were changed in the task definition')
+def update(cluster, task, image, tag, command, env, role, region, access_key_id, secret_access_key, profile, diff):
+    """
+    Update a task definition by creating a new revision.
+
+    \b
+    CLUSTER is the name of your cluster (e.g. 'my-custer') within ECS.
+    TASK is the name of your task definition (e.g. 'my-task') within ECS.
+    """
+    try:
+        client = get_client(access_key_id, secret_access_key, region, profile)
+        action = UpdateAction(client, cluster)
+
+        td = action.get_task_definition(task)
+        td.set_images(tag, **{key: value for (key, value) in image})
+        td.set_commands(**{key: value for (key, value) in command})
+        td.set_environment(env)
+        td.set_role_arn(role)
+
+        if diff:
+            print_diff(td)
+
+        new_td = create_task_definition(action, td)
+
+        click.secho('Updated task %s' % new_td.arn)
 
     except EcsError as e:
         click.secho('%s\n' % str(e), fg='red', err=True)
@@ -443,6 +486,7 @@ ecs.add_command(deploy)
 ecs.add_command(scale)
 ecs.add_command(run)
 ecs.add_command(cron)
+ecs.add_command(update)
 
 if __name__ == '__main__':  # pragma: no cover
     ecs()

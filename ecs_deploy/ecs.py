@@ -491,6 +491,11 @@ class RunAction(EcsAction):
             raise EcsError(str(e))
 
 
+class UpdateAction(EcsAction):
+    def __init__(self, client, cluster_name):
+        super(UpdateAction, self).__init__(client, cluster_name, None)
+
+
 class EcsError(Exception):
     pass
 

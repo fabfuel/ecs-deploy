@@ -40,6 +40,10 @@ Updating a cron job::
 
     $ ecs cron my-cluster my-task my-rule
 
+Update a task definition (without running or deploying)::
+
+    $ ecs update my-cluster my-task
+
 
 Installation
 ------------
@@ -76,6 +80,10 @@ run
 ===
 Run a one-off task based on an existing task-definition and optionally override command and/or environment variables.
 
+
+update
+======
+Update a task definition by creating a new revision.
 
 Usage
 -----
