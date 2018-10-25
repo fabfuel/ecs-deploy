@@ -36,7 +36,7 @@ def get_client(access_key_id, secret_access_key, region, profile):
 @click.option('--access-key-id', required=False, help='AWS access key id')
 @click.option('--secret-access-key', required=False, help='AWS secret access key')
 @click.option('--profile', required=False, help='AWS configuration profile name')
-@click.option('--timeout', required=False, default=300, type=int, help='Amount of seconds to wait for deployment before command fails (default: 300)')
+@click.option('--timeout', required=False, default=300, type=int, help='Amount of seconds to wait for deployment before command fails (default: 300, check disabled: -2 )')
 @click.option('--ignore-warnings', is_flag=True, help='Do not fail deployment on warnings (port already in use or insufficient memory/CPU)')
 @click.option('--newrelic-apikey', required=False, help='New Relic API Key for recording the deployment')
 @click.option('--newrelic-appid', required=False, help='New Relic App ID for recording the deployment')
@@ -196,6 +196,7 @@ def run(cluster, task, count, command, env, region, access_key_id, secret_access
 def wait_for_finish(action, timeout, title, success_message, failure_message,
                     ignore_warnings):
     click.secho(title, nl=False)
+    print("Wait for finish")
     waiting = True
     waiting_timeout = datetime.now() + timedelta(seconds=timeout)
     service = action.get_service()
@@ -239,14 +240,16 @@ def deploy_task_definition(deployment, task_definition, title, success_message,
 
     click.secho(message, fg='green')
 
-    wait_for_finish(
-        action=deployment,
-        timeout=timeout,
-        title=title,
-        success_message=success_message,
-        failure_message=failure_message,
-        ignore_warnings=ignore_warnings
-    )
+    #timeout = 0 means disable check and exit
+    if(timeout != -2):
+         wait_for_finish(
+            action=deployment,
+            timeout=timeout,
+            title=title,
+            success_message=success_message,
+            failure_message=failure_message,
+            ignore_warnings=ignore_warnings
+        )
 
     if deregister:
         deregister_task_definition(deployment, previous_task_definition)
