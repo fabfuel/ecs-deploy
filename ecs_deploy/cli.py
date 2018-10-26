@@ -196,7 +196,6 @@ def run(cluster, task, count, command, env, region, access_key_id, secret_access
 def wait_for_finish(action, timeout, title, success_message, failure_message,
                     ignore_warnings):
     click.secho(title, nl=False)
-    print("Wait for finish")
     waiting = True
     waiting_timeout = datetime.now() + timedelta(seconds=timeout)
     service = action.get_service()
@@ -240,7 +239,6 @@ def deploy_task_definition(deployment, task_definition, title, success_message,
 
     click.secho(message, fg='green')
 
-    #timeout = 0 means disable check and exit
     if(timeout != -2):
          wait_for_finish(
             action=deployment,
