@@ -240,7 +240,7 @@ def deploy_task_definition(deployment, task_definition, title, success_message,
 
     click.secho(message, fg='green')
 
-    #timeout = 0 means disable check and exit
+    #timeout = -2 means disable check
     if(timeout != -2):
          wait_for_finish(
             action=deployment,
