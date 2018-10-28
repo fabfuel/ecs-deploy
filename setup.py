@@ -5,7 +5,7 @@ from setuptools import find_packages, setup
 
 from ecs_deploy import VERSION
 
-dependencies = ['click', 'botocore', 'boto3>=1.4.7', 'future', 'requests']
+dependencies = ['click<7.0.0', 'botocore', 'boto3>=1.4.7', 'future', 'requests']
 
 setup(
     name='ecs-deploy',
