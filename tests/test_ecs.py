@@ -220,12 +220,6 @@ def test_service_init(service):
     assert service[u'taskDefinition'] == TASK_DEFINITION_ARN_1
 
 
-def test_service_set_desired_count(service):
-    assert service.desired_count == DESIRED_COUNT
-    service.set_desired_count(5)
-    assert service.desired_count == 5
-
-
 def test_service_set_task_definition(service, task_definition):
     assert service.task_definition == TASK_DEFINITION_ARN_1
     service.set_task_definition(task_definition)
@@ -610,7 +604,7 @@ def test_update_service(client, service):
     client.update_service.assert_called_once_with(
         cluster=service.cluster,
         service=service.name,
-        desired_count=service.desired_count,
+        desired_count=None,
         task_definition=service.task_definition
     )
 
@@ -647,7 +641,7 @@ def test_is_not_deployed_with_more_than_one_deployment(client, service):
 def test_is_deployed_if_no_tasks_should_be_running(client, service):
     client.list_tasks.return_value = RESPONSE_LIST_TASKS_0
     action = EcsAction(client, CLUSTER_NAME, SERVICE_NAME)
-    service.set_desired_count(0)
+    service[u'desiredCount'] = 0
     is_deployed = action.is_deployed(service)
     assert is_deployed is True
 
@@ -702,7 +696,6 @@ def test_scale_action(client):
     action = ScaleAction(client, CLUSTER_NAME, SERVICE_NAME)
     updated_service = action.scale(5)
 
-    assert action.service.desired_count == 5
     assert isinstance(updated_service, EcsService)
 
     client.describe_services.assert_called_once_with(

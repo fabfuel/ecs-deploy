@@ -55,6 +55,12 @@ class EcsClient(object):
         )
 
     def update_service(self, cluster, service, desired_count, task_definition):
+        if desired_count is None:
+            return self.boto.update_service(
+                cluster=cluster,
+                service=service,
+                taskDefinition=task_definition
+            )
         return self.boto.update_service(
             cluster=cluster,
             service=service,
@@ -76,9 +82,6 @@ class EcsService(dict):
     def __init__(self, cluster, service_definition=None, **kwargs):
         self._cluster = cluster
         super(EcsService, self).__init__(service_definition, **kwargs)
-
-    def set_desired_count(self, desired_count):
-        self[u'desiredCount'] = desired_count
 
     def set_task_definition(self, task_definition):
         self[u'taskDefinition'] = task_definition.arn
@@ -385,11 +388,11 @@ class EcsAction(object):
     def deregister_task_definition(self, task_definition):
         self._client.deregister_task_definition(task_definition.arn)
 
-    def update_service(self, service):
+    def update_service(self, service, desired_count=None):
         response = self._client.update_service(
             cluster=service.cluster,
             service=service.name,
-            desired_count=service.desired_count,
+            desired_count=desired_count,
             task_definition=service.task_definition
         )
         return EcsService(self._cluster_name, response[u'service'])
@@ -451,8 +454,7 @@ class DeployAction(EcsAction):
 class ScaleAction(EcsAction):
     def scale(self, desired_count):
         try:
-            self._service.set_desired_count(desired_count)
-            return self.update_service(self._service)
+            return self.update_service(self._service, desired_count)
         except ClientError as e:
             raise EcsError(str(e))
 
