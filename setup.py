@@ -5,6 +5,12 @@ from setuptools import find_packages, setup
 
 from ecs_deploy import VERSION
 
+
+def readme():
+    with open('README.rst') as f:
+        return f.read()
+
+
 dependencies = ['click<7.0.0', 'botocore', 'boto3>=1.4.7', 'future', 'requests']
 
 setup(
@@ -15,8 +21,9 @@ setup(
     license='BSD',
     author='Fabian Fuelling',
     author_email='pypi@fabfuel.de',
-    description='Simplify Amazon ECS deployments',
-    long_description=__doc__,
+    description='Powerful CLI tool to simplify Amazon ECS deployments, '
+                'rollbacks & scaling',
+    long_description=readme(),
     packages=find_packages(exclude=['tests']),
     include_package_data=True,
     zip_safe=False,
