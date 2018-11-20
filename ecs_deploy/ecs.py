@@ -7,9 +7,10 @@ from dateutil.tz.tz import tzlocal
 
 class EcsClient(object):
     def __init__(self, access_key_id=None, secret_access_key=None,
-                 region=None, profile=None):
+                 session_token=None, region=None, profile=None):
         session = Session(aws_access_key_id=access_key_id,
                           aws_secret_access_key=secret_access_key,
+                          aws_session_token=session_token,
                           region_name=region,
                           profile_name=profile)
         self.boto = session.client(u'ecs')
