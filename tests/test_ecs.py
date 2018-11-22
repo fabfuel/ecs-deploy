@@ -397,12 +397,13 @@ def test_task_definition_diff():
 def test_client_init(mocked_init, mocked_client):
     mocked_init.return_value = None
 
-    EcsClient(u'access_key_id', u'secret_access_key', u'region', u'profile')
+    EcsClient(u'access_key_id', u'secret_access_key', u'region', u'profile', u'session_token')
 
     mocked_init.assert_called_once_with(aws_access_key_id=u'access_key_id',
                                         aws_secret_access_key=u'secret_access_key',
                                         profile_name=u'profile',
-                                        region_name=u'region')
+                                        region_name=u'region',
+                                        aws_session_token=u'session_token')
     mocked_client.assert_called_once_with(u'ecs')
 
 
@@ -411,7 +412,7 @@ def test_client_init(mocked_init, mocked_client):
 @patch.object(Session, '__init__')
 def client(mocked_init, mocked_client):
     mocked_init.return_value = None
-    return EcsClient(u'access_key_id', u'secret_access_key', u'region', u'profile')
+    return EcsClient(u'access_key_id', u'secret_access_key', u'region', u'profile', u'session_token')
 
 
 def test_client_describe_services(client):
