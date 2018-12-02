@@ -186,6 +186,8 @@ class EcsTaskDefinition(object):
                 override['command'] = self.get_overrides_command(diff.value)
             elif diff.field == 'environment':
                 override['environment'] = self.get_overrides_env(diff.value)
+            elif diff.field == 'secrets':
+                override['secrets'] = self.get_overrides_secrets(diff.value)
         return overrides
 
     @staticmethod
@@ -195,6 +197,10 @@ class EcsTaskDefinition(object):
     @staticmethod
     def get_overrides_env(env):
         return [{"name": e, "value": env[e]} for e in env]
+
+    @staticmethod
+    def get_overrides_secrets(secrets):
+        return [{"name": s, "valueFrom": secrets[s]} for s in secrets]
 
     def set_images(self, tag=None, **images):
         self.validate_container_options(**images)
@@ -271,6 +277,42 @@ class EcsTaskDefinition(object):
             {"name": e, "value": merged[e]} for e in merged
         ]
 
+    def set_secrets(self, secrets_list):
+        secrets = {}
+
+        for secret in secrets_list:
+            secrets.setdefault(secret[0], {})
+            secrets[secret[0]][secret[1]] = secret[2]
+
+        self.validate_container_options(**secrets)
+        for container in self.containers:
+            if container[u'name'] in secrets:
+                self.apply_container_secrets(
+                    container=container,
+                    new_secrets=secrets[container[u'name']]
+                )
+
+    def apply_container_secrets(self, container, new_secrets):
+        secrets = container.get('secrets', {})
+        old_secrets = {secret['name']: secret['valueFrom'] for secret in secrets}
+        merged = old_secrets.copy()
+        merged.update(new_secrets)
+
+        if old_secrets == merged:
+            return
+
+        diff = EcsTaskDefinitionDiff(
+            container=container[u'name'],
+            field=u'secrets',
+            value=merged,
+            old_value=old_secrets
+        )
+        self._diff.append(diff)
+
+        container[u'secrets'] = [
+            {"name": s, "valueFrom": merged[s]} for s in merged
+        ]
+
     def validate_container_options(self, **container_options):
         for container_name in container_options:
             if container_name not in self.container_names:
@@ -304,6 +346,12 @@ class EcsTaskDefinitionDiff(object):
                 self.value,
                 self.old_value,
             ))
+        elif self.field == u'secrets':
+            return '\n'.join(self._get_secrets_diffs(
+                self.container,
+                self.value,
+                self.old_value,
+            ))
         elif self.container:
             return u'Changed %s of container "%s" to: "%s" (was: "%s")' % (
                 self.field,
@@ -324,6 +372,17 @@ class EcsTaskDefinitionDiff(object):
         diffs = []
         for name, value in env.items():
             old_value = old_env.get(name)
+            if value != old_value or not old_value:
+                message = msg % (name, container, value)
+                diffs.append(message)
+        return diffs
+
+    @staticmethod
+    def _get_secrets_diffs(container, secrets, old_secrets):
+        msg = u'Changed secrets "%s" of container "%s" to: "%s"'
+        diffs = []
+        for name, value in secrets.items():
+            old_value = old_secrets.get(name)
             if value != old_value or not old_value:
                 message = msg % (name, container, value)
                 diffs.append(message)

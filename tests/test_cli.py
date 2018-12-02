@@ -203,6 +203,29 @@ def test_deploy_one_new_environment_variable(get_client, runner):
 
 
 @patch('ecs_deploy.cli.get_client')
+def test_deploy_one_new_secrets_variable(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME,
+                                        '-s', 'application', 'baz', 'qux',
+                                        '-s', 'webserver', 'baz', 'quux'))
+
+    assert result.exit_code == 0
+    assert not result.exception
+
+    print(result.output)
+
+    assert u"Deploying based on task definition: test-task:1" in result.output
+    assert u"Updating task definition" in result.output
+    assert u'Changed secrets "baz" of container "application" to: "qux"' in result.output
+    assert u'Changed secrets "baz" of container "webserver" to: "quux"' in result.output
+    assert u'Changed secrets "dolor" of container "webserver" to: "sit"' not in result.output
+    assert u'Successfully created revision: 2' in result.output
+    assert u'Successfully deregistered revision: 1' in result.output
+    assert u'Successfully changed task definition to: test-task:2' in result.output
+    assert u'Deployment successful' in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
 def test_deploy_without_changing_environment_value(get_client, runner):
     get_client.return_value = EcsTestClient('acces_key', 'secret_key')
     result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '-e', 'webserver', 'foo', 'bar'))
@@ -213,6 +236,23 @@ def test_deploy_without_changing_environment_value(get_client, runner):
     assert u"Deploying based on task definition: test-task:1" in result.output
     assert u"Updating task definition" not in result.output
     assert u'Changed environment' not in result.output
+    assert u'Successfully created revision: 2' in result.output
+    assert u'Successfully deregistered revision: 1' in result.output
+    assert u'Successfully changed task definition to: test-task:2' in result.output
+    assert u'Deployment successful' in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_deploy_without_changing_secrets_value(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '-s', 'webserver', 'baz', 'qux'))
+
+    assert result.exit_code == 0
+    assert not result.exception
+
+    assert u"Deploying based on task definition: test-task:1" in result.output
+    assert u"Updating task definition" not in result.output
+    assert u'Changed secrets' not in result.output
     assert u'Successfully created revision: 2' in result.output
     assert u'Successfully deregistered revision: 1' in result.output
     assert u'Successfully changed task definition to: test-task:2' in result.output
