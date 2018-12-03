@@ -379,7 +379,7 @@ class EcsTaskDefinitionDiff(object):
 
     @staticmethod
     def _get_secrets_diffs(container, secrets, old_secrets):
-        msg = u'Changed secrets "%s" of container "%s" to: "%s"'
+        msg = u'Changed secret "%s" of container "%s" to: "%s"'
         diffs = []
         for name, value in secrets.items():
             old_value = old_secrets.get(name)

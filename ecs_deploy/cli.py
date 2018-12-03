@@ -30,7 +30,7 @@ def get_client(access_key_id, secret_access_key, region, profile):
 @click.option('-i', '--image', type=(str, str), multiple=True, help='Overwrites the image for a container: <container> <image>')
 @click.option('-c', '--command', type=(str, str), multiple=True, help='Overwrites the command in a container: <container> <command>')
 @click.option('-e', '--env', type=(str, str, str), multiple=True, help='Adds or changes an environment variable: <container> <name> <value>')
-@click.option('-s', '--secret', type=(str, str, str), multiple=True, help='Adds or changes a secret variable (Not available for Fargate): <container> <name> <value>')
+@click.option('-s', '--secret', type=(str, str, str), multiple=True, help='Adds or changes a secret from the AWS Parameter Store (Not available for Fargate): <container> <name> <parameter name>')
 @click.option('-r', '--role', type=str, help='Sets the task\'s role ARN: <task role ARN>')
 @click.option('--task', type=str, help='Task definition to be deployed. Can be a task ARN or a task family with optional revision')
 @click.option('--region', required=False, help='AWS region (e.g. eu-central-1)')
