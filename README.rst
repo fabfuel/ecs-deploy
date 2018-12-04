@@ -164,6 +164,9 @@ The **app**'s environment variable `APP_VARIABLE` will be set to "APP_VALUE".
 
 Set an secret from AWS Parameter Store
 ======================================
+
+**NOTE:** This option was introduced by AWS in ECS Agent v1.22.0. Make sure your ECS agent version is >= 1.22.0 or else your task will not deploy.
+
 To add a new or adjust an existing secret of a specific container, run the following command::
 
     $ ecs deploy my-cluster my-service -s webserver SOME_SECRET KEY_OF_SECRET_IN_PARAMETER_STORE
