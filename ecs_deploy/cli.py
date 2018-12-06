@@ -12,6 +12,7 @@ from ecs_deploy.ecs import DeployAction, ScaleAction, RunAction, EcsClient, \
     TaskPlacementError, EcsError
 from ecs_deploy.newrelic import Deployment, NewRelicException
 
+from random import randint
 
 @click.group()
 @click.version_option(version=VERSION, prog_name='ecs-deploy')
@@ -213,7 +214,7 @@ def wait_for_finish(action, timeout, title, success_message, failure_message,
         waiting = not action.is_deployed(service)
 
         if waiting:
-            sleep(10)
+            sleep(randint(10, 60))
 
     inspect_errors(
         service=service,
