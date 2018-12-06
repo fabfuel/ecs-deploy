@@ -3,6 +3,8 @@ from datetime import datetime
 from boto3.session import Session
 from botocore.exceptions import ClientError, NoCredentialsError
 from dateutil.tz.tz import tzlocal
+from random import randint
+from time import sleep
 
 
 class EcsClient(object):
@@ -15,6 +17,7 @@ class EcsClient(object):
         self.boto = session.client(u'ecs')
 
     def describe_services(self, cluster_name, service_name):
+        sleep(randint(1,20))
         return self.boto.describe_services(
             cluster=cluster_name,
             services=[service_name]
