@@ -213,7 +213,7 @@ def wait_for_finish(action, timeout, title, success_message, failure_message,
         waiting = not action.is_deployed(service)
 
         if waiting:
-            sleep(1)
+            sleep(10)
 
     inspect_errors(
         service=service,
