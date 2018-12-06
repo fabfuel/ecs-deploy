@@ -162,10 +162,11 @@ This will modify the definition **of two containers**.
 The **webserver**'s environment variable `SOME_VARIABLE` will be set to "SOME_VALUE" and the variable `OTHER_VARIABLE` to "OTHER_VALUE".
 The **app**'s environment variable `APP_VARIABLE` will be set to "APP_VALUE".
 
-Set an secret from AWS Parameter Store
-======================================
+Set a secret environment variable from the AWS Parameter Store
+==============================================================
 
-**NOTE:** This option was introduced by AWS in ECS Agent v1.22.0. Make sure your ECS agent version is >= 1.22.0 or else your task will not deploy.
+.. important::
+    This option was introduced by AWS in ECS Agent v1.22.0. Make sure your ECS agent version is >= 1.22.0 or else your task will not deploy.
 
 To add a new or adjust an existing secret of a specific container, run the following command::
 
@@ -175,7 +176,7 @@ You can also specify the full arn of the parameter::
 
     $ ecs deploy my-cluster my-service -s webserver SOME_SECRET arn:aws:ssm:<aws region>:<aws account id>:parameter/KEY_OF_SECRET_IN_PARAMETER_STORE
 
-This will modify the **webserver** container definition and add or overwrite the secret `SOME_SECRET` with the value of the `KEY_OF_SECRET_IN_PARAMETER_STORE` in the AWS Parameter Store.
+This will modify the **webserver** container definition and add or overwrite the environment variable `SOME_SECRET` with the value of the `KEY_OF_SECRET_IN_PARAMETER_STORE` in the AWS Parameter Store of the AWS Systems Manager.
 
 Modify a command
 ================
