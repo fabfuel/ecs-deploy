@@ -15,7 +15,7 @@ ECS Deploy
 Key Features
 ------------
 - support for complex task definitions (e.g. multiple containers & task role)
-- easily redeploy the current task definition (including `docker pull` of eventually updated images) 
+- easily redeploy the current task definition (including `docker pull` of eventually updated images)
 - deploy new versions/tags or all containers or just a single container in your task definition
 - scale up or down by adjusting the desired count of running tasks
 - add or adjust containers environment variables
@@ -25,11 +25,11 @@ Key Features
 TL;DR
 -----
 Deploy a new version of your service::
- 
+
     $ ecs deploy my-cluster my-service --tag 1.2.3
 
 Redeploy the current version of a service::
- 
+
     $ ecs deploy my-cluster my-service
 
 Scale up or down a service::
@@ -47,14 +47,14 @@ The project is availably on PyPI. Simply run::
 
 Configuration
 -------------
-As **ecs-deploy** is based on boto3 (the official AWS Python library), there are several ways to configure and store the 
-authentication credentials. Please read the boto3 documentation for more details 
+As **ecs-deploy** is based on boto3 (the official AWS Python library), there are several ways to configure and store the
+authentication credentials. Please read the boto3 documentation for more details
 (http://boto3.readthedocs.org/en/latest/guide/configuration.html#configuration). The simplest way is by running::
 
     $ aws configure
 
 Alternatively you can pass the AWS credentials (via `--access-key-id` and `--secret-access-key`) or the AWS
-configuration profile (via `--profile`) as options when you run `ecs`. 
+configuration profile (via `--profile`) as options when you run `ecs`.
 
 Actions
 -------
@@ -95,7 +95,7 @@ To redeploy a service without any modifications, but pulling the most recent ima
 This will duplicate the current task definition and cause the service to redeploy all running tasks.::
 
     $ ecs deploy my-cluster my-service
-   
+
 
 Deploy a new tag
 ================
@@ -109,7 +109,7 @@ Deploy a new image
 To change the image of a specific container, run the following command::
 
     $ ecs deploy my-cluster my-service --image webserver nginx:1.11.8
-     
+
 This will modify the **webserver** container only and change its image to "nginx:1.11.8".
 
 
@@ -118,7 +118,7 @@ Deploy several new images
 The `-i` or `--image` option can also be passed several times::
 
     $ ecs deploy my-cluster my-service -i webserver nginx:1.9 -i application my-app:1.2.3
-     
+
 This will change the **webserver**'s container image to "nginx:1.9" and the **application**'s image to "my-app:1.2.3".
 
 Deploy a custom task definition
@@ -136,9 +136,9 @@ A task family name with revision::
 Or just a task family name. It this case, the most recent revision is used::
 
     $ ecs deploy my-cluster my-service --task my-task
-    
+
 .. important::
-   ``ecs`` will still create a new task definition, which then is used in the service. 
+   ``ecs`` will still create a new task definition, which then is used in the service.
    This is done, to retain consistent behaviour and to ensure the ECS agent e.g. pulls all images.
    But the newly created task definition will be based on the given task, not the currently used task.
 
@@ -148,7 +148,7 @@ Set an environment variable
 To add a new or adjust an existing environment variable of a specific container, run the following command::
 
     $ ecs deploy my-cluster my-service -e webserver SOME_VARIABLE SOME_VALUE
-     
+
 This will modify the **webserver** container definition and add or overwrite the environment variable `SOME_VARIABLE` with the value "SOME_VALUE". This way you can add new or adjust already existing environment variables.
 
 
@@ -162,6 +162,21 @@ This will modify the definition **of two containers**.
 The **webserver**'s environment variable `SOME_VARIABLE` will be set to "SOME_VALUE" and the variable `OTHER_VARIABLE` to "OTHER_VALUE".
 The **app**'s environment variable `APP_VARIABLE` will be set to "APP_VALUE".
 
+Set a secret environment variable from the AWS Parameter Store
+==============================================================
+
+.. important::
+    This option was introduced by AWS in ECS Agent v1.22.0. Make sure your ECS agent version is >= 1.22.0 or else your task will not deploy.
+
+To add a new or adjust an existing secret of a specific container, run the following command::
+
+    $ ecs deploy my-cluster my-service -s webserver SOME_SECRET KEY_OF_SECRET_IN_PARAMETER_STORE
+
+You can also specify the full arn of the parameter::
+
+    $ ecs deploy my-cluster my-service -s webserver SOME_SECRET arn:aws:ssm:<aws region>:<aws account id>:parameter/KEY_OF_SECRET_IN_PARAMETER_STORE
+
+This will modify the **webserver** container definition and add or overwrite the environment variable `SOME_SECRET` with the value of the `KEY_OF_SECRET_IN_PARAMETER_STORE` in the AWS Parameter Store of the AWS Systems Manager.
 
 Modify a command
 ================
@@ -186,8 +201,8 @@ If your cluster is undersized or the service's deployment options are not optima
 might be incapable to run blue-green-deployments. In this case, you might see errors like these:
 
     ERROR: (service my-service) was unable to place a task because no container instance met all of
-    its requirements. The closest matching (container-instance 123456-1234-1234-1234-1234567890) is 
-    already using a port required by your task. For more information, see the Troubleshooting 
+    its requirements. The closest matching (container-instance 123456-1234-1234-1234-1234567890) is
+    already using a port required by your task. For more information, see the Troubleshooting
     section of the Amazon ECS Developer Guide.
 
 There might also be warnings about insufficient memory or CPU.
@@ -196,7 +211,7 @@ To ignore these warnings, you can run the deployment with the flag ``--ignore-wa
 
     $ ecs deploy my-cluster my-service --ignore-warnings
 
-In that case, the warning is printed, but the script continues and waits for a successful 
+In that case, the warning is printed, but the script continues and waits for a successful
 deployment until it times out.
 
 Scaling
@@ -243,12 +258,12 @@ To record a deployment in New Relic, you can provide the the API Key (**Attentio
 Via cli options::
 
     $ ecs deploy my-cluster my-service --newrelic-apikey ABCDEFGHIJKLMN --newrelic-appid 1234567890
-  
+
 Or implicitly via environment variables ``NEW_RELIC_API_KEY`` and ``NEW_RELIC_APP_ID`` ::
 
     $ export NEW_RELIC_API_KEY=ABCDEFGHIJKLMN
     $ export NEW_RELIC_APP_ID=1234567890
-    $ ecs deploy my-cluster my-service 
+    $ ecs deploy my-cluster my-service
 
 Optionally you can provide an additional comment to the deployment via ``--comment "New feature X"`` and the name of the user who deployed with ``--user john.doe``
 
@@ -279,6 +294,6 @@ There are some other libraries/tools available on GitHub, which also handle the 
 
 Shell
   ecs-deploy - https://github.com/silinternational/ecs-deploy
-  
+
 Ruby
   broadside - https://github.com/lumoslabs/broadside
