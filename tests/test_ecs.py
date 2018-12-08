@@ -26,7 +26,7 @@ TASK_DEFINITION_ARN_1 = u'arn:aws:ecs:eu-central-1:123456789012:task-definition/
 TASK_DEFINITION_VOLUMES_1 = []
 TASK_DEFINITION_CONTAINERS_1 = [
     {u'name': u'webserver', u'image': u'webserver:123', u'command': u'run',
-     u'environment': ({"name": "foo", "value": "bar"}, {"name": "lorem", "value": "ipsum"}),
+     u'environment': ({"name": "foo", "value": "bar"}, {"name": "lorem", "value": "ipsum"}, {"name": "empty", "value": ""}),
      u'secrets': ({"name": "baz", "valueFrom": "qux"}, {"name": "dolor", "valueFrom": "sit"})},
     {u'name': u'application', u'image': u'application:123', u'command': u'run'}
 ]
@@ -37,7 +37,7 @@ TASK_DEFINITION_ARN_2 = u'arn:aws:ecs:eu-central-1:123456789012:task-definition/
 TASK_DEFINITION_VOLUMES_2 = []
 TASK_DEFINITION_CONTAINERS_2 = [
     {u'name': u'webserver', u'image': u'webserver:123', u'command': u'run',
-     u'environment': ({"name": "foo", "value": "bar"}, {"name": "lorem", "value": "ipsum"}),
+     u'environment': ({"name": "foo", "value": "bar"}, {"name": "lorem", "value": "ipsum"}, {"name": "empty", "value": ""}),
      u'secrets': ({"name": "baz", "valueFrom": "qux"}, {"name": "dolor", "valueFrom": "sit"})},
     {u'name': u'application', u'image': u'application:123', u'command': u'run'}
 ]
