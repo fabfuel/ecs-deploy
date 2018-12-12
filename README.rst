@@ -80,6 +80,9 @@ run
 ===
 Run a one-off task based on an existing task-definition and optionally override command and/or environment variables.
 
+cron
+======
+Update a task definition and update a rule to use the new task definition.
 
 update
 ======

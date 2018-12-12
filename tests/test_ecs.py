@@ -29,7 +29,6 @@ TASK_DEFINITION_CONTAINERS_1 = [
      u'environment': ({"name": "foo", "value": "bar"}, {"name": "lorem", "value": "ipsum"})},
     {u'name': u'application', u'image': u'application:123', u'command': u'run'}
 ]
-RULE_1 = u'test-rule'
 TASK_DEFINITION_FAMILY_2 = u'test-task'
 TASK_DEFINITION_REVISION_2 = 2
 TASK_DEFINITION_ARN_2 = u'arn:aws:ecs:eu-central-1:123456789012:task-definition/%s:%s' % (TASK_DEFINITION_FAMILY_2,
