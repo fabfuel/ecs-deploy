@@ -26,7 +26,8 @@ TASK_DEFINITION_ARN_1 = u'arn:aws:ecs:eu-central-1:123456789012:task-definition/
 TASK_DEFINITION_VOLUMES_1 = []
 TASK_DEFINITION_CONTAINERS_1 = [
     {u'name': u'webserver', u'image': u'webserver:123', u'command': u'run',
-     u'environment': ({"name": "foo", "value": "bar"}, {"name": "lorem", "value": "ipsum"})},
+     u'environment': ({"name": "foo", "value": "bar"}, {"name": "lorem", "value": "ipsum"}, {"name": "empty", "value": ""}),
+     u'secrets': ({"name": "baz", "valueFrom": "qux"}, {"name": "dolor", "valueFrom": "sit"})},
     {u'name': u'application', u'image': u'application:123', u'command': u'run'}
 ]
 TASK_DEFINITION_FAMILY_2 = u'test-task'
@@ -36,7 +37,8 @@ TASK_DEFINITION_ARN_2 = u'arn:aws:ecs:eu-central-1:123456789012:task-definition/
 TASK_DEFINITION_VOLUMES_2 = []
 TASK_DEFINITION_CONTAINERS_2 = [
     {u'name': u'webserver', u'image': u'webserver:123', u'command': u'run',
-     u'environment': ({"name": "foo", "value": "bar"}, {"name": "lorem", "value": "ipsum"})},
+     u'environment': ({"name": "foo", "value": "bar"}, {"name": "lorem", "value": "ipsum"}, {"name": "empty", "value": ""}),
+     u'secrets': ({"name": "baz", "valueFrom": "qux"}, {"name": "dolor", "valueFrom": "sit"})},
     {u'name': u'application', u'image': u'application:123', u'command': u'run'}
 ]
 
@@ -220,12 +222,6 @@ def test_service_init(service):
     assert service[u'taskDefinition'] == TASK_DEFINITION_ARN_1
 
 
-def test_service_set_desired_count(service):
-    assert service.desired_count == DESIRED_COUNT
-    service.set_desired_count(5)
-    assert service.desired_count == 5
-
-
 def test_service_set_task_definition(service, task_definition):
     assert service.task_definition == TASK_DEFINITION_ARN_1
     service.set_task_definition(task_definition)
@@ -320,6 +316,12 @@ def test_task_set_environment(task_definition):
     assert {'name': 'foo', 'value': 'baz'} in task_definition.containers[0]['environment']
     assert {'name': 'some-name', 'value': 'some-value'} in task_definition.containers[0]['environment']
 
+def test_task_set_secrets(task_definition):
+    task_definition.set_secrets(((u'webserver', u'foo', u'baz'), (u'webserver', u'some-name', u'some-value')))
+
+    assert {'name': 'dolor', 'valueFrom': 'sit'} in task_definition.containers[0]['secrets']
+    assert {'name': 'foo', 'valueFrom': 'baz'} in task_definition.containers[0]['secrets']
+    assert {'name': 'some-name', 'valueFrom': 'some-value'} in task_definition.containers[0]['secrets']
 
 def test_task_set_image_for_unknown_container(task_definition):
     with pytest.raises(UnknownContainerError):
@@ -359,25 +361,37 @@ def test_task_get_overrides_with_environment(task_definition):
     assert dict(name='foo', value='baz') in overrides[0]['environment']
 
 
-def test_task_get_overrides_with_commandand_environment(task_definition):
+def test_task_get_overrides_with_secrets(task_definition):
+    task_definition.set_secrets((('webserver', 'foo', 'baz'),))
+    overrides = task_definition.get_overrides()
+    assert len(overrides) == 1
+    assert overrides[0]['name'] == 'webserver'
+    assert dict(name='foo', valueFrom='baz') in overrides[0]['secrets']
+
+
+def test_task_get_overrides_with_command_environment_and_secrets(task_definition):
     task_definition.set_commands(webserver='/usr/bin/python script.py')
     task_definition.set_environment((('webserver', 'foo', 'baz'),))
+    task_definition.set_secrets((('webserver', 'bar', 'qux'),))
     overrides = task_definition.get_overrides()
     assert len(overrides) == 1
     assert overrides[0]['name'] == 'webserver'
     assert overrides[0]['command'] == ['/usr/bin/python','script.py']
     assert dict(name='foo', value='baz') in overrides[0]['environment']
+    assert dict(name='bar', valueFrom='qux') in overrides[0]['secrets']
 
 
-def test_task_get_overrides_with_commandand_environment_for_multiple_containers(task_definition):
+def test_task_get_overrides_with_command_secrets_and_environment_for_multiple_containers(task_definition):
     task_definition.set_commands(application='/usr/bin/python script.py')
     task_definition.set_environment((('webserver', 'foo', 'baz'),))
+    task_definition.set_secrets((('webserver', 'bar', 'qux'),))
     overrides = task_definition.get_overrides()
     assert len(overrides) == 2
     assert overrides[0]['name'] == 'application'
     assert overrides[0]['command'] == ['/usr/bin/python','script.py']
     assert overrides[1]['name'] == 'webserver'
     assert dict(name='foo', value='baz') in overrides[1]['environment']
+    assert dict(name='bar', valueFrom='qux') in overrides[1]['secrets']
 
 
 def test_task_get_overrides_command(task_definition):
@@ -393,6 +407,13 @@ def test_task_get_overrides_environment(task_definition):
     assert environment[0] == dict(name='foo', value='bar')
 
 
+def test_task_get_overrides_secrets(task_definition):
+    secrets = task_definition.get_overrides_secrets(dict(foo='bar'))
+    assert isinstance(secrets, list)
+    assert len(secrets) == 1
+    assert secrets[0] == dict(name='foo', valueFrom='bar')
+
+
 def test_task_definition_diff():
     diff = EcsTaskDefinitionDiff(u'webserver', u'image', u'new', u'old')
     assert str(diff) == u'Changed image of container "webserver" to: "new" (was: "old")'
@@ -403,13 +424,14 @@ def test_task_definition_diff():
 def test_client_init(mocked_init, mocked_client):
     mocked_init.return_value = None
 
-    EcsClient(u'access_key_id', u'secret_access_key', u'region', u'profile')
+    EcsClient(u'access_key_id', u'secret_access_key', u'region', u'profile', u'session_token')
 
     mocked_init.assert_called_once_with(aws_access_key_id=u'access_key_id',
                                         aws_secret_access_key=u'secret_access_key',
                                         profile_name=u'profile',
-                                        region_name=u'region')
-    mocked_client.assert_any_call(u'ecs')
+                                        region_name=u'region',
+                                        aws_session_token=u'session_token')
+    mocked_client.assert_called_once_with(u'ecs')
     mocked_client.assert_any_call(u'events')
 
 
@@ -418,7 +440,7 @@ def test_client_init(mocked_init, mocked_client):
 @patch.object(Session, '__init__')
 def client(mocked_init, mocked_client):
     mocked_init.return_value = None
-    return EcsClient(u'access_key_id', u'secret_access_key', u'region', u'profile')
+    return EcsClient(u'access_key_id', u'secret_access_key', u'region', u'profile', u'session_token')
 
 
 def test_client_describe_services(client):
@@ -611,7 +633,7 @@ def test_update_service(client, service):
     client.update_service.assert_called_once_with(
         cluster=service.cluster,
         service=service.name,
-        desired_count=service.desired_count,
+        desired_count=None,
         task_definition=service.task_definition
     )
 
@@ -648,7 +670,7 @@ def test_is_not_deployed_with_more_than_one_deployment(client, service):
 def test_is_deployed_if_no_tasks_should_be_running(client, service):
     client.list_tasks.return_value = RESPONSE_LIST_TASKS_0
     action = EcsAction(client, CLUSTER_NAME, SERVICE_NAME)
-    service.set_desired_count(0)
+    service[u'desiredCount'] = 0
     is_deployed = action.is_deployed(service)
     assert is_deployed is True
 
@@ -703,7 +725,6 @@ def test_scale_action(client):
     action = ScaleAction(client, CLUSTER_NAME, SERVICE_NAME)
     updated_service = action.scale(5)
 
-    assert action.service.desired_count == 5
     assert isinstance(updated_service, EcsService)
 
     client.describe_services.assert_called_once_with(
