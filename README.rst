@@ -184,7 +184,11 @@ To change the command of a specific container, run the following command::
 
     $ ecs deploy my-cluster my-service --command webserver "nginx"
 
-This will modify the **webserver** container and change its command to "nginx".
+This will modify the **webserver** container and change its command to "nginx". If you have 
+a command that requries arugments as well, then you can simply specify it like this as you would normally do:
+
+    $ ecs deploy my-cluster my-service --command webserver "ngnix -c /etc/ngnix/ngnix.conf"
+
 
 
 Set a task role
