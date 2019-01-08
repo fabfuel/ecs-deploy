@@ -17,7 +17,8 @@ class EcsClient(object):
         self.boto = session.client(u'ecs')
 
     def describe_services(self, cluster_name, service_name):
-        sleep(randint(1,20))
+        print("Wait")
+        sleep(randint(10,40))
         return self.boto.describe_services(
             cluster=cluster_name,
             services=[service_name]
@@ -352,6 +353,9 @@ class EcsAction(object):
             )
 
     def get_service(self):
+        print("Wait")
+        sleep(randint(10,40))
+
         services_definition = self._client.describe_services(
             cluster_name=self._cluster_name,
             service_name=self._service_name
