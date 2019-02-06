@@ -164,7 +164,7 @@ def run(cluster, task, count, command, env, secret, region, access_key_id, secre
     \b
     CLUSTER is the name of your cluster (e.g. 'my-custer') within ECS.
     TASK is the name of your task definition (e.g. 'my-task') within ECS.
-    COMMAND is the number of tasks your service should run.
+    COUNT is the number of tasks your service should run.
     """
     try:
         client = get_client(access_key_id, secret_access_key, region, profile)
