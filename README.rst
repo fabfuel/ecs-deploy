@@ -162,6 +162,16 @@ This will modify the definition **of two containers**.
 The **webserver**'s environment variable `SOME_VARIABLE` will be set to "SOME_VALUE" and the variable `OTHER_VARIABLE` to "OTHER_VALUE".
 The **app**'s environment variable `APP_VARIABLE` will be set to "APP_VALUE".
 
+
+Set environment variables exclusively, remove all other pre-existing environment variables
+==========================================================================================
+To reset all existing environment variables of a task definition, use the flag ``--exclusive-env`` ::
+
+    $ ecs deploy my-cluster my-service -e webserver SOME_VARIABLE SOME_VALUE --exclusive-env
+
+This will remove **all other** existing environment variables of **all containers** of the task definition, except for the variable `SOME_VARIABLE` with the value "SOME_VALUE" in the webserver container.
+
+
 Set a secret environment variable from the AWS Parameter Store
 ==============================================================
 
