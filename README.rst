@@ -188,6 +188,16 @@ You can also specify the full arn of the parameter::
 
 This will modify the **webserver** container definition and add or overwrite the environment variable `SOME_SECRET` with the value of the `KEY_OF_SECRET_IN_PARAMETER_STORE` in the AWS Parameter Store of the AWS Systems Manager.
 
+
+Set secrets exclusively, remove all other pre-existing secret environment variables
+===================================================================================
+To reset all existing secrets (secret environment variables) of a task definition, use the flag ``--exclusive-secrets`` ::
+
+    $ ecs deploy my-cluster my-service -s webserver NEW_SECRET KEY_OF_SECRET_IN_PARAMETER_STORE --exclusive-secret
+
+This will remove **all other** existing secret environment variables of **all containers** of the task definition, except for the new secret variable `NEW_SECRET` with the value coming from the AWS Parameter Store with the name "KEY_OF_SECRET_IN_PARAMETER_STORE" in the webserver container.
+
+
 Modify a command
 ================
 To change the command of a specific container, run the following command::

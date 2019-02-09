@@ -47,7 +47,8 @@ def get_client(access_key_id, secret_access_key, region, profile):
 @click.option('--deregister/--no-deregister', default=True, help='Deregister or keep the old task definition (default: --deregister)')
 @click.option('--rollback/--no-rollback', default=False, help='Rollback to previous revision, if deployment failed (default: --no-rollback)')
 @click.option('--exclusive-env', is_flag=True, default=False, help='Set the given environment variables exclusively and remove all other pre-existing env variables from all containers')
-def deploy(cluster, service, tag, image, command, env, secret, role, task, region, access_key_id, secret_access_key, profile, timeout, newrelic_apikey, newrelic_appid, comment, user, ignore_warnings, diff, deregister, rollback, exclusive_env):
+@click.option('--exclusive-secrets', is_flag=True, default=False, help='Set the given secrets exclusively and remove all other pre-existing secrets from all containers')
+def deploy(cluster, service, tag, image, command, env, secret, role, task, region, access_key_id, secret_access_key, profile, timeout, newrelic_apikey, newrelic_appid, comment, user, ignore_warnings, diff, deregister, rollback, exclusive_env, exclusive_secrets):
     """
     Redeploy or modify a service.
 
@@ -68,7 +69,7 @@ def deploy(cluster, service, tag, image, command, env, secret, role, task, regio
         td.set_images(tag, **{key: value for (key, value) in image})
         td.set_commands(**{key: value for (key, value) in command})
         td.set_environment(env, exclusive_env)
-        td.set_secrets(secret)
+        td.set_secrets(secret, exclusive_secrets)
         td.set_role_arn(role)
 
         if diff:

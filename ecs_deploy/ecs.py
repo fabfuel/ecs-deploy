@@ -288,7 +288,7 @@ class EcsTaskDefinition(object):
             {"name": e, "value": merged[e]} for e in merged
         ]
 
-    def set_secrets(self, secrets_list):
+    def set_secrets(self, secrets_list, exclusive=False):
         secrets = {}
 
         for secret in secrets_list:
@@ -300,12 +300,23 @@ class EcsTaskDefinition(object):
             if container[u'name'] in secrets:
                 self.apply_container_secrets(
                     container=container,
-                    new_secrets=secrets[container[u'name']]
+                    new_secrets=secrets[container[u'name']],
+                    exclusive=exclusive,
+                )
+            elif exclusive is True:
+                self.apply_container_secrets(
+                    container=container,
+                    new_secrets={},
+                    exclusive=exclusive,
                 )
 
-    def apply_container_secrets(self, container, new_secrets):
+    def apply_container_secrets(self, container, new_secrets, exclusive=False):
         secrets = container.get('secrets', {})
         old_secrets = {secret['name']: secret['valueFrom'] for secret in secrets}
+
+        if exclusive is True:
+            merged = new_secrets
+        else:
         merged = old_secrets.copy()
         merged.update(new_secrets)
 
@@ -396,11 +407,16 @@ class EcsTaskDefinitionDiff(object):
     @staticmethod
     def _get_secrets_diffs(container, secrets, old_secrets):
         msg = u'Changed secret "%s" of container "%s" to: "%s"'
+        msg_removed = u'Removed secret "%s" of container "%s"'
         diffs = []
         for name, value in secrets.items():
             old_value = old_secrets.get(name)
             if value != old_value or not old_value:
                 message = msg % (name, container, value)
+                diffs.append(message)
+        for old_name in old_secrets.keys():
+            if old_name not in secrets.keys():
+                message = msg_removed % (old_name, container)
                 diffs.append(message)
         return diffs
 

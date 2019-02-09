@@ -335,6 +335,15 @@ def test_task_set_environment_exclusively(task_definition):
     assert {'name': 'new-var', 'value': 'new-value'} in task_definition.containers[1]['environment']
 
 
+def test_task_set_secrets_exclusively(task_definition):
+    assert len(task_definition.containers[0]['secrets']) == 2
+
+    task_definition.set_secrets(((u'webserver', u'new-secret', u'another-place'), ), exclusive=True)
+
+    assert len(task_definition.containers[0]['secrets']) == 1
+    assert {'name': 'new-secret', 'valueFrom': 'another-place'} in task_definition.containers[0]['secrets']
+
+
 def test_task_set_secrets(task_definition):
     task_definition.set_secrets(((u'webserver', u'foo', u'baz'), (u'webserver', u'some-name', u'some-value')))
 
