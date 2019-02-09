@@ -331,9 +331,9 @@ def test_task_set_environment_exclusively(task_definition):
     assert len(task_definition.containers[1]['environment']) == 2
 
     assert task_definition.containers[0]['environment'] == []
-    assert task_definition.containers[1]['environment'] == [
-        {'name': 'new-var', 'value': 'new-value'},
+    assert sorted(task_definition.containers[1]['environment']) == [
         {'name': 'foo', 'value': 'baz'},
+        {'name': 'new-var', 'value': 'new-value'},
     ]
 
 
