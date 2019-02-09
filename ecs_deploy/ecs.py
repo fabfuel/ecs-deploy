@@ -395,7 +395,7 @@ class EcsTaskDefinitionDiff(object):
         diffs = []
         for name, value in env.items():
             old_value = old_env.get(name)
-            if value != old_value or not old_value:
+            if value != old_value or value and not old_value:
                 message = msg % (name, container, value)
                 diffs.append(message)
         for old_name in old_env.keys():
