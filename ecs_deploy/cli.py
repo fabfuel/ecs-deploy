@@ -37,7 +37,7 @@ def get_client(access_key_id, secret_access_key, region, profile):
 @click.option('--access-key-id', required=False, help='AWS access key id')
 @click.option('--secret-access-key', required=False, help='AWS secret access key')
 @click.option('--profile', required=False, help='AWS configuration profile name')
-@click.option('--timeout', required=False, default=300, type=int, help='Amount of seconds to wait for deployment before command fails (default: 300)')
+@click.option('--timeout', required=False, default=300, type=int, help='Amount of seconds to wait for deployment before command fails (default: 300). To disable timeout (fire and forget) set to -1')
 @click.option('--ignore-warnings', is_flag=True, help='Do not fail deployment on warnings (port already in use or insufficient memory/CPU)')
 @click.option('--newrelic-apikey', required=False, help='New Relic API Key for recording the deployment')
 @click.option('--newrelic-appid', required=False, help='New Relic App ID for recording the deployment')
@@ -113,7 +113,7 @@ def deploy(cluster, service, tag, image, command, env, secret, role, task, regio
 @click.option('--access-key-id', help='AWS access key id')
 @click.option('--secret-access-key', help='AWS secret access key')
 @click.option('--profile', help='AWS configuration profile name')
-@click.option('--timeout', default=300, type=int, help='AWS configuration profile')
+@click.option('--timeout', default=300, type=int, help='Amount of seconds to wait for deployment before command fails (default: 300). To disable timeout (fire and forget) set to -1')
 @click.option('--ignore-warnings', is_flag=True, help='Do not fail deployment on warnings (port already in use or insufficient memory/CPU)')
 def scale(cluster, service, desired_count, access_key_id, secret_access_key, region, profile, timeout, ignore_warnings):
     """
@@ -202,10 +202,15 @@ def run(cluster, task, count, command, env, secret, region, access_key_id, secre
 def wait_for_finish(action, timeout, title, success_message, failure_message,
                     ignore_warnings):
     click.secho(title, nl=False)
-    waiting = True
     waiting_timeout = datetime.now() + timedelta(seconds=timeout)
     service = action.get_service()
     inspected_until = None
+
+    if timeout == -1:
+        waiting = False
+    else:
+        waiting = True
+
     while waiting and datetime.now() < waiting_timeout:
         click.secho('.', nl=False)
         service = action.get_service()

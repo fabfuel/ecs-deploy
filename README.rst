@@ -238,6 +238,13 @@ To ignore these warnings, you can run the deployment with the flag ``--ignore-wa
 In that case, the warning is printed, but the script continues and waits for a successful
 deployment until it times out.
 
+Deployment timeout
+==================
+The deploy and scale actions allow defining a timeout (in seconds) via the ``--timeout`` parameter.
+This instructs ecs-deploy to wait for ECS to finish the deployment for the given number of seconds.
+
+To run a deployment without waiting for the successful or failed result at all, set ``--timeout`` to the value of ``-1``.
+
 Scaling
 -------
 
