@@ -1,3 +1,5 @@
+from datetime import datetime
+
 import pytest
 from click.testing import CliRunner
 from mock.mock import patch
@@ -482,6 +484,30 @@ def test_deploy_with_timeout(get_client, runner):
     assert result.exit_code == 1
     assert u"Deployment failed due to timeout. Please see: " \
            u"https://github.com/fabfuel/ecs-deploy#timeout" in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_deploy_with_wait_within_timeout(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key', wait=2)
+    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '--timeout', '10'))
+    assert result.exit_code == 0
+    assert u'Deploying new task definition...' in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_deploy_without_timeout(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key', wait=2)
+
+    start_time = datetime.now()
+    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '--timeout', '-1'))
+    end_time = datetime.now()
+
+    assert result.exit_code == 0
+
+    # assert task is not waiting for deployment
+    assert u'Deploying new task definition\n' in result.output
+    assert u'...' not in result.output
+    assert (end_time - start_time).total_seconds() < 1
 
 
 @patch('ecs_deploy.cli.get_client')

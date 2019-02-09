@@ -202,10 +202,15 @@ def run(cluster, task, count, command, env, secret, region, access_key_id, secre
 def wait_for_finish(action, timeout, title, success_message, failure_message,
                     ignore_warnings):
     click.secho(title, nl=False)
-    waiting = True
     waiting_timeout = datetime.now() + timedelta(seconds=timeout)
     service = action.get_service()
     inspected_until = None
+
+    if timeout == -1:
+        waiting = False
+    else:
+        waiting = True
+
     while waiting and datetime.now() < waiting_timeout:
         click.secho('.', nl=False)
         service = action.get_service()
