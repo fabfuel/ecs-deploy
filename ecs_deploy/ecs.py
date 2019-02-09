@@ -317,8 +317,8 @@ class EcsTaskDefinition(object):
         if exclusive is True:
             merged = new_secrets
         else:
-        merged = old_secrets.copy()
-        merged.update(new_secrets)
+            merged = old_secrets.copy()
+            merged.update(new_secrets)
 
         if old_secrets == merged:
             return
