@@ -37,7 +37,7 @@ def get_client(access_key_id, secret_access_key, region, profile):
 @click.option('--access-key-id', required=False, help='AWS access key id')
 @click.option('--secret-access-key', required=False, help='AWS secret access key')
 @click.option('--profile', required=False, help='AWS configuration profile name')
-@click.option('--timeout', required=False, default=300, type=int, help='Amount of seconds to wait for deployment before command fails (default: 300)')
+@click.option('--timeout', required=False, default=300, type=int, help='Amount of seconds to wait for deployment before command fails (default: 300). To disable timeout (fire and forget) set to -1')
 @click.option('--ignore-warnings', is_flag=True, help='Do not fail deployment on warnings (port already in use or insufficient memory/CPU)')
 @click.option('--newrelic-apikey', required=False, help='New Relic API Key for recording the deployment')
 @click.option('--newrelic-appid', required=False, help='New Relic App ID for recording the deployment')
@@ -46,7 +46,9 @@ def get_client(access_key_id, secret_access_key, region, profile):
 @click.option('--diff/--no-diff', default=True, help='Print which values were changed in the task definition (default: --diff)')
 @click.option('--deregister/--no-deregister', default=True, help='Deregister or keep the old task definition (default: --deregister)')
 @click.option('--rollback/--no-rollback', default=False, help='Rollback to previous revision, if deployment failed (default: --no-rollback)')
-def deploy(cluster, service, tag, image, command, env, secret, role, task, region, access_key_id, secret_access_key, profile, timeout, newrelic_apikey, newrelic_appid, comment, user, ignore_warnings, diff, deregister, rollback):
+@click.option('--exclusive-env', is_flag=True, default=False, help='Set the given environment variables exclusively and remove all other pre-existing env variables from all containers')
+@click.option('--exclusive-secrets', is_flag=True, default=False, help='Set the given secrets exclusively and remove all other pre-existing secrets from all containers')
+def deploy(cluster, service, tag, image, command, env, secret, role, task, region, access_key_id, secret_access_key, profile, timeout, newrelic_apikey, newrelic_appid, comment, user, ignore_warnings, diff, deregister, rollback, exclusive_env, exclusive_secrets):
     """
     Redeploy or modify a service.
 
@@ -66,8 +68,8 @@ def deploy(cluster, service, tag, image, command, env, secret, role, task, regio
         td = get_task_definition(deployment, task)
         td.set_images(tag, **{key: value for (key, value) in image})
         td.set_commands(**{key: value for (key, value) in command})
-        td.set_environment(env)
-        td.set_secrets(secret)
+        td.set_environment(env, exclusive_env)
+        td.set_secrets(secret, exclusive_secrets)
         td.set_role_arn(role)
 
         if diff:
@@ -111,7 +113,7 @@ def deploy(cluster, service, tag, image, command, env, secret, role, task, regio
 @click.option('--access-key-id', help='AWS access key id')
 @click.option('--secret-access-key', help='AWS secret access key')
 @click.option('--profile', help='AWS configuration profile name')
-@click.option('--timeout', default=300, type=int, help='AWS configuration profile')
+@click.option('--timeout', default=300, type=int, help='Amount of seconds to wait for deployment before command fails (default: 300). To disable timeout (fire and forget) set to -1')
 @click.option('--ignore-warnings', is_flag=True, help='Do not fail deployment on warnings (port already in use or insufficient memory/CPU)')
 def scale(cluster, service, desired_count, access_key_id, secret_access_key, region, profile, timeout, ignore_warnings):
     """
@@ -164,7 +166,7 @@ def run(cluster, task, count, command, env, secret, region, access_key_id, secre
     \b
     CLUSTER is the name of your cluster (e.g. 'my-custer') within ECS.
     TASK is the name of your task definition (e.g. 'my-task') within ECS.
-    COMMAND is the number of tasks your service should run.
+    COUNT is the number of tasks your service should run.
     """
     try:
         client = get_client(access_key_id, secret_access_key, region, profile)
@@ -200,10 +202,15 @@ def run(cluster, task, count, command, env, secret, region, access_key_id, secre
 def wait_for_finish(action, timeout, title, success_message, failure_message,
                     ignore_warnings):
     click.secho(title, nl=False)
-    waiting = True
     waiting_timeout = datetime.now() + timedelta(seconds=timeout)
     service = action.get_service()
     inspected_until = None
+
+    if timeout == -1:
+        waiting = False
+    else:
+        waiting = True
+
     while waiting and datetime.now() < waiting_timeout:
         click.secho('.', nl=False)
         service = action.get_service()

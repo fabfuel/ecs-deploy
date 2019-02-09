@@ -26,9 +26,9 @@ TASK_DEFINITION_ARN_1 = u'arn:aws:ecs:eu-central-1:123456789012:task-definition/
 TASK_DEFINITION_VOLUMES_1 = []
 TASK_DEFINITION_CONTAINERS_1 = [
     {u'name': u'webserver', u'image': u'webserver:123', u'command': u'run',
-     u'environment': ({"name": "foo", "value": "bar"}, {"name": "lorem", "value": "ipsum"}),
+     u'environment': ({"name": "foo", "value": "bar"}, {"name": "lorem", "value": "ipsum"}, {"name": "empty", "value": ""}),
      u'secrets': ({"name": "baz", "valueFrom": "qux"}, {"name": "dolor", "valueFrom": "sit"})},
-    {u'name': u'application', u'image': u'application:123', u'command': u'run'}
+    {u'name': u'application', u'image': u'application:123', u'command': u'run', u'environment': ()}
 ]
 TASK_DEFINITION_FAMILY_2 = u'test-task'
 TASK_DEFINITION_REVISION_2 = 2
@@ -37,9 +37,9 @@ TASK_DEFINITION_ARN_2 = u'arn:aws:ecs:eu-central-1:123456789012:task-definition/
 TASK_DEFINITION_VOLUMES_2 = []
 TASK_DEFINITION_CONTAINERS_2 = [
     {u'name': u'webserver', u'image': u'webserver:123', u'command': u'run',
-     u'environment': ({"name": "foo", "value": "bar"}, {"name": "lorem", "value": "ipsum"}),
+     u'environment': ({"name": "foo", "value": "bar"}, {"name": "lorem", "value": "ipsum"}, {"name": "empty", "value": ""}),
      u'secrets': ({"name": "baz", "valueFrom": "qux"}, {"name": "dolor", "valueFrom": "sit"})},
-    {u'name': u'application', u'image': u'application:123', u'command': u'run'}
+    {u'name': u'application', u'image': u'application:123', u'command': u'run', u'environment': ()}
 ]
 
 PAYLOAD_TASK_DEFINITION_1 = {
@@ -310,11 +310,39 @@ def test_task_set_image(task_definition):
 
 
 def test_task_set_environment(task_definition):
+    assert len(task_definition.containers[0]['environment']) == 3
+
     task_definition.set_environment(((u'webserver', u'foo', u'baz'), (u'webserver', u'some-name', u'some-value')))
+
+    assert len(task_definition.containers[0]['environment']) == 4
 
     assert {'name': 'lorem', 'value': 'ipsum'} in task_definition.containers[0]['environment']
     assert {'name': 'foo', 'value': 'baz'} in task_definition.containers[0]['environment']
     assert {'name': 'some-name', 'value': 'some-value'} in task_definition.containers[0]['environment']
+
+
+def test_task_set_environment_exclusively(task_definition):
+    assert len(task_definition.containers[0]['environment']) == 3
+    assert len(task_definition.containers[1]['environment']) == 0
+
+    task_definition.set_environment(((u'application', u'foo', u'baz'), (u'application', u'new-var', u'new-value')), exclusive=True)
+
+    assert len(task_definition.containers[0]['environment']) == 0
+    assert len(task_definition.containers[1]['environment']) == 2
+
+    assert task_definition.containers[0]['environment'] == []
+    assert {'name': 'foo', 'value': 'baz'} in task_definition.containers[1]['environment']
+    assert {'name': 'new-var', 'value': 'new-value'} in task_definition.containers[1]['environment']
+
+
+def test_task_set_secrets_exclusively(task_definition):
+    assert len(task_definition.containers[0]['secrets']) == 2
+
+    task_definition.set_secrets(((u'webserver', u'new-secret', u'another-place'), ), exclusive=True)
+
+    assert len(task_definition.containers[0]['secrets']) == 1
+    assert {'name': 'new-secret', 'valueFrom': 'another-place'} in task_definition.containers[0]['secrets']
+
 
 def test_task_set_secrets(task_definition):
     task_definition.set_secrets(((u'webserver', u'foo', u'baz'), (u'webserver', u'some-name', u'some-value')))
@@ -322,6 +350,7 @@ def test_task_set_secrets(task_definition):
     assert {'name': 'dolor', 'valueFrom': 'sit'} in task_definition.containers[0]['secrets']
     assert {'name': 'foo', 'valueFrom': 'baz'} in task_definition.containers[0]['secrets']
     assert {'name': 'some-name', 'valueFrom': 'some-value'} in task_definition.containers[0]['secrets']
+
 
 def test_task_set_image_for_unknown_container(task_definition):
     with pytest.raises(UnknownContainerError):
@@ -335,6 +364,15 @@ def test_task_set_command(task_definition):
             assert container[u'command'] == [u'run-webserver']
         if container[u'name'] == u'application':
             assert container[u'command'] == [u'run-application']
+
+
+def test_task_set_command_with_multiple_arguments(task_definition):
+    task_definition.set_commands(webserver=u'run-webserver arg1 arg2', application=u'run-application arg1 arg2')
+    for container in task_definition.containers:
+        if container[u'name'] == u'webserver':
+            assert container[u'command'] == [u'run-webserver', u'arg1', u'arg2']
+        if container[u'name'] == u'application':
+            assert container[u'command'] == [u'run-application', u'arg1', u'arg2']
 
 
 def test_task_set_command_for_unknown_container(task_definition):

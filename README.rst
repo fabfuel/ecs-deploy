@@ -162,6 +162,16 @@ This will modify the definition **of two containers**.
 The **webserver**'s environment variable `SOME_VARIABLE` will be set to "SOME_VALUE" and the variable `OTHER_VARIABLE` to "OTHER_VALUE".
 The **app**'s environment variable `APP_VARIABLE` will be set to "APP_VALUE".
 
+
+Set environment variables exclusively, remove all other pre-existing environment variables
+==========================================================================================
+To reset all existing environment variables of a task definition, use the flag ``--exclusive-env`` ::
+
+    $ ecs deploy my-cluster my-service -e webserver SOME_VARIABLE SOME_VALUE --exclusive-env
+
+This will remove **all other** existing environment variables of **all containers** of the task definition, except for the variable `SOME_VARIABLE` with the value "SOME_VALUE" in the webserver container.
+
+
 Set a secret environment variable from the AWS Parameter Store
 ==============================================================
 
@@ -178,13 +188,27 @@ You can also specify the full arn of the parameter::
 
 This will modify the **webserver** container definition and add or overwrite the environment variable `SOME_SECRET` with the value of the `KEY_OF_SECRET_IN_PARAMETER_STORE` in the AWS Parameter Store of the AWS Systems Manager.
 
+
+Set secrets exclusively, remove all other pre-existing secret environment variables
+===================================================================================
+To reset all existing secrets (secret environment variables) of a task definition, use the flag ``--exclusive-secrets`` ::
+
+    $ ecs deploy my-cluster my-service -s webserver NEW_SECRET KEY_OF_SECRET_IN_PARAMETER_STORE --exclusive-secret
+
+This will remove **all other** existing secret environment variables of **all containers** of the task definition, except for the new secret variable `NEW_SECRET` with the value coming from the AWS Parameter Store with the name "KEY_OF_SECRET_IN_PARAMETER_STORE" in the webserver container.
+
+
 Modify a command
 ================
 To change the command of a specific container, run the following command::
 
     $ ecs deploy my-cluster my-service --command webserver "nginx"
 
-This will modify the **webserver** container and change its command to "nginx".
+This will modify the **webserver** container and change its command to "nginx". If you have 
+a command that requries arugments as well, then you can simply specify it like this as you would normally do:
+
+    $ ecs deploy my-cluster my-service --command webserver "ngnix -c /etc/ngnix/ngnix.conf"
+
 
 
 Set a task role
@@ -213,6 +237,13 @@ To ignore these warnings, you can run the deployment with the flag ``--ignore-wa
 
 In that case, the warning is printed, but the script continues and waits for a successful
 deployment until it times out.
+
+Deployment timeout
+==================
+The deploy and scale actions allow defining a timeout (in seconds) via the ``--timeout`` parameter.
+This instructs ecs-deploy to wait for ECS to finish the deployment for the given number of seconds.
+
+To run a deployment without waiting for the successful or failed result at all, set ``--timeout`` to the value of ``-1``.
 
 Scaling
 -------
