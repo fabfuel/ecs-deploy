@@ -239,7 +239,7 @@ class EcsTaskDefinition(object):
                     old_value=container.get(u'command')
                 )
                 self._diff.append(diff)
-                container[u'command'] = [new_command]
+                container[u'command'] = new_command.split(" ")
 
     def set_environment(self, environment_list):
         environment = {}
