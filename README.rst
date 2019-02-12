@@ -72,6 +72,10 @@ run
 ===
 Run a one-off task based on an existing task-definition and optionally override command and/or environment variables.
 
+update_task
+===========
+Update a task definition with a new image, environment variable and/or command definition.
+
 
 Usage
 -----
