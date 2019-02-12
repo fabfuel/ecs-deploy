@@ -308,7 +308,9 @@ def scale(cluster, service, desired_count, access_key_id, secret_access_key, reg
 @click.option('--secret-access-key', help='AWS secret access key')
 @click.option('--profile', help='AWS configuration profile name')
 @click.option('--diff/--no-diff', default=True, help='Print what values were changed in the task definition')
-def run(cluster, task, count, command, env, secret, launchtype, subnet, securitygroup, public_ip, region, access_key_id, secret_access_key, profile, diff):
+@click.option('--exclusive-env', is_flag=True, default=False, help='Set the given environment variables exclusively and remove all other pre-existing env variables from all containers')
+@click.option('--exclusive-secrets', is_flag=True, default=False, help='Set the given secrets exclusively and remove all other pre-existing secrets from all containers')
+def run(cluster, task, count, command, env, secret, launchtype, subnet, securitygroup, public_ip, region, access_key_id, secret_access_key, profile, diff, exclusive_env, exclusive_secrets):
     """
     Run a one-off task.
 
@@ -323,8 +325,8 @@ def run(cluster, task, count, command, env, secret, launchtype, subnet, security
 
         td = action.get_task_definition(task)
         td.set_commands(**{key: value for (key, value) in command})
-        td.set_environment(env)
-        td.set_secrets(secret)
+        td.set_environment(env, exclusive_env)
+        td.set_secrets(secret, exclusive_secrets)
 
         if diff:
             print_diff(td, 'Using task definition: %s' % task)
