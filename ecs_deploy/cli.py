@@ -310,11 +310,13 @@ def scale(cluster, service, desired_count, access_key_id, secret_access_key, reg
 @click.option('--access-key-id', help='AWS access key id')
 @click.option('--secret-access-key', help='AWS secret access key')
 @click.option('--profile', help='AWS configuration profile name')
+@click.option('--timeout', default=300, type=int, help='Amount of seconds to wait for task to finish before command fails (default: 300). To disable timeout (fire and forget) set to -1')
+@click.option('--sleep-time', default=1, type=int, help='Amount of seconds to wait between each check of the service (default: 1)')
 @click.option('--diff/--no-diff', default=True, help='Print what values were changed in the task definition')
 @click.option('--exclusive-env', is_flag=True, default=False, help='Set the given environment variables exclusively and remove all other pre-existing env variables from all containers')
 @click.option('--exclusive-secrets', is_flag=True, default=False, help='Set the given secrets exclusively and remove all other pre-existing secrets from all containers')
 @click.option('--deregister/--no-deregister', default=True, help='Deregister or keep the old task definition (default: --deregister)')
-def run(cluster, task, count, tag, image, command, env, secret, role, launchtype, subnet, securitygroup, public_ip, region, access_key_id, secret_access_key, profile, diff, exclusive_env, exclusive_secrets, deregister):
+def run(cluster, task, count, tag, image, command, env, secret, role, launchtype, subnet, securitygroup, public_ip, region, access_key_id, secret_access_key, profile, timeout, sleep_time, diff, exclusive_env, exclusive_secrets, deregister):
     """
     Run a one-off task.
 
@@ -355,8 +357,17 @@ def run(cluster, task, count, tag, image, command, env, secret, role, launchtype
             click.secho('- %s' % started_task['taskArn'], fg='green')
         click.secho(' ')
 
+        exit_code = wait_for_task(
+            action=action,
+            timeout=timeout,
+            title='Running task',
+            sleep_time=sleep_time,
+        )
+
         if should_create_task_definition and deregister:
             deregister_task_definition(action, td_old)
+
+        exit(exit_code)
 
     except EcsError as e:
         click.secho('%s\n' % str(e), fg='red', err=True)
@@ -407,6 +418,33 @@ def diff(task, revision_a, revision_b, region, access_key_id, secret_access_key,
     except EcsError as e:
         click.secho('%s\n' % str(e), fg='red', err=True)
         exit(1)
+
+
+def wait_for_task(action, timeout, title, sleep_time=1):
+    click.secho(title, nl=False)
+    waiting_timeout = datetime.now() + timedelta(seconds=timeout)
+    tasks_arn = [task[u'taskArn'] for task in action.started_tasks]
+
+    if timeout == -1:
+        waiting = False
+    else:
+        waiting = True
+
+    exit_code = 0
+
+    while waiting and datetime.now() < waiting_timeout:
+        click.secho('.', nl=False)
+        waiting = False
+
+        for task in action.get_tasks(tasks_arn):
+            if task.is_stopped:
+                exit_code = exit_code or task.exit_code
+            else:
+                waiting = True
+        if waiting:
+            sleep(sleep_time)
+
+    return exit_code
 
 
 def wait_for_finish(action, timeout, title, success_message, failure_message,
