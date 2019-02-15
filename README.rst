@@ -197,7 +197,6 @@ To reset all existing secrets (secret environment variables) of a task definitio
 
 This will remove **all other** existing secret environment variables of **all containers** of the task definition, except for the new secret variable `NEW_SECRET` with the value coming from the AWS Parameter Store with the name "KEY_OF_SECRET_IN_PARAMETER_STORE" in the webserver container.
 
-
 Modify a command
 ================
 To change the command of a specific container, run the following command::
@@ -208,6 +207,15 @@ This will modify the **webserver** container and change its command to "nginx". 
 a command that requries arugments as well, then you can simply specify it like this as you would normally do:
 
     $ ecs deploy my-cluster my-service --command webserver "ngnix -c /etc/ngnix/ngnix.conf"
+
+This works fine as long as any of the arguments do not contain any spaces. In case arguments to the
+command itself contain spaces, then you can use the JSON format:
+
+$ ecs deploy my-cluster my-service --command webserver '["sh", "-c", "while true; do echo Time files like an arrow $(date); sleep 1; done;"]'
+
+More about this can be looked up in documentation.
+https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task_definition_parameters.html#container_definitions
+
 
 
 
@@ -277,6 +285,8 @@ You can override the command definition via option ``-c`` or ``--command`` follo
 command in a natural syntax, e.g. no conversion to comma-separation required::
 
     $ ecs run my-cluster my-task -c my-container "python some-script.py param1 param2"
+
+The JSON sytax explained above regarding modifying a command is also applicable here.
 
 Monitoring
 ----------

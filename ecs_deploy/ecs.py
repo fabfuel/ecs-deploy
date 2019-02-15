@@ -1,9 +1,12 @@
 from datetime import datetime
+import json
+import re
 
 from boto3.session import Session
 from botocore.exceptions import ClientError, NoCredentialsError
 from dateutil.tz.tz import tzlocal
 
+JSON_LIST_REGEX = re.compile(r'^\[.*\]$')
 
 class EcsClient(object):
     def __init__(self, access_key_id=None, secret_access_key=None,
@@ -191,8 +194,19 @@ class EcsTaskDefinition(object):
         return overrides
 
     @staticmethod
-    def get_overrides_command(command):
+    def parse_command(command):
+        if re.match(JSON_LIST_REGEX, command):
+            try:
+                return json.loads(command)
+            except json.JSONDecodeError as e:
+                raise EcsTaskDefinitionCommandError("command should be valid JSON list."
+                                                    "Got following command: {}"
+                                                    "Resulting in error: {}".format(command, str(e)))
+
         return command.split(' ')
+    @staticmethod
+    def get_overrides_command(command):
+        return EcsTaskDefinition.parse_command(command)
 
     @staticmethod
     def get_overrides_env(env):
@@ -239,7 +253,7 @@ class EcsTaskDefinition(object):
                     old_value=container.get(u'command')
                 )
                 self._diff.append(diff)
-                container[u'command'] = new_command.split(" ")
+                container[u'command'] = self.parse_command(new_command)
 
     def set_environment(self, environment_list, exclusive=False):
         environment = {}
@@ -590,4 +604,7 @@ class TaskPlacementError(EcsError):
 
 
 class UnknownTaskDefinitionError(EcsError):
+    pass
+
+class EcsTaskDefinitionCommandError(EcsError):
     pass
