@@ -8,6 +8,12 @@ from dateutil.tz.tz import tzlocal
 
 JSON_LIST_REGEX = re.compile(r'^\[.*\]$')
 
+# Python2 raises ValueError
+try:
+    JSONDecodeError = json.JSONDecodeError
+except AttributeError:
+    JSONDecodeError = ValueError
+
 class EcsClient(object):
     def __init__(self, access_key_id=None, secret_access_key=None,
                  region=None, profile=None, session_token=None):
@@ -198,7 +204,7 @@ class EcsTaskDefinition(object):
         if re.match(JSON_LIST_REGEX, command):
             try:
                 return json.loads(command)
-            except json.JSONDecodeError as e:
+            except JSONDecodeError as e:
                 raise EcsTaskDefinitionCommandError("command should be valid JSON list."
                                                     "Got following command: {}"
                                                     "Resulting in error: {}".format(command, str(e)))
