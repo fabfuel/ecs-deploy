@@ -567,6 +567,15 @@ def test_client_update_service(client):
     )
 
 
+def test_client_update_service_without_desired_count(client):
+    client.update_service(u'test-cluster', u'test-service', None, u'task-definition')
+    client.boto.update_service.assert_called_once_with(
+        cluster=u'test-cluster',
+        service=u'test-service',
+        taskDefinition=u'task-definition'
+    )
+
+
 def test_client_run_task(client):
     client.run_task(
         cluster=u'test-cluster',
@@ -809,6 +818,28 @@ def test_run_action_run(client, task_definition):
     )
 
     assert len(action.started_tasks) == 2
+
+
+def test_ecs_server_get_warnings():
+    since = datetime.now() - timedelta(hours=1)
+    until = datetime.now() + timedelta(hours=1)
+
+    event_unable = {
+        u'createdAt': datetime.now(),
+        u'message': u'unable to foo',
+    }
+
+    event_unknown = {
+        u'createdAt': datetime.now(),
+        u'message': u'unkown foo',
+    }
+
+    service = EcsService('foo', {
+        u'deployments': [],
+        u'events': [event_unable, event_unknown],
+    })
+
+    assert len(service.get_warnings(since, until)) == 1
 
 
 class EcsTestClient(object):
