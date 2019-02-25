@@ -119,6 +119,20 @@ def test_deploy_with_role_arn(get_client, runner):
     assert u"Updating task definition" in result.output
     assert u'Changed role_arn to: "arn:new:role" (was: "arn:test:role:1")' in result.output
 
+@patch('ecs_deploy.cli.get_client')
+def test_deploy_with_execution_role_arn(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '-x', 'arn:new:role'))
+    assert result.exit_code == 0
+    assert not result.exception
+    assert u"Deploying based on task definition: test-task:1" in result.output
+    assert u'Successfully created revision: 2' in result.output
+    assert u'Successfully deregistered revision: 1' in result.output
+    assert u'Successfully changed task definition to: test-task:2' in result.output
+    assert u'Deployment successful' in result.output
+    assert u"Updating task definition" in result.output
+    assert u'Changed execution_role_arn to: "arn:new:role" (was: "arn:test:role:1")' in result.output
+
 
 @patch('ecs_deploy.cli.get_client')
 def test_deploy_new_tag(get_client, runner):

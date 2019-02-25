@@ -47,6 +47,7 @@ PAYLOAD_TASK_DEFINITION_1 = {
     u'family': TASK_DEFINITION_FAMILY_1,
     u'revision': TASK_DEFINITION_REVISION_1,
     u'taskRoleArn': TASK_DEFINITION_ROLE_ARN_1,
+    u'executionRoleArn': TASK_DEFINITION_ROLE_ARN_1,
     u'volumes': deepcopy(TASK_DEFINITION_VOLUMES_1),
     u'containerDefinitions': deepcopy(TASK_DEFINITION_CONTAINERS_1),
     u'status': u'active',
@@ -511,12 +512,14 @@ def test_client_register_task_definition(client):
     containers = [{u'name': u'foo'}]
     volumes = [{u'foo': u'bar'}]
     role_arn = 'arn:test:role'
+    execution_role_arn = 'arn:test:role'
     task_definition = EcsTaskDefinition(
         containerDefinitions=containers,
         volumes=volumes,
         family=u'family',
         revision=1,
         taskRoleArn=role_arn,
+        executionRoleArn=execution_role_arn,
         status='active',
         taskDefinitionArn='arn:task',
         requiresAttributes={},
@@ -528,6 +531,7 @@ def test_client_register_task_definition(client):
         containers=task_definition.containers,
         volumes=task_definition.volumes,
         role_arn=task_definition.role_arn,
+        execution_role_arn=execution_role_arn,
         additional_properties=task_definition.additional_properties
     )
 
@@ -536,6 +540,7 @@ def test_client_register_task_definition(client):
         containerDefinitions=containers,
         volumes=volumes,
         taskRoleArn=role_arn,
+        executionRoleArn=execution_role_arn,
         unkownProperty='foobar'
     )
 
@@ -650,6 +655,7 @@ def test_update_task_definition(client, task_definition):
         containers=task_definition.containers,
         volumes=task_definition.volumes,
         role_arn=task_definition.role_arn,
+        execution_role_arn=task_definition.execution_role_arn,
         additional_properties={
             u'networkMode': u'host',
             u'placementConstraints': {},
@@ -874,7 +880,8 @@ class EcsTestClient(object):
     def describe_tasks(self, cluster_name, task_arns):
         return deepcopy(RESPONSE_DESCRIBE_TASKS)
 
-    def register_task_definition(self, family, containers, volumes, role_arn, additional_properties):
+    def register_task_definition(self, family, containers, volumes, role_arn,
+                                 execution_role_arn, additional_properties):
         return deepcopy(RESPONSE_TASK_DEFINITION_2)
 
     def deregister_task_definition(self, task_definition_arn):
