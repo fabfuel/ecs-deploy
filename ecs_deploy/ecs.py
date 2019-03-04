@@ -14,6 +14,7 @@ try:
 except AttributeError:
     JSONDecodeError = ValueError
 
+
 class EcsClient(object):
     def __init__(self, access_key_id=None, secret_access_key=None,
                  region=None, profile=None, session_token=None):
@@ -208,11 +209,13 @@ class EcsTaskDefinition(object):
             try:
                 return json.loads(command)
             except JSONDecodeError as e:
-                raise EcsTaskDefinitionCommandError("command should be valid JSON list."
-                                                    "Got following command: {}"
-                                                    "Resulting in error: {}".format(command, str(e)))
+                raise EcsTaskDefinitionCommandError(
+                    "command should be valid JSON list. Got following "
+                    "command: {} resulting in error: {}"
+                    .format(command, str(e)))
 
         return command.split(' ')
+
     @staticmethod
     def get_overrides_command(command):
         return EcsTaskDefinition.parse_command(command)
@@ -626,6 +629,7 @@ class TaskPlacementError(EcsError):
 
 class UnknownTaskDefinitionError(EcsError):
     pass
+
 
 class EcsTaskDefinitionCommandError(EcsError):
     pass
