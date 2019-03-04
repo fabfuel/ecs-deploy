@@ -50,12 +50,13 @@ class EcsClient(object):
         return self.boto.describe_tasks(cluster=cluster_name, tasks=task_arns)
 
     def register_task_definition(self, family, containers, volumes, role_arn,
-                                 additional_properties):
+                                 execution_role_arn, additional_properties):
         return self.boto.register_task_definition(
             family=family,
             containerDefinitions=containers,
             volumes=volumes,
             taskRoleArn=role_arn,
+            executionRoleArn=execution_role_arn,
             **additional_properties
         )
 
@@ -154,7 +155,8 @@ class EcsService(dict):
 class EcsTaskDefinition(object):
     def __init__(self, containerDefinitions, volumes, family, revision,
                  status, taskDefinitionArn, requiresAttributes=None,
-                 taskRoleArn=None, compatibilities=None, **kwargs):
+                 taskRoleArn=None, executionRoleArn=None, compatibilities=None,
+                 **kwargs):
         self.containers = containerDefinitions
         self.volumes = volumes
         self.family = family
@@ -163,6 +165,7 @@ class EcsTaskDefinition(object):
         self.arn = taskDefinitionArn
         self.requires_attributes = requiresAttributes or {}
         self.role_arn = taskRoleArn or u''
+        self.execution_role_arn = executionRoleArn or u''
         self.additional_properties = kwargs
         self._diff = []
 
@@ -373,6 +376,17 @@ class EcsTaskDefinition(object):
             self.role_arn = role_arn
             self._diff.append(diff)
 
+    def set_execution_role_arn(self, execution_role_arn):
+        if execution_role_arn:
+            diff = EcsTaskDefinitionDiff(
+                container=None,
+                field=u'execution_role_arn',
+                value=execution_role_arn,
+                old_value=self.execution_role_arn
+            )
+            self.execution_role_arn = execution_role_arn
+            self._diff.append(diff)
+
 
 class EcsTaskDefinitionDiff(object):
     def __init__(self, container, field, value, old_value):
@@ -492,6 +506,7 @@ class EcsAction(object):
             containers=task_definition.containers,
             volumes=task_definition.volumes,
             role_arn=task_definition.role_arn,
+            execution_role_arn=task_definition.execution_role_arn,
             additional_properties=task_definition.additional_properties
         )
         new_task_definition = EcsTaskDefinition(**response[u'taskDefinition'])
