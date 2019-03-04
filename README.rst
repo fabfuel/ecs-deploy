@@ -286,7 +286,7 @@ command in a natural syntax, e.g. no conversion to comma-separation required::
 
     $ ecs run my-cluster my-task -c my-container "python some-script.py param1 param2"
 
-The JSON sytax explained above regarding modifying a command is also applicable here.
+The JSON syntax explained above regarding modifying a command is also applicable here.
 
 Monitoring
 ----------
