@@ -32,6 +32,7 @@ def get_client(access_key_id, secret_access_key, region, profile):
 @click.option('-e', '--env', type=(str, str, str), multiple=True, help='Adds or changes an environment variable: <container> <name> <value>')
 @click.option('-s', '--secret', type=(str, str, str), multiple=True, help='Adds or changes a secret environment variable from the AWS Parameter Store (Not available for Fargate): <container> <name> <parameter name>')
 @click.option('-r', '--role', type=str, help='Sets the task\'s role ARN: <task role ARN>')
+@click.option('-x', '--execution-role', type=str, help='Sets the execution\'s role ARN: <execution role ARN>')
 @click.option('--task', type=str, help='Task definition to be deployed. Can be a task ARN or a task family with optional revision')
 @click.option('--region', required=False, help='AWS region (e.g. eu-central-1)')
 @click.option('--access-key-id', required=False, help='AWS access key id')
@@ -48,7 +49,7 @@ def get_client(access_key_id, secret_access_key, region, profile):
 @click.option('--rollback/--no-rollback', default=False, help='Rollback to previous revision, if deployment failed (default: --no-rollback)')
 @click.option('--exclusive-env', is_flag=True, default=False, help='Set the given environment variables exclusively and remove all other pre-existing env variables from all containers')
 @click.option('--exclusive-secrets', is_flag=True, default=False, help='Set the given secrets exclusively and remove all other pre-existing secrets from all containers')
-def deploy(cluster, service, tag, image, command, env, secret, role, task, region, access_key_id, secret_access_key, profile, timeout, newrelic_apikey, newrelic_appid, comment, user, ignore_warnings, diff, deregister, rollback, exclusive_env, exclusive_secrets):
+def deploy(cluster, service, tag, image, command, env, secret, role, execution_role, task, region, access_key_id, secret_access_key, profile, timeout, newrelic_apikey, newrelic_appid, comment, user, ignore_warnings, diff, deregister, rollback, exclusive_env, exclusive_secrets):
     """
     Redeploy or modify a service.
 
@@ -71,6 +72,7 @@ def deploy(cluster, service, tag, image, command, env, secret, role, task, regio
         td.set_environment(env, exclusive_env)
         td.set_secrets(secret, exclusive_secrets)
         td.set_role_arn(role)
+        td.set_execution_role_arn(execution_role)
 
         if diff:
             print_diff(td)
