@@ -45,8 +45,8 @@ The project is availably on PyPI. Simply run::
     $ pip install ecs-deploy
 
 
-Usage via Docker
-----------------
+Run via Docker
+--------------
 Instead of installing **ecs-deploy** locally, which requires a Python environment, you can run **ecs-deploy** via Docker. All versions starting from 1.7.1 are available on Docker Hub: https://cloud.docker.com/repository/docker/fabfuel/ecs-deploy
 
 Running **ecs-deploy** via Docker is easy as::
@@ -57,7 +57,7 @@ In this example, the stable version 1.7.1 is executed. Alternatively you can use
 
 Please be aware, that when running **ecs-deploy** via Docker, the configuration - as described below - does not apply. You have to provide credentials and the AWS region via the command as attributes or environment variables::
 
-    docker run fabfuel/ecs-deploy ecs deploy my-cluster my-service --region eu-central-1 --access-key-id ABC --secret-access-key ABC
+    docker run fabfuel/ecs-deploy:1.7.1 ecs deploy my-cluster my-service --region eu-central-1 --access-key-id ABC --secret-access-key ABC
 
 
 Configuration
