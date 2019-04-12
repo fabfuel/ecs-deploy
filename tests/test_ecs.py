@@ -375,6 +375,13 @@ def test_task_set_command_with_multiple_arguments(task_definition):
         if container[u'name'] == u'application':
             assert container[u'command'] == [u'run-application', u'arg1', u'arg2']
 
+def test_task_set_command_with_empty_argument(task_definition):
+    empty_argument = " " 
+    task_definition.set_commands(webserver=empty_argument + u'run-webserver arg1 arg2')
+    for container in task_definition.containers:
+        if container[u'name'] == u'webserver':
+            assert container[u'command'] == [u'run-webserver', u'arg1', u'arg2']
+
 def test_task_set_command_as_json_list(task_definition):
     task_definition.set_commands(webserver=u'["run-webserver", "arg1", "arg2"]', application=u'["run-application", "arg1", "arg2"]')
     for container in task_definition.containers:
