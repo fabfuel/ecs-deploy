@@ -214,7 +214,7 @@ class EcsTaskDefinition(object):
                     "command: {} resulting in error: {}"
                     .format(command, str(e)))
 
-        return command.split(' ')
+        return command.split()
 
     @staticmethod
     def get_overrides_command(command):
