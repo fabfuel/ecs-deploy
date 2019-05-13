@@ -27,8 +27,18 @@ TASK_DEFINITION_VOLUMES_1 = []
 TASK_DEFINITION_CONTAINERS_1 = [
     {u'name': u'webserver', u'image': u'webserver:123', u'command': u'run',
      u'environment': ({"name": "foo", "value": "bar"}, {"name": "lorem", "value": "ipsum"}, {"name": "empty", "value": ""}),
-     u'secrets': ({"name": "baz", "valueFrom": "qux"}, {"name": "dolor", "valueFrom": "sit"})},
-    {u'name': u'application', u'image': u'application:123', u'command': u'run', u'environment': ()}
+     u'secrets': ({"name": "baz", "valueFrom": "qux"}, {"name": "dolor", "valueFrom": "sit"}),
+     u'logConfiguration': {},
+     u'ulimits': [{'name': 'memlock', 'softLimit': 256, 'hardLimit': 256}],
+     u'systemControls': [{'namespace': 'net.core.somaxconn', 'value': '511'}],
+     u'portMappings': [{'containerPort': 8080, 'hostPort': 8080}],
+     u'mountPoints': [{'sourceVolume': 'volume', 'containerPath': '/container/path', 'readOnly': False}]},
+    {u'name': u'application', u'image': u'application:123', u'command': u'run', u'environment': (),
+     u'logConfiguration': {},
+     u'ulimits': [{'name': 'memlock', 'softLimit': 256, 'hardLimit': 256}],
+     u'systemControls': [{'namespace': 'net.core.somaxconn', 'value': '511'}],
+     u'portMappings': [{'containerPort': 8080, 'hostPort': 8080}],
+     u'mountPoints': [{'sourceVolume': 'volume', 'containerPath': '/container/path', 'readOnly': False}]}
 ]
 
 TASK_DEFINITION_FAMILY_2 = u'test-task'
@@ -39,8 +49,19 @@ TASK_DEFINITION_VOLUMES_2 = []
 TASK_DEFINITION_CONTAINERS_2 = [
     {u'name': u'webserver', u'image': u'webserver:123', u'command': u'run',
      u'environment': ({"name": "foo", "value": "bar"}, {"name": "lorem", "value": "ipsum"}, {"name": "empty", "value": ""}),
-     u'secrets': ({"name": "baz", "valueFrom": "qux"}, {"name": "dolor", "valueFrom": "sit"})},
-    {u'name': u'application', u'image': u'application:123', u'command': u'run', u'environment': ()}
+     u'secrets': ({"name": "baz", "valueFrom": "qux"}, {"name": "dolor", "valueFrom": "sit"}),
+     u'logConfiguration': {},
+     u'ulimits': [{'name': 'memlock', 'softLimit': 256, 'hardLimit': 256}],
+     u'systemControls': [{'namespace': 'net.core.somaxconn', 'value': '511'}],
+     u'portMappings': [{'containerPort': 8080, 'hostPort': 8080}],
+     u'mountPoints': [{'sourceVolume': 'volume', 'containerPath': '/container/path', 'readOnly': False}]},
+    {u'name': u'application', u'image': u'application:123', u'command': u'run', u'environment': (),
+     u'logConfiguration': {},
+     u'ulimits': [{'name': 'memlock', 'softLimit': 256, 'hardLimit': 256}],
+     u'systemControls': [{'namespace': 'net.core.somaxconn', 'value': '511'}],
+     u'portMappings': [{'containerPort': 8080, 'hostPort': 8080}],
+     u'mountPoints': [{'sourceVolume': 'volume', 'containerPath': '/container/path', 'readOnly': False}]},
+    
 ]
 
 TASK_DEFINITION_REVISION_3 = 3
@@ -344,6 +365,70 @@ def test_task_set_image(task_definition):
         if container[u'name'] == u'application':
             assert container[u'image'] == u'app-image:latest'
 
+def test_task_set_cpu(task_definition):
+    task_definition.set_cpu(webserver=10, application=0)
+    for container in task_definition.containers:
+        if container[u'name'] == u'webserver':
+            assert container[u'cpu'] == 10
+        if container[u'name'] == u'application':
+            assert container[u'cpu'] == 0
+
+def test_task_set_memory(task_definition):
+    task_definition.set_memory(webserver=256, application=128)
+    for container in task_definition.containers:
+        if container[u'name'] == u'webserver':
+            assert container[u'memory'] == 256
+        if container[u'name'] == u'application':
+            assert container[u'memory'] == 128
+
+def test_task_set_memoryreservation(task_definition):
+    task_definition.set_memoryreservation(webserver=128, application=64)
+    for container in task_definition.containers:
+        if container[u'name'] == u'webserver':
+            assert container[u'memoryReservation'] == 128
+        if container[u'name'] == u'application':
+            assert container[u'memoryReservation'] == 64
+
+def test_task_set_privileged(task_definition):
+    task_definition.set_privileged(webserver=False, application=True)
+    for container in task_definition.containers:
+        if container[u'name'] == u'webserver':
+            assert container[u'privileged'] == False
+        if container[u'name'] == u'application':
+            assert container[u'privileged'] == True
+
+def test_task_set_log_configurations(task_definition):
+    assert len(task_definition.containers[0]['logConfiguration']) == 0
+
+    task_definition.set_log_configurations(((u'webserver', u'awslogs', u'awslogs-group', u'service_logs'), (u'webserver', u'awslogs', u'awslogs-region', u'eu-central-1')))
+
+    assert len(task_definition.containers[0]['logConfiguration']) > 0
+
+    assert('logDriver' in task_definition.containers[0]['logConfiguration'])
+    assert 'awslogs' == task_definition.containers[0]['logConfiguration']['logDriver']
+    assert 'options' in task_definition.containers[0]['logConfiguration']
+    assert 'awslogs-group' in task_definition.containers[0]['logConfiguration']['options']
+    assert 'service_logs' == task_definition.containers[0]['logConfiguration']['options']['awslogs-group']
+    assert 'awslogs-region' in task_definition.containers[0]['logConfiguration']['options']
+    assert 'eu-central-1' == task_definition.containers[0]['logConfiguration']['options']['awslogs-region']
+
+def test_task_set_log_configurations_no_changes(task_definition):
+    assert len(task_definition.containers[0]['logConfiguration']) == 0
+
+    task_definition.set_log_configurations(((u'webserver', u'awslogs', u'awslogs-group', u'service_logs'), (u'webserver', u'awslogs', u'awslogs-region', u'eu-central-1')))
+    # deploy without log configurations does not change the previous configuration
+    # needs to be actively changed
+    task_definition.set_log_configurations(())
+
+    assert len(task_definition.containers[0]['logConfiguration']) > 0
+
+    assert('logDriver' in task_definition.containers[0]['logConfiguration'])
+    assert 'awslogs' == task_definition.containers[0]['logConfiguration']['logDriver']
+    assert 'options' in task_definition.containers[0]['logConfiguration']
+    assert 'awslogs-group' in task_definition.containers[0]['logConfiguration']['options']
+    assert 'service_logs' == task_definition.containers[0]['logConfiguration']['options']['awslogs-group']
+    assert 'awslogs-region' in task_definition.containers[0]['logConfiguration']['options']
+    assert 'eu-central-1' == task_definition.containers[0]['logConfiguration']['options']['awslogs-region']
 
 def test_task_set_environment(task_definition):
     assert len(task_definition.containers[0]['environment']) == 3
@@ -387,6 +472,113 @@ def test_task_set_secrets(task_definition):
     assert {'name': 'foo', 'valueFrom': 'baz'} in task_definition.containers[0]['secrets']
     assert {'name': 'some-name', 'valueFrom': 'some-value'} in task_definition.containers[0]['secrets']
 
+def test_task_set_system_controls(task_definition):
+    assert len(task_definition.containers[0]['systemControls']) == 1
+    
+    task_definition.set_system_controls(((u'webserver', u'net.core.somaxconn', u'511'), (u'webserver',u'net.ipv4.ip_forward', u'1')))
+
+    assert len(task_definition.containers[0]['systemControls']) == 2
+
+    assert {'namespace': 'net.core.somaxconn', 'value': '511'} in task_definition.containers[0]['systemControls']
+    assert {'namespace': 'net.ipv4.ip_forward', 'value': '1'} in task_definition.containers[0]['systemControls']
+
+def test_task_set_system_controls_existing_not_set_again(task_definition):
+    assert len(task_definition.containers[0]['systemControls']) == 1
+    
+    task_definition.set_system_controls(((u'webserver', u'net.ipv4.ip_forward', u'1'), ))
+
+    assert len(task_definition.containers[0]['systemControls']) == 2
+
+    assert {'namespace': 'net.core.somaxconn', 'value': '511'} in task_definition.containers[0]['systemControls']
+    assert {'namespace': 'net.ipv4.ip_forward', 'value': '1'} in task_definition.containers[0]['systemControls']
+
+def test_task_set_system_controlsts_exclusively(task_definition):
+    assert len(task_definition.containers[0]['systemControls']) == 1
+    assert 'net.core.somaxconn' == task_definition.containers[0]['systemControls'][0]['namespace']
+    
+    task_definition.set_system_controls(((u'webserver', u'net.ipv4.ip_forward', u'1'),), exclusive=True)
+
+    assert len(task_definition.containers[0]['systemControls']) == 1
+
+    assert 'net.ipv4.ip_forward' == task_definition.containers[0]['systemControls'][0]['namespace']
+    assert {'namespace': 'net.ipv4.ip_forward', 'value': '1'} in task_definition.containers[0]['systemControls']
+
+def test_task_set_ulimits(task_definition):
+    assert len(task_definition.containers[0]['ulimits']) == 1
+    
+    task_definition.set_ulimits(((u'webserver', u'memlock', 256, 257), (u'webserver', u'cpu', 80, 85)))
+
+    assert len(task_definition.containers[0]['ulimits']) == 2
+
+    assert {'name': 'memlock', 'softLimit': 256, 'hardLimit': 257} in task_definition.containers[0]['ulimits']
+    assert {'name': 'cpu', 'softLimit': 80, 'hardLimit': 85} in task_definition.containers[0]['ulimits']
+
+def test_task_set_ulimits_existing_not_set_again(task_definition):
+    assert len(task_definition.containers[0]['ulimits']) == 1
+    
+    task_definition.set_ulimits(((u'webserver', u'cpu', 80, 85), ))
+
+    assert len(task_definition.containers[0]['ulimits']) == 2
+
+    assert {'name': 'memlock', 'softLimit': 256, 'hardLimit': 256} in task_definition.containers[0]['ulimits']
+    assert {'name': 'cpu', 'softLimit': 80, 'hardLimit': 85} in task_definition.containers[0]['ulimits']
+
+def test_task_set_ulimits_exclusively(task_definition):
+    assert len(task_definition.containers[0]['ulimits']) == 1
+    assert 'memlock' == task_definition.containers[0]['ulimits'][0]['name']
+    
+    task_definition.set_ulimits(((u'webserver', u'cpu', 80, 85),), exclusive=True)
+
+    assert len(task_definition.containers[0]['ulimits']) == 1
+
+    assert 'cpu' == task_definition.containers[0]['ulimits'][0]['name']
+    assert {'name': 'cpu', 'softLimit': 80, 'hardLimit': 85} in task_definition.containers[0]['ulimits']
+
+def test_task_set_port_mappings(task_definition):
+    assert len(task_definition.containers[0]['portMappings']) == 1
+    assert 8080 == task_definition.containers[0]['portMappings'][0]['containerPort']
+    
+    task_definition.set_port_mappings(((u'webserver', 8080, 8080), (u'webserver', 81, 80)))
+
+    assert len(task_definition.containers[0]['portMappings']) == 2
+
+    assert {'containerPort': 8080, 'hostPort': 8080, 'protocol': 'tcp'} in task_definition.containers[0]['portMappings']
+    assert {'containerPort': 81, 'hostPort': 80, 'protocol': 'tcp'} in task_definition.containers[0]['portMappings']
+
+def test_task_set_port_mappings_exclusively(task_definition):
+    assert len(task_definition.containers[0]['portMappings']) == 1
+    assert 8080 == task_definition.containers[0]['portMappings'][0]['containerPort']
+    
+    task_definition.set_port_mappings(((u'webserver', 81, 80),), exclusive=True)
+
+    assert len(task_definition.containers[0]['portMappings']) == 1
+
+    assert 81 == task_definition.containers[0]['portMappings'][0]['containerPort']
+    assert {'containerPort': 81, 'hostPort': 80, 'protocol': 'tcp'} in task_definition.containers[0]['portMappings']
+
+def test_task_set_mount_points(task_definition):
+    assert len(task_definition.containers[0]['mountPoints']) == 1
+    assert '/container/path' == task_definition.containers[0]['mountPoints'][0]['containerPath']
+    
+    task_definition.set_mount_points(((u'webserver', u'volume', u'/data/path'), (u'webserver', u'another_volume', u'/logs/path')))
+
+    assert len(task_definition.containers[0]['mountPoints']) == 2
+
+    assert {'sourceVolume': 'volume', 'containerPath': '/data/path', 'readOnly': False} in task_definition.containers[0]['mountPoints']
+    assert {'sourceVolume': 'another_volume', 'containerPath': '/logs/path', 'readOnly': False} in task_definition.containers[0]['mountPoints']
+
+def test_task_set_mount_points_exclusively(task_definition):
+    assert len(task_definition.containers[0]['mountPoints']) == 1
+    assert '/container/path' == task_definition.containers[0]['mountPoints'][0]['containerPath']
+    assert 'volume' == task_definition.containers[0]['mountPoints'][0]['sourceVolume']
+    
+    task_definition.set_mount_points(((u'webserver', u'another_volume', u'/logs/path'),), exclusive=True)
+
+    assert len(task_definition.containers[0]['mountPoints']) == 1
+
+    assert '/logs/path' == task_definition.containers[0]['mountPoints'][0]['containerPath']
+    assert 'another_volume' == task_definition.containers[0]['mountPoints'][0]['sourceVolume']
+    assert {'sourceVolume': 'another_volume', 'containerPath': '/logs/path', 'readOnly': False} in task_definition.containers[0]['mountPoints']
 
 def test_task_set_image_for_unknown_container(task_definition):
     with pytest.raises(UnknownContainerError):

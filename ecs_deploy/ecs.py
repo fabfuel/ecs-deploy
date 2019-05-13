@@ -1,6 +1,7 @@
 from datetime import datetime
 import json
 import re
+import copy
 
 from boto3.session import Session
 from botocore.exceptions import ClientError, NoCredentialsError
@@ -349,13 +350,90 @@ class EcsTaskDefinition(object):
                 self._diff.append(diff)
                 container[u'command'] = self.parse_command(new_command)
 
+    def set_cpu(self, **cpu):
+        self.validate_container_options(**cpu)
+        for container in self.containers:
+            if container[u'name'] in cpu:
+                new_cpu = int(cpu[container[u'name']])
+                diff = EcsTaskDefinitionDiff(
+                    container=container[u'name'],
+                    field=u'cpu',
+                    value=new_cpu,
+                    old_value=container.get(u'cpu')
+                )
+
+                self._diff.append(diff)
+                container[u'cpu'] = new_cpu
+    
+    def set_memory(self, **memory):
+        self.validate_container_options(**memory)
+        for container in self.containers:
+            if container[u'name'] in memory:
+                new_memory = int(memory[container[u'name']])
+                diff = EcsTaskDefinitionDiff(
+                    container=container[u'name'],
+                    field=u'memory',
+                    value=new_memory,
+                    old_value=container.get(u'memory')
+                )
+                self._diff.append(diff)
+                container[u'memory'] = new_memory
+    
+    def set_memoryreservation(self, **memoryreservation):
+        self.validate_container_options(**memoryreservation)
+        for container in self.containers:
+            if container[u'name'] in memoryreservation:
+                new_memoryreservation = int(memoryreservation[container[u'name']])
+                diff = EcsTaskDefinitionDiff(
+                    container=container[u'name'],
+                    field=u'memoryReservation',
+                    value=new_memoryreservation,
+                    old_value=container.get(u'memoryReservation')
+                )
+                self._diff.append(diff)
+                container[u'memoryReservation'] = new_memoryreservation
+
+    def set_privileged(self, **privileged):
+        self.validate_container_options(**privileged)
+        for container in self.containers:
+            if container[u'name'] in privileged:
+                new_privileged = bool(privileged[container[u'name']])
+                diff = EcsTaskDefinitionDiff(
+                    container=container[u'name'],
+                    field=u'privileged',
+                    value=new_privileged,
+                    old_value=container.get(u'privileged')
+                )
+                self._diff.append(diff)
+                container[u'privileged'] = new_privileged
+
+    def set_log_configurations(self, log_configurations_list):
+        log_configurations = {}
+        for log_configuration in log_configurations_list:
+            log_configurations.setdefault(log_configuration[0], {})
+            log_configurations[log_configuration[0]]["logDriver"] = log_configuration[1]
+            log_configurations[log_configuration[0]].setdefault("options", {})
+            log_configurations[log_configuration[0]]["options"][log_configuration[2]] = log_configuration[3]
+            log_configurations[log_configuration[0]]["secretOptions"] = []
+
+        self.validate_container_options(**log_configurations)
+        for container in self.containers:
+            if container[u'name'] in log_configurations:
+                new_log_configurations = log_configurations[container[u'name']]
+                diff = EcsTaskDefinitionDiff(
+                    container=container[u'name'],
+                    field=u'logConfiguration',
+                    value=new_log_configurations,
+                    old_value=container.get(u'logConfiguration')
+                )
+                self._diff.append(diff)
+                container[u'logConfiguration'] = new_log_configurations
+
     def set_environment(self, environment_list, exclusive=False):
         environment = {}
-
         for env in environment_list:
             environment.setdefault(env[0], {})
             environment[env[0]][env[1]] = env[2]
-
         self.validate_container_options(**environment)
         for container in self.containers:
             if container[u'name'] in environment:
@@ -442,6 +520,267 @@ class EcsTaskDefinition(object):
         container[u'secrets'] = [
             {"name": s, "valueFrom": merged[s]} for s in merged
         ]
+    
+    def set_system_controls(self, system_controls_list, exclusive=False):
+        system_controls = {}
+        for system_control in system_controls_list:
+            system_controls.setdefault(system_control[0], [])
+
+            mapping = {}
+            mapping["namespace"] = system_control[1]
+            mapping["value"] = system_control[2]
+            system_controls[system_control[0]].append(mapping)
+            
+        self.validate_container_options(**system_controls)
+        for container in self.containers:
+            if container[u'name'] in system_controls:
+                self.apply_container_system_controls(
+                    container=container,
+                    new_system_controls=system_controls[container[u'name']],
+                    exclusive=exclusive,
+                )
+            elif exclusive is True:
+                self.apply_container_system_controls(
+                    container=container,
+                    new_system_controls={},
+                    exclusive=exclusive,
+                )
+
+    def apply_container_system_controls(self, container, new_system_controls, exclusive=False):
+        system_controls = container.get('systemControls', [])
+        old_system_controls = [ {name: value for name, value in system_control.items()} for system_control in system_controls]
+
+        if exclusive is True:
+            merged = new_system_controls if new_system_controls else []
+        else:
+            merged = copy.deepcopy(old_system_controls)
+            old_system_control_namespaces = [system_control["namespace"] for system_control in merged]
+            new_system_control_namespaces = [system_control["namespace"] for system_control in new_system_controls]
+            new = set(new_system_control_namespaces) - set(old_system_control_namespaces)
+            new_merged = list()
+            # update
+            for system_control in merged:
+                for new_system_control in new_system_controls:
+                    if system_control["namespace"] == new_system_control["namespace"]:
+                        system_control.update(new_system_control)
+            # new
+            for name in new:
+                for new_system_control in new_system_controls:
+                    if name == new_system_control["namespace"]:
+                        new_merged.append(new_system_control)
+
+            merged.extend(new_merged)
+
+        if old_system_controls == merged:
+            return
+
+        diff = EcsTaskDefinitionDiff(
+            container=container[u'name'],
+            field=u'systemControls',
+            value=merged,
+            old_value=old_system_controls
+        )
+        self._diff.append(diff)
+
+        container[u'systemControls'] = [
+            {name: value for name,value in e.items()} for e in merged
+        ]
+
+    def set_ulimits(self, ulimits_list, exclusive=False):
+        ulimits = {}
+        for ulimit in ulimits_list:
+            ulimits.setdefault(ulimit[0], [])
+
+            mapping = {}
+            mapping["name"] = ulimit[1]
+            mapping["softLimit"] = int(ulimit[2])
+            mapping["hardLimit"] = int(ulimit[3])
+            ulimits[ulimit[0]].append(mapping)
+            
+        self.validate_container_options(**ulimits)
+        for container in self.containers:
+            if container[u'name'] in ulimits:
+                self.apply_container_ulimits(
+                    container=container,
+                    new_ulimits=ulimits[container[u'name']],
+                    exclusive=exclusive,
+                )
+            elif exclusive is True:
+                self.apply_container_ulimits(
+                    container=container,
+                    new_ulimits={},
+                    exclusive=exclusive,
+                )
+
+    def apply_container_ulimits(self, container, new_ulimits, exclusive=False):
+        ulimits = container.get('ulimits', [])
+        old_ulimits = [ {name: value for name, value in ulimit.items()} for ulimit in ulimits]
+
+        if exclusive is True:
+            merged = new_ulimits if new_ulimits else []
+        else:
+            merged = copy.deepcopy(old_ulimits)
+            old_ulimit_names = [ulimit["name"] for ulimit in merged]
+            new_ulimit_names = [ulimit["name"] for ulimit in new_ulimits]
+            new = set(new_ulimit_names) - set(old_ulimit_names)
+            new_merged = list()
+            # update
+            for ulimit in merged:
+                for new_ulimit in new_ulimits:
+                    if ulimit["name"] == new_ulimit["name"]:
+                        ulimit.update(new_ulimit)
+            # new
+            for name in new:
+                for new_ulimit in new_ulimits:
+                    if name == new_ulimit["name"]:
+                        new_merged.append(new_ulimit)
+
+            merged.extend(new_merged)
+
+        if old_ulimits == merged:
+            return
+
+        diff = EcsTaskDefinitionDiff(
+            container=container[u'name'],
+            field=u'ulimits',
+            value=merged,
+            old_value=old_ulimits
+        )
+        self._diff.append(diff)
+
+        container[u'ulimits'] = [
+            {name: value for name,value in e.items()} for e in merged
+        ]
+
+    def set_port_mappings(self, port_mappings_list, exclusive=False):
+        port_mappings = {}
+
+        for port_mapping in port_mappings_list:
+            port_mappings.setdefault(port_mapping[0], [])
+            mapping = {}
+            mapping["containerPort"] = int(port_mapping[1])
+            mapping["hostPort"] = int(port_mapping[2])
+            mapping["protocol"] = "tcp"
+            port_mappings[port_mapping[0]].append(mapping)
+
+        self.validate_container_options(**port_mappings)
+        for container in self.containers:
+            if container[u'name'] in port_mappings:
+                self.apply_container_port_mappings(
+                    container=container,
+                    new_port_mappings=port_mappings[container[u'name']],
+                    exclusive=exclusive,
+                )
+            elif exclusive is True:
+                self.apply_container_port_mappings(
+                    container=container,
+                    new_port_mappings={},
+                    exclusive=exclusive,
+                )
+
+    def apply_container_port_mappings(self, container, new_port_mappings, exclusive=False):
+        port_mappings = container.get('portMappings', [])
+        old_port_mappings = [ {name: value for name, value in port_mapping.items()} for port_mapping in port_mappings]
+
+        if exclusive is True:
+            merged = new_port_mappings if new_port_mappings else []
+        else:
+            merged = copy.deepcopy(old_port_mappings)
+            old_container_ports = [port_mapping["containerPort"] for port_mapping in merged]
+            new_container_ports = [port_mapping["containerPort"] for port_mapping in new_port_mappings]
+            new = set(new_container_ports) - set(old_container_ports)
+            new_merged = list()
+            # update
+            for port_mapping in merged:
+                for new_port_mapping in new_port_mappings:
+                    if port_mapping["containerPort"] == new_port_mapping["containerPort"]:
+                        port_mapping.update(new_port_mapping)
+            # new
+            for port in new:
+                for new_port_mapping in new_port_mappings:
+                    if port == new_port_mapping["containerPort"]:
+                        new_merged.append(new_port_mapping)
+
+            merged.extend(new_merged)
+        if old_port_mappings == merged:
+            return
+
+        diff = EcsTaskDefinitionDiff(
+            container=container[u'name'],
+            field=u'portMappings',
+            value=merged,
+            old_value=old_port_mappings
+        )
+        self._diff.append(diff)
+
+        container[u'portMappings'] = [
+            {name: value for name,value in e.items()} for e in merged
+        ]
+
+    def set_mount_points(self, mount_points_list, exclusive=False):
+        mount_points = {}
+        for mount_point in mount_points_list:
+            mount_points.setdefault(mount_point[0], [])
+            mapping = {}
+            mapping["sourceVolume"] = mount_point[1]
+            mapping["containerPath"] = mount_point[2]
+            mapping["readOnly"] = False
+            mount_points[mount_point[0]].append(mapping)
+
+        self.validate_container_options(**mount_points)
+        for container in self.containers:
+            if container[u'name'] in mount_points:
+                self.apply_container_mount_points(
+                    container=container,
+                    new_mount_points=mount_points[container[u'name']],
+                    exclusive=exclusive,
+                )
+            elif exclusive is True:
+                self.apply_container_mount_points(
+                    container=container,
+                    new_mount_points={},
+                    exclusive=exclusive,
+                )
+
+    def apply_container_mount_points(self, container, new_mount_points, exclusive=False):
+        mount_points = container.get('mountPoints', [])
+        old_mount_points = [ {name: value for name, value in mount_point.items()} for mount_point in mount_points]
+
+        if exclusive is True:
+            merged = new_mount_points if new_mount_points else []
+        else:
+            merged = copy.deepcopy(old_mount_points)
+            old_source_volumes = [mount_point["sourceVolume"] for mount_point in merged]
+            new_source_volumes = [mount_point["sourceVolume"] for mount_point in new_mount_points]
+            new = set(new_source_volumes) - set(old_source_volumes)
+            new_merged = list()
+            # update
+            for mount_point in merged:
+                for new_mount_point in new_mount_points:
+                    if mount_point["sourceVolume"] == new_mount_point["sourceVolume"]:
+                        mount_point.update(new_mount_point)
+            # new
+            for volume in new:
+                for new_mount_point in new_mount_points:
+                    if volume == new_mount_point["sourceVolume"]:
+                        new_merged.append(new_mount_point)
+
+            merged.extend(new_merged)
+
+        if old_mount_points == merged:
+            return
+
+        diff = EcsTaskDefinitionDiff(
+            container=container[u'name'],
+            field=u'mountPoints',
+            value=merged,
+            old_value=old_mount_points
+        )
+        self._diff.append(diff)
+
+        container[u'mountPoints'] = [
+            {name: value for name,value in e.items()} for e in merged
+        ]
 
     def validate_container_options(self, **container_options):
         for container_name in container_options:
@@ -470,6 +809,26 @@ class EcsTaskDefinition(object):
                 old_value=self.execution_role_arn
             )
             self.execution_role_arn = execution_role_arn
+            self._diff.append(diff)
+
+    def set_volumes(self, volumes_list):
+        volumes = []
+
+        for volume in volumes_list:
+            mapping = {}
+            mapping["name"] = volume[0]
+            mapping.setdefault("host",{})
+            mapping["host"]["sourcePath"] = volume[1]
+            volumes.append(mapping)
+
+        if volumes:
+            diff = EcsTaskDefinitionDiff(
+                container=None,
+                field=u'volumes',
+                value=volumes,
+                old_value=self.volumes
+            )
+            self.volumes = volumes
             self._diff.append(diff)
 
 
