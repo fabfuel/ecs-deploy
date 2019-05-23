@@ -4,7 +4,7 @@ import re
 
 from boto3.session import Session
 from botocore.exceptions import ClientError, NoCredentialsError
-from dateutil.tz.tz import tzlocal
+from dateutil.tz import tzlocal
 
 JSON_LIST_REGEX = re.compile(r'^\[.*\]$')
 
