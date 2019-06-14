@@ -97,7 +97,7 @@ def deploy(cluster, service, tag, image, command, env, secret, role, execution_r
         except TaskPlacementError as e:
             if rollback:
                 click.secho('%s\n' % str(e), fg='red', err=True)
-                rollback_task_definition(deployment, td, new_td)
+                rollback_task_definition(deployment, td, new_td, sleep_time=sleep_time)
                 exit(1)
             else:
                 raise
@@ -303,7 +303,7 @@ def deregister_task_definition(action, task_definition):
     )
 
 
-def rollback_task_definition(deployment, old, new, timeout=600):
+def rollback_task_definition(deployment, old, new, timeout=600, sleep_time=1):
     click.secho(
         'Rolling back to task definition: %s\n' % old.family_revision,
         fg='yellow',
@@ -317,7 +317,8 @@ def rollback_task_definition(deployment, old, new, timeout=600):
         timeout=timeout,
         deregister=True,
         previous_task_definition=new,
-        ignore_warnings=False
+        ignore_warnings=False,
+        sleep_time=sleep_time
     )
     click.secho(
         'Deployment failed, but service has been rolled back to previous '
