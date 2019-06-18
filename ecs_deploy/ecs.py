@@ -80,11 +80,12 @@ class EcsClient(object):
             taskDefinition=task_definition
         )
 
-    def run_task(self, cluster, task_definition, count, started_by, overrides):
+    def run_task(self, cluster, task_definition, count, network_configuration, started_by, overrides):
         return self.boto.run_task(
             cluster=cluster,
             taskDefinition=task_definition,
             count=count,
+            networkConfiguration=network_configuration,
             startedBy=started_by,
             overrides=overrides
         )
@@ -109,6 +110,10 @@ class EcsService(dict):
     @property
     def task_definition(self):
         return self.get(u'taskDefinition')
+
+    @property
+    def network_configuration(self):
+        return self.get(u'networkConfiguration')
 
     @property
     def desired_count(self):
@@ -590,10 +595,11 @@ class ScaleAction(EcsAction):
 
 
 class RunAction(EcsAction):
-    def __init__(self, client, cluster_name):
-        super(RunAction, self).__init__(client, cluster_name, None)
+    def __init__(self, client, cluster_name, service_name):
+        super(RunAction, self).__init__(client, cluster_name, service_name)
         self._client = client
         self._cluster_name = cluster_name
+        self._service_name = service_name
         self.started_tasks = []
 
     def run(self, task_definition, count, started_by):
@@ -602,6 +608,7 @@ class RunAction(EcsAction):
                 cluster=self._cluster_name,
                 task_definition=task_definition.family_revision,
                 count=count,
+                network_configuration=self._service.network_configuration,
                 started_by=started_by,
                 overrides=dict(containerOverrides=task_definition.get_overrides())
             )
