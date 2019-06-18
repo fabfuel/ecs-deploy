@@ -81,13 +81,21 @@ class EcsClient(object):
         )
 
     def run_task(self, cluster, task_definition, count, network_configuration, started_by, overrides):
+        if network_configuration is None:
+            return self.boto.run_task(
+                cluster=cluster,
+                taskDefinition=task_definition,
+                count=count,
+                startedBy=started_by,
+                overrides=overrides
+            )
         return self.boto.run_task(
-            cluster=cluster,
-            taskDefinition=task_definition,
-            count=count,
-            networkConfiguration=network_configuration,
-            startedBy=started_by,
-            overrides=overrides
+                cluster=cluster,
+                taskDefinition=task_definition,
+                networkConfiguration=network_configuration,
+                count=count,
+                startedBy=started_by,
+                overrides=overrides
         )
 
 
