@@ -151,6 +151,7 @@ def scale(cluster, service, desired_count, access_key_id, secret_access_key, reg
 
 @click.command()
 @click.argument('cluster')
+@click.argument('service')
 @click.argument('task')
 @click.argument('count', required=False, default=1)
 @click.option('-c', '--command', type=(str, str), multiple=True, help='Overwrites the command in a container: <container> <command>')
@@ -161,18 +162,19 @@ def scale(cluster, service, desired_count, access_key_id, secret_access_key, reg
 @click.option('--secret-access-key', help='AWS secret access key')
 @click.option('--profile', help='AWS configuration profile name')
 @click.option('--diff/--no-diff', default=True, help='Print what values were changed in the task definition')
-def run(cluster, task, count, command, env, secret, region, access_key_id, secret_access_key, profile, diff):
+def run(cluster, service, task, count, command, env, secret, region, access_key_id, secret_access_key, profile, diff):
     """
     Run a one-off task.
 
     \b
     CLUSTER is the name of your cluster (e.g. 'my-custer') within ECS.
+    SERVICE is the name of your service (e.g. 'my-app') within ECS.
     TASK is the name of your task definition (e.g. 'my-task') within ECS.
     COUNT is the number of tasks your service should run.
     """
     try:
         client = get_client(access_key_id, secret_access_key, region, profile)
-        action = RunAction(client, cluster)
+        action = RunAction(client, cluster, service)
 
         td = action.get_task_definition(task)
         td.set_commands(**{key: value for (key, value) in command})
