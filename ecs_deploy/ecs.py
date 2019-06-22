@@ -5,6 +5,10 @@ from botocore.exceptions import ClientError, NoCredentialsError
 from dateutil.tz.tz import tzlocal
 
 
+LAUNCH_TYPE_EC2 = 'EC2'
+LAUNCH_TYPE_FARGATE = 'FARGATE'
+
+
 class EcsClient(object):
     def __init__(self, access_key_id=None, secret_access_key=None,
                  region=None, profile=None, session_token=None):
@@ -70,7 +74,35 @@ class EcsClient(object):
             taskDefinition=task_definition
         )
 
-    def run_task(self, cluster, task_definition, count, started_by, overrides):
+    def run_task(self, cluster, task_definition, count, started_by, overrides,
+                 launchtype='EC2', subnets=(), security_groups=(),
+                 public_ip=False):
+
+        if launchtype == LAUNCH_TYPE_FARGATE:
+            if not subnets or not security_groups:
+                msg = 'At least one subnet (--subnet) and one security ' \
+                      'group (--securitygroup) definition are required ' \
+                      'for launch type FARGATE'
+                raise TaskPlacementError(msg)
+
+            network_configuration = {
+                "awsvpcConfiguration": {
+                    "subnets": subnets,
+                    "securityGroups": security_groups,
+                    "assignPublicIp": "ENABLED" if public_ip else "DISABLED"
+                }
+            }
+
+            return self.boto.run_task(
+                cluster=cluster,
+                taskDefinition=task_definition,
+                count=count,
+                startedBy=started_by,
+                overrides=overrides,
+                launchType=launchtype,
+                networkConfiguration=network_configuration
+            )
+
         return self.boto.run_task(
             cluster=cluster,
             taskDefinition=task_definition,
@@ -242,7 +274,7 @@ class EcsTaskDefinition(object):
                     old_value=container.get(u'command')
                 )
                 self._diff.append(diff)
-                container[u'command'] = new_command.split(" ")
+                container[u'command'] = [command for command in new_command.split(" ") if command]
 
     def set_environment(self, environment_list, exclusive=False):
         environment = {}
@@ -573,14 +605,19 @@ class RunAction(EcsAction):
         self._cluster_name = cluster_name
         self.started_tasks = []
 
-    def run(self, task_definition, count, started_by):
+    def run(self, task_definition, count, started_by, launchtype, subnets,
+            security_groups, public_ip):
         try:
             result = self._client.run_task(
                 cluster=self._cluster_name,
                 task_definition=task_definition.family_revision,
                 count=count,
                 started_by=started_by,
-                overrides=dict(containerOverrides=task_definition.get_overrides())
+                overrides=dict(containerOverrides=task_definition.get_overrides()),
+                launchtype=launchtype,
+                subnets=subnets,
+                security_groups=security_groups,
+                public_ip=public_ip
             )
             self.started_tasks = result['tasks']
             return True

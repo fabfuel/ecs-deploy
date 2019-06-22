@@ -11,7 +11,7 @@ from mock.mock import patch
 from ecs_deploy.ecs import EcsService, EcsTaskDefinition, \
     UnknownContainerError, EcsTaskDefinitionDiff, EcsClient, \
     EcsAction, EcsConnectionError, DeployAction, ScaleAction, RunAction, \
-    UnknownTaskDefinitionError
+    UnknownTaskDefinitionError, LAUNCH_TYPE_EC2
 
 CLUSTER_NAME = u'test-cluster'
 CLUSTER_ARN = u'arn:aws:ecs:eu-central-1:123456789012:cluster/%s' % CLUSTER_NAME
@@ -801,14 +801,18 @@ def test_run_action(client):
 def test_run_action_run(client, task_definition):
     action = RunAction(client, CLUSTER_NAME)
     client.run_task.return_value = dict(tasks=[dict(taskArn='A'), dict(taskArn='B')])
-    action.run(task_definition, 2, 'test')
+    action.run(task_definition, 2, 'test', LAUNCH_TYPE_EC2, (), (), False)
 
     client.run_task.assert_called_once_with(
         cluster=CLUSTER_NAME,
         task_definition=task_definition.family_revision,
         count=2,
         started_by='test',
-        overrides=dict(containerOverrides=task_definition.get_overrides())
+        overrides=dict(containerOverrides=task_definition.get_overrides()),
+        launchtype=LAUNCH_TYPE_EC2,
+        subnets=(),
+        security_groups=(),
+        public_ip=False
     )
 
     assert len(action.started_tasks) == 2
@@ -895,7 +899,9 @@ class EcsTestClient(object):
             return deepcopy(RESPONSE_SERVICE_WITH_ERRORS)
         return deepcopy(RESPONSE_SERVICE)
 
-    def run_task(self, cluster, task_definition, count, started_by, overrides):
+    def run_task(self, cluster, task_definition, count, started_by, overrides,
+                 launchtype='EC2', subnets=(), security_groups=(),
+                 public_ip=False):
         if not self.access_key_id or not self.secret_access_key:
             raise EcsConnectionError(u'Unable to locate credentials. Configure credentials by running "aws configure".')
         if cluster == 'unknown-cluster':
