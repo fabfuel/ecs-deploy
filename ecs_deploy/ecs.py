@@ -1,8 +1,22 @@
 from datetime import datetime
+import json
+import re
 
 from boto3.session import Session
 from botocore.exceptions import ClientError, NoCredentialsError
 from dateutil.tz.tz import tzlocal
+
+JSON_LIST_REGEX = re.compile(r'^\[.*\]$')
+
+# Python2 raises ValueError
+try:
+    JSONDecodeError = json.JSONDecodeError
+except AttributeError:
+    JSONDecodeError = ValueError
+
+
+LAUNCH_TYPE_EC2 = 'EC2'
+LAUNCH_TYPE_FARGATE = 'FARGATE'
 
 
 class EcsClient(object):
@@ -41,12 +55,13 @@ class EcsClient(object):
         return self.boto.describe_tasks(cluster=cluster_name, tasks=task_arns)
 
     def register_task_definition(self, family, containers, volumes, role_arn,
-                                 additional_properties):
+                                 execution_role_arn, additional_properties):
         return self.boto.register_task_definition(
             family=family,
             containerDefinitions=containers,
             volumes=volumes,
             taskRoleArn=role_arn,
+            executionRoleArn=execution_role_arn,
             **additional_properties
         )
 
@@ -69,7 +84,35 @@ class EcsClient(object):
             taskDefinition=task_definition
         )
 
-    def run_task(self, cluster, task_definition, count, started_by, overrides):
+    def run_task(self, cluster, task_definition, count, started_by, overrides,
+                 launchtype='EC2', subnets=(), security_groups=(),
+                 public_ip=False):
+
+        if launchtype == LAUNCH_TYPE_FARGATE:
+            if not subnets or not security_groups:
+                msg = 'At least one subnet (--subnet) and one security ' \
+                      'group (--securitygroup) definition are required ' \
+                      'for launch type FARGATE'
+                raise TaskPlacementError(msg)
+
+            network_configuration = {
+                "awsvpcConfiguration": {
+                    "subnets": subnets,
+                    "securityGroups": security_groups,
+                    "assignPublicIp": "ENABLED" if public_ip else "DISABLED"
+                }
+            }
+
+            return self.boto.run_task(
+                cluster=cluster,
+                taskDefinition=task_definition,
+                count=count,
+                startedBy=started_by,
+                overrides=overrides,
+                launchType=launchtype,
+                networkConfiguration=network_configuration
+            )
+
         return self.boto.run_task(
             cluster=cluster,
             taskDefinition=task_definition,
@@ -145,7 +188,8 @@ class EcsService(dict):
 class EcsTaskDefinition(object):
     def __init__(self, containerDefinitions, volumes, family, revision,
                  status, taskDefinitionArn, requiresAttributes=None,
-                 taskRoleArn=None, compatibilities=None, **kwargs):
+                 taskRoleArn=None, executionRoleArn=None, compatibilities=None,
+                 **kwargs):
         self.containers = containerDefinitions
         self.volumes = volumes
         self.family = family
@@ -154,6 +198,7 @@ class EcsTaskDefinition(object):
         self.arn = taskDefinitionArn
         self.requires_attributes = requiresAttributes or {}
         self.role_arn = taskRoleArn or u''
+        self.execution_role_arn = executionRoleArn or u''
         self.additional_properties = kwargs
         self._diff = []
 
@@ -191,8 +236,21 @@ class EcsTaskDefinition(object):
         return overrides
 
     @staticmethod
+    def parse_command(command):
+        if re.match(JSON_LIST_REGEX, command):
+            try:
+                return json.loads(command)
+            except JSONDecodeError as e:
+                raise EcsTaskDefinitionCommandError(
+                    "command should be valid JSON list. Got following "
+                    "command: {} resulting in error: {}"
+                    .format(command, str(e)))
+
+        return command.split()
+
+    @staticmethod
     def get_overrides_command(command):
-        return command.split(' ')
+        return EcsTaskDefinition.parse_command(command)
 
     @staticmethod
     def get_overrides_env(env):
@@ -239,7 +297,7 @@ class EcsTaskDefinition(object):
                     old_value=container.get(u'command')
                 )
                 self._diff.append(diff)
-                container[u'command'] = new_command.split(" ")
+                container[u'command'] = self.parse_command(new_command)
 
     def set_environment(self, environment_list, exclusive=False):
         environment = {}
@@ -351,6 +409,17 @@ class EcsTaskDefinition(object):
                 old_value=self.role_arn
             )
             self.role_arn = role_arn
+            self._diff.append(diff)
+
+    def set_execution_role_arn(self, execution_role_arn):
+        if execution_role_arn:
+            diff = EcsTaskDefinitionDiff(
+                container=None,
+                field=u'execution_role_arn',
+                value=execution_role_arn,
+                old_value=self.execution_role_arn
+            )
+            self.execution_role_arn = execution_role_arn
             self._diff.append(diff)
 
 
@@ -472,6 +541,7 @@ class EcsAction(object):
             containers=task_definition.containers,
             volumes=task_definition.volumes,
             role_arn=task_definition.role_arn,
+            execution_role_arn=task_definition.execution_role_arn,
             additional_properties=task_definition.additional_properties
         )
         new_task_definition = EcsTaskDefinition(**response[u'taskDefinition'])
@@ -558,14 +628,19 @@ class RunAction(EcsAction):
         self._cluster_name = cluster_name
         self.started_tasks = []
 
-    def run(self, task_definition, count, started_by):
+    def run(self, task_definition, count, started_by, launchtype, subnets,
+            security_groups, public_ip):
         try:
             result = self._client.run_task(
                 cluster=self._cluster_name,
                 task_definition=task_definition.family_revision,
                 count=count,
                 started_by=started_by,
-                overrides=dict(containerOverrides=task_definition.get_overrides())
+                overrides=dict(containerOverrides=task_definition.get_overrides()),
+                launchtype=launchtype,
+                subnets=subnets,
+                security_groups=security_groups,
+                public_ip=public_ip
             )
             self.started_tasks = result['tasks']
             return True
@@ -590,4 +665,8 @@ class TaskPlacementError(EcsError):
 
 
 class UnknownTaskDefinitionError(EcsError):
+    pass
+
+
+class EcsTaskDefinitionCommandError(EcsError):
     pass

@@ -11,7 +11,7 @@ from mock.mock import patch
 from ecs_deploy.ecs import EcsService, EcsTaskDefinition, \
     UnknownContainerError, EcsTaskDefinitionDiff, EcsClient, \
     EcsAction, EcsConnectionError, DeployAction, ScaleAction, RunAction, \
-    UnknownTaskDefinitionError
+    EcsTaskDefinitionCommandError, UnknownTaskDefinitionError, LAUNCH_TYPE_EC2
 
 CLUSTER_NAME = u'test-cluster'
 CLUSTER_ARN = u'arn:aws:ecs:eu-central-1:123456789012:cluster/%s' % CLUSTER_NAME
@@ -47,6 +47,7 @@ PAYLOAD_TASK_DEFINITION_1 = {
     u'family': TASK_DEFINITION_FAMILY_1,
     u'revision': TASK_DEFINITION_REVISION_1,
     u'taskRoleArn': TASK_DEFINITION_ROLE_ARN_1,
+    u'executionRoleArn': TASK_DEFINITION_ROLE_ARN_1,
     u'volumes': deepcopy(TASK_DEFINITION_VOLUMES_1),
     u'containerDefinitions': deepcopy(TASK_DEFINITION_CONTAINERS_1),
     u'status': u'active',
@@ -374,6 +375,25 @@ def test_task_set_command_with_multiple_arguments(task_definition):
         if container[u'name'] == u'application':
             assert container[u'command'] == [u'run-application', u'arg1', u'arg2']
 
+def test_task_set_command_with_empty_argument(task_definition):
+    empty_argument = " " 
+    task_definition.set_commands(webserver=empty_argument + u'run-webserver arg1 arg2')
+    for container in task_definition.containers:
+        if container[u'name'] == u'webserver':
+            assert container[u'command'] == [u'run-webserver', u'arg1', u'arg2']
+
+def test_task_set_command_as_json_list(task_definition):
+    task_definition.set_commands(webserver=u'["run-webserver", "arg1", "arg2"]', application=u'["run-application", "arg1", "arg2"]')
+    for container in task_definition.containers:
+        if container[u'name'] == u'webserver':
+            assert container[u'command'] == [u'run-webserver', u'arg1', u'arg2']
+        if container[u'name'] == u'application':
+            assert container[u'command'] == [u'run-application', u'arg1', u'arg2']
+
+def test_task_set_command_as_invalid_json_list(task_definition):
+    with pytest.raises(EcsTaskDefinitionCommandError):
+        task_definition.set_commands(webserver=u'["run-webserver, "arg1" arg2"]', application=u'["run-application" "arg1 "arg2"]')
+
 
 def test_task_set_command_for_unknown_container(task_definition):
     with pytest.raises(UnknownContainerError):
@@ -511,12 +531,14 @@ def test_client_register_task_definition(client):
     containers = [{u'name': u'foo'}]
     volumes = [{u'foo': u'bar'}]
     role_arn = 'arn:test:role'
+    execution_role_arn = 'arn:test:role'
     task_definition = EcsTaskDefinition(
         containerDefinitions=containers,
         volumes=volumes,
         family=u'family',
         revision=1,
         taskRoleArn=role_arn,
+        executionRoleArn=execution_role_arn,
         status='active',
         taskDefinitionArn='arn:task',
         requiresAttributes={},
@@ -528,6 +550,7 @@ def test_client_register_task_definition(client):
         containers=task_definition.containers,
         volumes=task_definition.volumes,
         role_arn=task_definition.role_arn,
+        execution_role_arn=execution_role_arn,
         additional_properties=task_definition.additional_properties
     )
 
@@ -536,6 +559,7 @@ def test_client_register_task_definition(client):
         containerDefinitions=containers,
         volumes=volumes,
         taskRoleArn=role_arn,
+        executionRoleArn=execution_role_arn,
         unkownProperty='foobar'
     )
 
@@ -650,6 +674,7 @@ def test_update_task_definition(client, task_definition):
         containers=task_definition.containers,
         volumes=task_definition.volumes,
         role_arn=task_definition.role_arn,
+        execution_role_arn=task_definition.execution_role_arn,
         additional_properties={
             u'networkMode': u'host',
             u'placementConstraints': {},
@@ -795,14 +820,18 @@ def test_run_action(client):
 def test_run_action_run(client, task_definition):
     action = RunAction(client, CLUSTER_NAME)
     client.run_task.return_value = dict(tasks=[dict(taskArn='A'), dict(taskArn='B')])
-    action.run(task_definition, 2, 'test')
+    action.run(task_definition, 2, 'test', LAUNCH_TYPE_EC2, (), (), False)
 
     client.run_task.assert_called_once_with(
         cluster=CLUSTER_NAME,
         task_definition=task_definition.family_revision,
         count=2,
         started_by='test',
-        overrides=dict(containerOverrides=task_definition.get_overrides())
+        overrides=dict(containerOverrides=task_definition.get_overrides()),
+        launchtype=LAUNCH_TYPE_EC2,
+        subnets=(),
+        security_groups=(),
+        public_ip=False
     )
 
     assert len(action.started_tasks) == 2
@@ -874,7 +903,8 @@ class EcsTestClient(object):
     def describe_tasks(self, cluster_name, task_arns):
         return deepcopy(RESPONSE_DESCRIBE_TASKS)
 
-    def register_task_definition(self, family, containers, volumes, role_arn, additional_properties):
+    def register_task_definition(self, family, containers, volumes, role_arn,
+                                 execution_role_arn, additional_properties):
         return deepcopy(RESPONSE_TASK_DEFINITION_2)
 
     def deregister_task_definition(self, task_definition_arn):
@@ -888,7 +918,9 @@ class EcsTestClient(object):
             return deepcopy(RESPONSE_SERVICE_WITH_ERRORS)
         return deepcopy(RESPONSE_SERVICE)
 
-    def run_task(self, cluster, task_definition, count, started_by, overrides):
+    def run_task(self, cluster, task_definition, count, started_by, overrides,
+                 launchtype='EC2', subnets=(), security_groups=(),
+                 public_ip=False):
         if not self.access_key_id or not self.secret_access_key:
             raise EcsConnectionError(u'Unable to locate credentials. Configure credentials by running "aws configure".')
         if cluster == 'unknown-cluster':
