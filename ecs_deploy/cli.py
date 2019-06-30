@@ -49,7 +49,8 @@ def get_client(access_key_id, secret_access_key, region, profile):
 @click.option('--rollback/--no-rollback', default=False, help='Rollback to previous revision, if deployment failed (default: --no-rollback)')
 @click.option('--exclusive-env', is_flag=True, default=False, help='Set the given environment variables exclusively and remove all other pre-existing env variables from all containers')
 @click.option('--exclusive-secrets', is_flag=True, default=False, help='Set the given secrets exclusively and remove all other pre-existing secrets from all containers')
-def deploy(cluster, service, tag, image, command, env, secret, role, execution_role, task, region, access_key_id, secret_access_key, profile, timeout, newrelic_apikey, newrelic_appid, comment, user, ignore_warnings, diff, deregister, rollback, exclusive_env, exclusive_secrets):
+@click.option('--sleep-time', default=1, type=int, help='Amount of seconds to wait between each check of the service (default: 1)')
+def deploy(cluster, service, tag, image, command, env, secret, role, execution_role, task, region, access_key_id, secret_access_key, profile, timeout, newrelic_apikey, newrelic_appid, comment, user, ignore_warnings, diff, deregister, rollback, exclusive_env, exclusive_secrets, sleep_time):
     """
     Redeploy or modify a service.
 
@@ -90,12 +91,13 @@ def deploy(cluster, service, tag, image, command, env, secret, role, execution_r
                 deregister=deregister,
                 previous_task_definition=td,
                 ignore_warnings=ignore_warnings,
+                sleep_time=sleep_time
             )
 
         except TaskPlacementError as e:
             if rollback:
                 click.secho('%s\n' % str(e), fg='red', err=True)
-                rollback_task_definition(deployment, td, new_td)
+                rollback_task_definition(deployment, td, new_td, sleep_time=sleep_time)
                 exit(1)
             else:
                 raise
@@ -117,7 +119,8 @@ def deploy(cluster, service, tag, image, command, env, secret, role, execution_r
 @click.option('--profile', help='AWS configuration profile name')
 @click.option('--timeout', default=300, type=int, help='Amount of seconds to wait for deployment before command fails (default: 300). To disable timeout (fire and forget) set to -1')
 @click.option('--ignore-warnings', is_flag=True, help='Do not fail deployment on warnings (port already in use or insufficient memory/CPU)')
-def scale(cluster, service, desired_count, access_key_id, secret_access_key, region, profile, timeout, ignore_warnings):
+@click.option('--sleep-time', default=1, type=int, help='Amount of seconds to wait between each check of the service (default: 1)')
+def scale(cluster, service, desired_count, access_key_id, secret_access_key, region, profile, timeout, ignore_warnings, sleep_time):
     """
     Scale a service up or down.
 
@@ -141,7 +144,8 @@ def scale(cluster, service, desired_count, access_key_id, secret_access_key, reg
             title='Scaling service',
             success_message='Scaling successful',
             failure_message='Scaling failed',
-            ignore_warnings=ignore_warnings
+            ignore_warnings=ignore_warnings,
+            sleep_time=sleep_time
         )
 
     except EcsError as e:
@@ -206,7 +210,7 @@ def run(cluster, task, count, command, env, secret, launchtype, subnet, security
 
 
 def wait_for_finish(action, timeout, title, success_message, failure_message,
-                    ignore_warnings):
+                    ignore_warnings, sleep_time=1):
     click.secho(title, nl=False)
     waiting_timeout = datetime.now() + timedelta(seconds=timeout)
     service = action.get_service()
@@ -230,7 +234,7 @@ def wait_for_finish(action, timeout, title, success_message, failure_message,
         waiting = not action.is_deployed(service)
 
         if waiting:
-            sleep(1)
+            sleep(sleep_time)
 
     inspect_errors(
         service=service,
@@ -245,7 +249,7 @@ def wait_for_finish(action, timeout, title, success_message, failure_message,
 
 def deploy_task_definition(deployment, task_definition, title, success_message,
                            failure_message, timeout, deregister,
-                           previous_task_definition, ignore_warnings):
+                           previous_task_definition, ignore_warnings, sleep_time):
     click.secho('Updating service')
     deployment.deploy(task_definition)
 
@@ -262,7 +266,8 @@ def deploy_task_definition(deployment, task_definition, title, success_message,
         title=title,
         success_message=success_message,
         failure_message=failure_message,
-        ignore_warnings=ignore_warnings
+        ignore_warnings=ignore_warnings,
+        sleep_time=sleep_time
     )
 
     if deregister:
@@ -302,7 +307,7 @@ def deregister_task_definition(action, task_definition):
     )
 
 
-def rollback_task_definition(deployment, old, new, timeout=600):
+def rollback_task_definition(deployment, old, new, timeout=600, sleep_time=1):
     click.secho(
         'Rolling back to task definition: %s\n' % old.family_revision,
         fg='yellow',
@@ -316,7 +321,8 @@ def rollback_task_definition(deployment, old, new, timeout=600):
         timeout=timeout,
         deregister=True,
         previous_task_definition=new,
-        ignore_warnings=False
+        ignore_warnings=False,
+        sleep_time=sleep_time
     )
     click.secho(
         'Deployment failed, but service has been rolled back to previous '

@@ -11,7 +11,7 @@ from mock.mock import patch
 from ecs_deploy.ecs import EcsService, EcsTaskDefinition, \
     UnknownContainerError, EcsTaskDefinitionDiff, EcsClient, \
     EcsAction, EcsConnectionError, DeployAction, ScaleAction, RunAction, \
-    UnknownTaskDefinitionError, LAUNCH_TYPE_EC2
+    EcsTaskDefinitionCommandError, UnknownTaskDefinitionError, LAUNCH_TYPE_EC2
 
 CLUSTER_NAME = u'test-cluster'
 CLUSTER_ARN = u'arn:aws:ecs:eu-central-1:123456789012:cluster/%s' % CLUSTER_NAME
@@ -374,6 +374,25 @@ def test_task_set_command_with_multiple_arguments(task_definition):
             assert container[u'command'] == [u'run-webserver', u'arg1', u'arg2']
         if container[u'name'] == u'application':
             assert container[u'command'] == [u'run-application', u'arg1', u'arg2']
+
+def test_task_set_command_with_empty_argument(task_definition):
+    empty_argument = " " 
+    task_definition.set_commands(webserver=empty_argument + u'run-webserver arg1 arg2')
+    for container in task_definition.containers:
+        if container[u'name'] == u'webserver':
+            assert container[u'command'] == [u'run-webserver', u'arg1', u'arg2']
+
+def test_task_set_command_as_json_list(task_definition):
+    task_definition.set_commands(webserver=u'["run-webserver", "arg1", "arg2"]', application=u'["run-application", "arg1", "arg2"]')
+    for container in task_definition.containers:
+        if container[u'name'] == u'webserver':
+            assert container[u'command'] == [u'run-webserver', u'arg1', u'arg2']
+        if container[u'name'] == u'application':
+            assert container[u'command'] == [u'run-application', u'arg1', u'arg2']
+
+def test_task_set_command_as_invalid_json_list(task_definition):
+    with pytest.raises(EcsTaskDefinitionCommandError):
+        task_definition.set_commands(webserver=u'["run-webserver, "arg1" arg2"]', application=u'["run-application" "arg1 "arg2"]')
 
 
 def test_task_set_command_for_unknown_container(task_definition):
