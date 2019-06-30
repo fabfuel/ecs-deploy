@@ -303,6 +303,26 @@ command in a natural syntax, e.g. no conversion to comma-separation required::
 
 The JSON syntax explained above regarding modifying a command is also applicable here.
 
+
+Run a task in a Fargate Cluster
+===============================
+
+If you want to run a one-off task in a Fargate cluster, additional configuration is required, to instruct AWS e.g. which
+subnets or security groups to use. The required parameters for this are:
+
+- launchtype
+- securitygroup
+- subnet
+- public-ip
+
+Example::
+
+    $ ecs run my-fargate-cluster my-task --launchtype=FARGATE --securitygroup sg-01234567890123456 --subnet subnet-01234567890123456 --public-ip
+
+You can pass multiple ``subnet`` as well as multiple ``securitygroup`` values. the ``public-ip`` flag determines, if the task receives a public IP address or not.
+Please see ``ecs run --help`` for more details.
+
+
 Monitoring
 ----------
 With ECS deploy you can track your deployments automatically. Currently only New Relic is supported:
