@@ -135,7 +135,7 @@ def deploy(cluster, service, tag, image, command, env, secret, role, execution_r
 @click.option('--rollback/--no-rollback', default=False, help='Rollback to previous revision, if deployment failed (default: --no-rollback)')
 def cron(cluster, task, rule, image, tag, command, env, role, region, access_key_id, secret_access_key, timeout, ignore_warnings, newrelic_apikey, newrelic_appid, comment, user, profile, diff, deregister, rollback):
     """
-    Update a task definition, and update the `rule` to use the new task definition.
+    Update a scheduled task.
 
     \b
     CLUSTER is the name of your cluster (e.g. 'my-custer') within ECS.
@@ -189,7 +189,7 @@ def cron(cluster, task, rule, image, tag, command, env, role, region, access_key
 @click.option('--exclusive-secrets', is_flag=True, default=False, help='Set the given secrets exclusively and remove all other pre-existing secrets from all containers')
 def update(cluster, task, image, tag, command, env, secret, role, region, access_key_id, secret_access_key, profile, diff, exclusive_env, exclusive_secrets):
     """
-    Update a task definition by creating a new revision.
+    Update a task definition.
 
     \b
     CLUSTER is the name of your cluster (e.g. 'my-custer') within ECS.
