@@ -186,7 +186,8 @@ def cron(cluster, task, rule, image, tag, command, env, role, region, access_key
 @click.option('--diff/--no-diff', default=True, help='Print what values were changed in the task definition')
 @click.option('--exclusive-env', is_flag=True, default=False, help='Set the given environment variables exclusively and remove all other pre-existing env variables from all containers')
 @click.option('--exclusive-secrets', is_flag=True, default=False, help='Set the given secrets exclusively and remove all other pre-existing secrets from all containers')
-def update(task, image, tag, command, env, secret, role, region, access_key_id, secret_access_key, profile, diff, exclusive_env, exclusive_secrets):
+@click.option('--deregister/--no-deregister', default=True, help='Deregister or keep the old task definition (default: --deregister)')
+def update(task, image, tag, command, env, secret, role, region, access_key_id, secret_access_key, profile, diff, exclusive_env, exclusive_secrets, deregister):
     """
     Update a task definition.
 
@@ -198,7 +199,6 @@ def update(task, image, tag, command, env, secret, role, region, access_key_id, 
         action = UpdateAction(client)
 
         td = action.get_task_definition(task)
-        click.secho('Update task definition: %s\n' % td.family_revision)
 
         td.set_images(tag, **{key: value for (key, value) in image})
         td.set_commands(**{key: value for (key, value) in command})
@@ -209,9 +209,10 @@ def update(task, image, tag, command, env, secret, role, region, access_key_id, 
         if diff:
             print_diff(td)
 
-        new_td = create_task_definition(action, td)
+        create_task_definition(action, td)
 
-        click.secho('Updated task %s' % new_td.arn)
+        if deregister:
+            deregister_task_definition(action, td)
 
     except EcsError as e:
         click.secho('%s\n' % str(e), fg='red', err=True)
