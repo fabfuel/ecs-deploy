@@ -123,8 +123,6 @@ def deploy(cluster, service, tag, image, command, env, secret, role, execution_r
 @click.option('--region', help='AWS region (e.g. eu-central-1)')
 @click.option('--access-key-id', help='AWS access key id')
 @click.option('--secret-access-key', help='AWS secret access key')
-@click.option('--timeout', required=False, default=300, type=int, help='Amount of seconds to wait for deployment before command fails (default: 300)')
-@click.option('--ignore-warnings', is_flag=True, help='Do not fail deployment on warnings (port already in use or insufficient memory/CPU)')
 @click.option('--newrelic-apikey', required=False, help='New Relic API Key for recording the deployment')
 @click.option('--newrelic-appid', required=False, help='New Relic App ID for recording the deployment')
 @click.option('--comment', required=False, help='Description/comment for recording the deployment')
@@ -133,7 +131,7 @@ def deploy(cluster, service, tag, image, command, env, secret, role, execution_r
 @click.option('--diff/--no-diff', default=True, help='Print what values were changed in the task definition')
 @click.option('--deregister/--no-deregister', default=True, help='Deregister or keep the old task definition (default: --deregister)')
 @click.option('--rollback/--no-rollback', default=False, help='Rollback to previous revision, if deployment failed (default: --no-rollback)')
-def cron(cluster, task, rule, image, tag, command, env, role, region, access_key_id, secret_access_key, timeout, ignore_warnings, newrelic_apikey, newrelic_appid, comment, user, profile, diff, deregister, rollback):
+def cron(cluster, task, rule, image, tag, command, env, role, region, access_key_id, secret_access_key, newrelic_apikey, newrelic_appid, comment, user, profile, diff, deregister, rollback):
     """
     Update a scheduled task.
 
@@ -165,6 +163,11 @@ def cron(cluster, task, rule, image, tag, command, env, role, region, access_key
             task_definition_arn=new_td.arn
         )
         click.secho('Updated scheduled task %s' % new_td.arn)
+
+        record_deployment(tag, newrelic_apikey, newrelic_appid, comment, user)
+
+        if deregister:
+            deregister_task_definition(action, td)
 
     except EcsError as e:
         click.secho('%s\n' % str(e), fg='red', err=True)
