@@ -45,6 +45,21 @@ The project is availably on PyPI. Simply run::
     $ pip install ecs-deploy
 
 
+Run via Docker
+--------------
+Instead of installing **ecs-deploy** locally, which requires a Python environment, you can run **ecs-deploy** via Docker. All versions starting from 1.7.1 are available on Docker Hub: https://cloud.docker.com/repository/docker/fabfuel/ecs-deploy
+
+Running **ecs-deploy** via Docker is easy as::
+
+    docker run fabfuel/ecs-deploy:1.7.1
+    
+In this example, the stable version 1.7.1 is executed. Alternatively you can use Docker tags ``master`` or ``latest`` for the latest stable version or Docker tag ``develop`` for the newest development version of **ecs-deploy**.
+
+Please be aware, that when running **ecs-deploy** via Docker, the configuration - as described below - does not apply. You have to provide credentials and the AWS region via the command as attributes or environment variables::
+
+    docker run fabfuel/ecs-deploy:1.7.1 ecs deploy my-cluster my-service --region eu-central-1 --access-key-id ABC --secret-access-key ABC
+
+
 Configuration
 -------------
 As **ecs-deploy** is based on boto3 (the official AWS Python library), there are several ways to configure and store the
@@ -201,7 +216,6 @@ To reset all existing secrets (secret environment variables) of a task definitio
 
 This will remove **all other** existing secret environment variables of **all containers** of the task definition, except for the new secret variable `NEW_SECRET` with the value coming from the AWS Parameter Store with the name "KEY_OF_SECRET_IN_PARAMETER_STORE" in the webserver container.
 
-
 Modify a command
 ================
 To change the command of a specific container, run the following command::
@@ -212,6 +226,15 @@ This will modify the **webserver** container and change its command to "nginx". 
 a command that requries arugments as well, then you can simply specify it like this as you would normally do:
 
     $ ecs deploy my-cluster my-service --command webserver "ngnix -c /etc/ngnix/ngnix.conf"
+
+This works fine as long as any of the arguments do not contain any spaces. In case arguments to the
+command itself contain spaces, then you can use the JSON format:
+
+$ ecs deploy my-cluster my-service --command webserver '["sh", "-c", "while true; do echo Time files like an arrow $(date); sleep 1; done;"]'
+
+More about this can be looked up in documentation.
+https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task_definition_parameters.html#container_definitions
+
 
 
 
@@ -281,6 +304,28 @@ You can override the command definition via option ``-c`` or ``--command`` follo
 command in a natural syntax, e.g. no conversion to comma-separation required::
 
     $ ecs run my-cluster my-task -c my-container "python some-script.py param1 param2"
+
+The JSON syntax explained above regarding modifying a command is also applicable here.
+
+
+Run a task in a Fargate Cluster
+===============================
+
+If you want to run a one-off task in a Fargate cluster, additional configuration is required, to instruct AWS e.g. which
+subnets or security groups to use. The required parameters for this are:
+
+- launchtype
+- securitygroup
+- subnet
+- public-ip
+
+Example::
+
+    $ ecs run my-fargate-cluster my-task --launchtype=FARGATE --securitygroup sg-01234567890123456 --subnet subnet-01234567890123456 --public-ip
+
+You can pass multiple ``subnet`` as well as multiple ``securitygroup`` values. the ``public-ip`` flag determines, if the task receives a public IP address or not.
+Please see ``ecs run --help`` for more details.
+
 
 Monitoring
 ----------

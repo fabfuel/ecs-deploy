@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 
 from ecs_deploy import VERSION
 from ecs_deploy.ecs import DeployAction, ScaleAction, RunAction, EcsClient, \
-    TaskPlacementError, EcsError
+    TaskPlacementError, EcsError, LAUNCH_TYPE_EC2, LAUNCH_TYPE_FARGATE
 from ecs_deploy.newrelic import Deployment, NewRelicException
 
 
@@ -32,6 +32,7 @@ def get_client(access_key_id, secret_access_key, region, profile):
 @click.option('-e', '--env', type=(str, str, str), multiple=True, help='Adds or changes an environment variable: <container> <name> <value>')
 @click.option('-s', '--secret', type=(str, str, str), multiple=True, help='Adds or changes a secret environment variable from the AWS Parameter Store (Not available for Fargate): <container> <name> <parameter name>')
 @click.option('-r', '--role', type=str, help='Sets the task\'s role ARN: <task role ARN>')
+@click.option('-x', '--execution-role', type=str, help='Sets the execution\'s role ARN: <execution role ARN>')
 @click.option('--task', type=str, help='Task definition to be deployed. Can be a task ARN or a task family with optional revision')
 @click.option('--region', required=False, help='AWS region (e.g. eu-central-1)')
 @click.option('--access-key-id', required=False, help='AWS access key id')
@@ -98,7 +99,8 @@ def update_task(cluster, service, tag, image, command, env, secret, role, task, 
 @click.option('--rollback/--no-rollback', default=False, help='Rollback to previous revision, if deployment failed (default: --no-rollback)')
 @click.option('--exclusive-env', is_flag=True, default=False, help='Set the given environment variables exclusively and remove all other pre-existing env variables from all containers')
 @click.option('--exclusive-secrets', is_flag=True, default=False, help='Set the given secrets exclusively and remove all other pre-existing secrets from all containers')
-def deploy(cluster, service, tag, image, command, env, secret, role, task, region, access_key_id, secret_access_key, profile, timeout, newrelic_apikey, newrelic_appid, comment, user, ignore_warnings, diff, deregister, rollback, exclusive_env, exclusive_secrets):
+@click.option('--sleep-time', default=1, type=int, help='Amount of seconds to wait between each check of the service (default: 1)')
+def deploy(cluster, service, tag, image, command, env, secret, role, execution_role, task, region, access_key_id, secret_access_key, profile, timeout, newrelic_apikey, newrelic_appid, comment, user, ignore_warnings, diff, deregister, rollback, exclusive_env, exclusive_secrets, sleep_time):
     """
     Redeploy or modify a service.
 
@@ -123,6 +125,7 @@ def deploy(cluster, service, tag, image, command, env, secret, role, task, regio
         td.set_environment(env, exclusive_env)
         td.set_secrets(secret, exclusive_secrets)
         td.set_role_arn(role)
+        td.set_execution_role_arn(execution_role)
 
         if diff:
             print_diff(td)
@@ -140,12 +143,13 @@ def deploy(cluster, service, tag, image, command, env, secret, role, task, regio
                 deregister=deregister,
                 previous_task_definition=td,
                 ignore_warnings=ignore_warnings,
+                sleep_time=sleep_time
             )
 
         except TaskPlacementError as e:
             if rollback:
                 click.secho('%s\n' % str(e), fg='red', err=True)
-                rollback_task_definition(deployment, td, new_td)
+                rollback_task_definition(deployment, td, new_td, sleep_time=sleep_time)
                 exit(1)
             else:
                 raise
@@ -167,7 +171,8 @@ def deploy(cluster, service, tag, image, command, env, secret, role, task, regio
 @click.option('--profile', help='AWS configuration profile name')
 @click.option('--timeout', default=300, type=int, help='Amount of seconds to wait for deployment before command fails (default: 300). To disable timeout (fire and forget) set to -1')
 @click.option('--ignore-warnings', is_flag=True, help='Do not fail deployment on warnings (port already in use or insufficient memory/CPU)')
-def scale(cluster, service, desired_count, access_key_id, secret_access_key, region, profile, timeout, ignore_warnings):
+@click.option('--sleep-time', default=1, type=int, help='Amount of seconds to wait between each check of the service (default: 1)')
+def scale(cluster, service, desired_count, access_key_id, secret_access_key, region, profile, timeout, ignore_warnings, sleep_time):
     """
     Scale a service up or down.
 
@@ -191,7 +196,8 @@ def scale(cluster, service, desired_count, access_key_id, secret_access_key, reg
             title='Scaling service',
             success_message='Scaling successful',
             failure_message='Scaling failed',
-            ignore_warnings=ignore_warnings
+            ignore_warnings=ignore_warnings,
+            sleep_time=sleep_time
         )
 
     except EcsError as e:
@@ -206,12 +212,16 @@ def scale(cluster, service, desired_count, access_key_id, secret_access_key, reg
 @click.option('-c', '--command', type=(str, str), multiple=True, help='Overwrites the command in a container: <container> <command>')
 @click.option('-e', '--env', type=(str, str, str), multiple=True, help='Adds or changes an environment variable: <container> <name> <value>')
 @click.option('-s', '--secret', type=(str, str, str), multiple=True, help='Adds or changes a secret environment variable from the AWS Parameter Store (Not available for Fargate): <container> <name> <parameter name>')
+@click.option('--launchtype', type=click.Choice([LAUNCH_TYPE_EC2, LAUNCH_TYPE_FARGATE]), default=LAUNCH_TYPE_EC2, help='ECS Launch type (default: EC2)')
+@click.option('--subnet', type=str, multiple=True, help='A subnet ID to launch the task within. Required for launch type FARGATE (multiple values possible)')
+@click.option('--securitygroup', type=str, multiple=True, help='A security group ID to launch the task within. Required for launch type FARGATE (multiple values possible)')
+@click.option('--public-ip', is_flag=True, default=False, help='Should a public IP address be assigned to the task (default: False)')
 @click.option('--region', help='AWS region (e.g. eu-central-1)')
 @click.option('--access-key-id', help='AWS access key id')
 @click.option('--secret-access-key', help='AWS secret access key')
 @click.option('--profile', help='AWS configuration profile name')
 @click.option('--diff/--no-diff', default=True, help='Print what values were changed in the task definition')
-def run(cluster, task, count, command, env, secret, region, access_key_id, secret_access_key, profile, diff):
+def run(cluster, task, count, command, env, secret, launchtype, subnet, securitygroup, public_ip, region, access_key_id, secret_access_key, profile, diff):
     """
     Run a one-off task.
 
@@ -232,7 +242,7 @@ def run(cluster, task, count, command, env, secret, region, access_key_id, secre
         if diff:
             print_diff(td, 'Using task definition: %s' % task)
 
-        action.run(td, count, 'ECS Deploy')
+        action.run(td, count, 'ECS Deploy', launchtype, subnet, securitygroup, public_ip)
 
         click.secho(
             'Successfully started %d instances of task: %s' % (
@@ -252,7 +262,7 @@ def run(cluster, task, count, command, env, secret, region, access_key_id, secre
 
 
 def wait_for_finish(action, timeout, title, success_message, failure_message,
-                    ignore_warnings):
+                    ignore_warnings, sleep_time=1):
     click.secho(title, nl=False)
     waiting_timeout = datetime.now() + timedelta(seconds=timeout)
     service = action.get_service()
@@ -276,7 +286,7 @@ def wait_for_finish(action, timeout, title, success_message, failure_message,
         waiting = not action.is_deployed(service)
 
         if waiting:
-            sleep(1)
+            sleep(sleep_time)
 
     inspect_errors(
         service=service,
@@ -291,7 +301,7 @@ def wait_for_finish(action, timeout, title, success_message, failure_message,
 
 def deploy_task_definition(deployment, task_definition, title, success_message,
                            failure_message, timeout, deregister,
-                           previous_task_definition, ignore_warnings):
+                           previous_task_definition, ignore_warnings, sleep_time):
     click.secho('Updating service')
     deployment.deploy(task_definition)
 
@@ -308,7 +318,8 @@ def deploy_task_definition(deployment, task_definition, title, success_message,
         title=title,
         success_message=success_message,
         failure_message=failure_message,
-        ignore_warnings=ignore_warnings
+        ignore_warnings=ignore_warnings,
+        sleep_time=sleep_time
     )
 
     if deregister:
@@ -344,7 +355,7 @@ def deregister_task_definition(action, task_definition):
     )
 
 
-def rollback_task_definition(deployment, old, new, timeout=600):
+def rollback_task_definition(deployment, old, new, timeout=600, sleep_time=1):
     click.secho(
         'Rolling back to task definition: %s\n' % old.family_revision,
         fg='yellow',
@@ -358,7 +369,8 @@ def rollback_task_definition(deployment, old, new, timeout=600):
         timeout=timeout,
         deregister=True,
         previous_task_definition=new,
-        ignore_warnings=False
+        ignore_warnings=False,
+        sleep_time=sleep_time
     )
     click.secho(
         'Deployment failed, but service has been rolled back to previous '
