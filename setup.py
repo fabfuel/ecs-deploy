@@ -18,7 +18,7 @@ setup(
     version=VERSION,
     url='https://github.com/fabfuel/ecs-deploy',
     download_url='https://github.com/fabfuel/ecs-deploy/archive/%s.tar.gz' % VERSION,
-    license='BSD',
+    license='BSD-3-Clause',
     author='Fabian Fuelling',
     author_email='pypi@fabfuel.de',
     description='Powerful CLI tool to simplify Amazon ECS deployments, '

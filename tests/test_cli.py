@@ -1,3 +1,5 @@
+from datetime import datetime
+
 import pytest
 from click.testing import CliRunner
 from mock.mock import patch
@@ -116,6 +118,20 @@ def test_deploy_with_role_arn(get_client, runner):
     assert u'Deployment successful' in result.output
     assert u"Updating task definition" in result.output
     assert u'Changed role_arn to: "arn:new:role" (was: "arn:test:role:1")' in result.output
+
+@patch('ecs_deploy.cli.get_client')
+def test_deploy_with_execution_role_arn(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '-x', 'arn:new:role'))
+    assert result.exit_code == 0
+    assert not result.exception
+    assert u"Deploying based on task definition: test-task:1" in result.output
+    assert u'Successfully created revision: 2' in result.output
+    assert u'Successfully deregistered revision: 1' in result.output
+    assert u'Successfully changed task definition to: test-task:2' in result.output
+    assert u'Deployment successful' in result.output
+    assert u"Updating task definition" in result.output
+    assert u'Changed execution_role_arn to: "arn:new:role" (was: "arn:test:role:1")' in result.output
 
 
 @patch('ecs_deploy.cli.get_client')
@@ -247,6 +263,69 @@ def test_deploy_empty_environment_variable_again(get_client, runner):
     assert u"Deploying based on task definition: test-task:1" in result.output
     assert u"Updating task definition" not in result.output
     assert u'Changed environment' not in result.output
+    assert u'Successfully created revision: 2' in result.output
+    assert u'Successfully deregistered revision: 1' in result.output
+    assert u'Successfully changed task definition to: test-task:2' in result.output
+    assert u'Deployment successful' in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_deploy_previously_empty_environment_variable_with_value(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '-e', 'webserver', 'empty', 'not-empty'))
+
+    assert result.exit_code == 0
+    assert not result.exception
+
+    assert u"Deploying based on task definition: test-task:1" in result.output
+    assert u"Updating task definition" in result.output
+    assert u'Changed environment "empty" of container "webserver" to: "not-empty"' in result.output
+    assert u'Successfully created revision: 2' in result.output
+    assert u'Successfully deregistered revision: 1' in result.output
+    assert u'Successfully changed task definition to: test-task:2' in result.output
+    assert u'Deployment successful' in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_deploy_exclusive_environment(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '-e', 'webserver', 'new-env', 'new-value', '--exclusive-env'))
+
+    assert result.exit_code == 0
+    assert not result.exception
+
+    assert u"Deploying based on task definition: test-task:1" in result.output
+    assert u"Updating task definition" in result.output
+    assert u'Changed environment "new-env" of container "webserver" to: "new-value"' in result.output
+
+    assert u'Removed environment "foo" of container "webserver"' in result.output
+    assert u'Removed environment "lorem" of container "webserver"' in result.output
+
+    assert u'Removed secret' not in result.output
+
+    assert u'Successfully created revision: 2' in result.output
+    assert u'Successfully deregistered revision: 1' in result.output
+    assert u'Successfully changed task definition to: test-task:2' in result.output
+    assert u'Deployment successful' in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_deploy_exclusive_secret(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '-s', 'webserver', 'new-secret', 'new-place', '--exclusive-secrets'))
+
+    assert result.exit_code == 0
+    assert not result.exception
+
+    assert u"Deploying based on task definition: test-task:1" in result.output
+    assert u"Updating task definition" in result.output
+    assert u'Changed secret "new-secret" of container "webserver" to: "new-place"' in result.output
+
+    assert u'Removed secret "baz" of container "webserver"' in result.output
+    assert u'Removed secret "dolor" of container "webserver"' in result.output
+
+    assert u'Removed environment' not in result.output
+
     assert u'Successfully created revision: 2' in result.output
     assert u'Successfully deregistered revision: 1' in result.output
     assert u'Successfully changed task definition to: test-task:2' in result.output
@@ -419,6 +498,30 @@ def test_deploy_with_timeout(get_client, runner):
     assert result.exit_code == 1
     assert u"Deployment failed due to timeout. Please see: " \
            u"https://github.com/fabfuel/ecs-deploy#timeout" in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_deploy_with_wait_within_timeout(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key', wait=2)
+    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '--timeout', '10'))
+    assert result.exit_code == 0
+    assert u'Deploying new task definition...' in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_deploy_without_timeout(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key', wait=2)
+
+    start_time = datetime.now()
+    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '--timeout', '-1'))
+    end_time = datetime.now()
+
+    assert result.exit_code == 0
+
+    # assert task is not waiting for deployment
+    assert u'Deploying new task definition\n' in result.output
+    assert u'...' not in result.output
+    assert (end_time - start_time).total_seconds() < 1
 
 
 @patch('ecs_deploy.cli.get_client')
