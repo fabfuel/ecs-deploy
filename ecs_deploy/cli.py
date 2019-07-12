@@ -172,7 +172,6 @@ def cron(cluster, task, rule, image, tag, command, env, role, region, access_key
 
 
 @click.command()
-@click.argument('cluster')
 @click.argument('task')
 @click.option('-i', '--image', type=(str, str), multiple=True, help='Overwrites the image for a container: <container> <image>')
 @click.option('-t', '--tag', help='Changes the tag for ALL container images')
@@ -187,17 +186,16 @@ def cron(cluster, task, rule, image, tag, command, env, role, region, access_key
 @click.option('--diff/--no-diff', default=True, help='Print what values were changed in the task definition')
 @click.option('--exclusive-env', is_flag=True, default=False, help='Set the given environment variables exclusively and remove all other pre-existing env variables from all containers')
 @click.option('--exclusive-secrets', is_flag=True, default=False, help='Set the given secrets exclusively and remove all other pre-existing secrets from all containers')
-def update(cluster, task, image, tag, command, env, secret, role, region, access_key_id, secret_access_key, profile, diff, exclusive_env, exclusive_secrets):
+def update(task, image, tag, command, env, secret, role, region, access_key_id, secret_access_key, profile, diff, exclusive_env, exclusive_secrets):
     """
     Update a task definition.
 
     \b
-    CLUSTER is the name of your cluster (e.g. 'my-custer') within ECS.
     TASK is the name of your task definition family (e.g. 'my-task') within ECS.
     """
     try:
         client = get_client(access_key_id, secret_access_key, region, profile)
-        action = UpdateAction(client, cluster)
+        action = UpdateAction(client)
 
         td = action.get_task_definition(task)
         click.secho('Update task definition: %s\n' % td.family_revision)

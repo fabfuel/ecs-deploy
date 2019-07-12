@@ -730,7 +730,7 @@ def test_record_deployment(deployment_init, deployment_deploy, secho):
 @patch('ecs_deploy.cli.get_client')
 def test_update_task_creates_new_revision(get_client, runner):
     get_client.return_value = EcsTestClient('access_key', 'secret_key')
-    result = runner.invoke(cli.update, (CLUSTER_NAME, TASK_DEFINITION_ARN_1))
+    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1,))
     assert result.exit_code == 0
     assert u"Creating new task definition revision" in result.output
     assert u"Successfully created revision: 2" in result.output
@@ -740,7 +740,7 @@ def test_update_task_creates_new_revision(get_client, runner):
 @patch('ecs_deploy.cli.get_client')
 def test_update_task(get_client, runner):
     get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.update, (CLUSTER_NAME, TASK_DEFINITION_ARN_1))
+    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1,))
 
     print(result.exception)
     assert result.exit_code == 0
@@ -752,7 +752,7 @@ def test_update_task(get_client, runner):
 @patch('ecs_deploy.cli.get_client')
 def test_update_task_with_role_arn(get_client, runner):
     get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.update, (CLUSTER_NAME, TASK_DEFINITION_ARN_1, '-r', 'arn:new:role'))
+    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1, '-r', 'arn:new:role'))
     assert result.exit_code == 0
     assert not result.exception
     assert u"Update task definition: test-task:1" in result.output
@@ -764,7 +764,7 @@ def test_update_task_with_role_arn(get_client, runner):
 @patch('ecs_deploy.cli.get_client')
 def test_update_task_new_tag(get_client, runner):
     get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.update, (CLUSTER_NAME, TASK_DEFINITION_ARN_1, '-t', 'latest'))
+    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1, '-t', 'latest'))
     assert result.exit_code == 0
     assert not result.exception
     assert u"Update task definition: test-task:1" in result.output
@@ -777,7 +777,7 @@ def test_update_task_new_tag(get_client, runner):
 @patch('ecs_deploy.cli.get_client')
 def test_update_task_one_new_image(get_client, runner):
     get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.update, (CLUSTER_NAME, TASK_DEFINITION_ARN_1, '-i', 'application', 'application:latest'))
+    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1, '-i', 'application', 'application:latest'))
     assert result.exit_code == 0
     assert not result.exception
     assert u"Update task definition: test-task:1" in result.output
@@ -789,7 +789,7 @@ def test_update_task_one_new_image(get_client, runner):
 @patch('ecs_deploy.cli.get_client')
 def test_update_task_two_new_images(get_client, runner):
     get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.update, (CLUSTER_NAME, TASK_DEFINITION_ARN_1, '-i', 'application', 'application:latest',
+    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1, '-i', 'application', 'application:latest',
                                         '-i', 'webserver', 'webserver:latest'))
     assert result.exit_code == 0
     assert not result.exception
@@ -803,7 +803,7 @@ def test_update_task_two_new_images(get_client, runner):
 @patch('ecs_deploy.cli.get_client')
 def test_update_task_one_new_command(get_client, runner):
     get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.update, (CLUSTER_NAME, TASK_DEFINITION_ARN_1, '-c', 'application', 'foobar'))
+    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1, '-c', 'application', 'foobar'))
     assert result.exit_code == 0
     assert not result.exception
     assert u"Update task definition: test-task:1" in result.output
@@ -815,7 +815,7 @@ def test_update_task_one_new_command(get_client, runner):
 @patch('ecs_deploy.cli.get_client')
 def test_update_task_one_new_environment_variable(get_client, runner):
     get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.update, (CLUSTER_NAME, TASK_DEFINITION_ARN_1,
+    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1,
                                         '-e', 'application', 'foo', 'bar',
                                         '-e', 'webserver', 'foo', 'baz'))
 
@@ -833,7 +833,7 @@ def test_update_task_one_new_environment_variable(get_client, runner):
 @patch('ecs_deploy.cli.get_client')
 def test_update_task_change_environment_variable_empty_string(get_client, runner):
     get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.update, (CLUSTER_NAME, TASK_DEFINITION_ARN_1, '-e', 'application', 'foo', ''))
+    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1, '-e', 'application', 'foo', ''))
 
     assert result.exit_code == 0
     assert not result.exception
@@ -847,7 +847,7 @@ def test_update_task_change_environment_variable_empty_string(get_client, runner
 @patch('ecs_deploy.cli.get_client')
 def test_update_task_new_empty_environment_variable(get_client, runner):
     get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.update, (CLUSTER_NAME, TASK_DEFINITION_ARN_1, '-e', 'application', 'new', ''))
+    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1, '-e', 'application', 'new', ''))
 
     assert result.exit_code == 0
     assert not result.exception
@@ -861,7 +861,7 @@ def test_update_task_new_empty_environment_variable(get_client, runner):
 @patch('ecs_deploy.cli.get_client')
 def test_update_task_empty_environment_variable_again(get_client, runner):
     get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.update, (CLUSTER_NAME, TASK_DEFINITION_ARN_1, '-e', 'webserver', 'empty', ''))
+    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1, '-e', 'webserver', 'empty', ''))
 
     assert result.exit_code == 0
     assert not result.exception
@@ -875,7 +875,7 @@ def test_update_task_empty_environment_variable_again(get_client, runner):
 @patch('ecs_deploy.cli.get_client')
 def test_update_task_previously_empty_environment_variable_with_value(get_client, runner):
     get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.update, (CLUSTER_NAME, TASK_DEFINITION_ARN_1, '-e', 'webserver', 'empty', 'not-empty'))
+    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1, '-e', 'webserver', 'empty', 'not-empty'))
 
     assert result.exit_code == 0
     assert not result.exception
@@ -889,7 +889,7 @@ def test_update_task_previously_empty_environment_variable_with_value(get_client
 @patch('ecs_deploy.cli.get_client')
 def test_update_task_exclusive_environment(get_client, runner):
     get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.update, (CLUSTER_NAME, TASK_DEFINITION_ARN_1, '-e', 'webserver', 'new-env', 'new-value', '--exclusive-env'))
+    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1, '-e', 'webserver', 'new-env', 'new-value', '--exclusive-env'))
 
     assert result.exit_code == 0
     assert not result.exception
@@ -909,7 +909,7 @@ def test_update_task_exclusive_environment(get_client, runner):
 @patch('ecs_deploy.cli.get_client')
 def test_update_task_exclusive_secret(get_client, runner):
     get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.update, (CLUSTER_NAME, TASK_DEFINITION_ARN_1, '-s', 'webserver', 'new-secret', 'new-place', '--exclusive-secrets'))
+    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1, '-s', 'webserver', 'new-secret', 'new-place', '--exclusive-secrets'))
 
     assert result.exit_code == 0
     assert not result.exception
@@ -929,7 +929,7 @@ def test_update_task_exclusive_secret(get_client, runner):
 @patch('ecs_deploy.cli.get_client')
 def test_update_task_one_new_secret_variable(get_client, runner):
     get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.update, (CLUSTER_NAME, TASK_DEFINITION_ARN_1,
+    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1,
                                         '-s', 'application', 'baz', 'qux',
                                         '-s', 'webserver', 'baz', 'quux'))
 
@@ -947,7 +947,7 @@ def test_update_task_one_new_secret_variable(get_client, runner):
 @patch('ecs_deploy.cli.get_client')
 def test_update_task_without_changing_environment_value(get_client, runner):
     get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.update, (CLUSTER_NAME, TASK_DEFINITION_ARN_1, '-e', 'webserver', 'foo', 'bar'))
+    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1, '-e', 'webserver', 'foo', 'bar'))
 
     assert result.exit_code == 0
     assert not result.exception
@@ -961,7 +961,7 @@ def test_update_task_without_changing_environment_value(get_client, runner):
 @patch('ecs_deploy.cli.get_client')
 def test_update_task_without_changing_secrets_value(get_client, runner):
     get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.update, (CLUSTER_NAME, TASK_DEFINITION_ARN_1, '-s', 'webserver', 'baz', 'qux'))
+    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1, '-s', 'webserver', 'baz', 'qux'))
 
     assert result.exit_code == 0
     assert not result.exception
@@ -975,7 +975,7 @@ def test_update_task_without_changing_secrets_value(get_client, runner):
 @patch('ecs_deploy.cli.get_client')
 def test_update_task_without_diff(get_client, runner):
     get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.update, (CLUSTER_NAME, TASK_DEFINITION_ARN_1, '-t', 'latest', '-e', 'webserver', 'foo', 'barz', '--no-diff'))
+    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1, '-t', 'latest', '-e', 'webserver', 'foo', 'barz', '--no-diff'))
 
     assert result.exit_code == 0
     assert not result.exception

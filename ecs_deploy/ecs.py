@@ -661,8 +661,8 @@ class RunAction(EcsAction):
 
 
 class UpdateAction(EcsAction):
-    def __init__(self, client, cluster_name):
-        super(UpdateAction, self).__init__(client, cluster_name, None)
+    def __init__(self, client):
+        super(UpdateAction, self).__init__(client, None, None)
 
 
 class EcsError(Exception):
