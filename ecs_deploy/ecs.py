@@ -14,6 +14,7 @@ class EcsClient(object):
                           region_name=region,
                           profile_name=profile)
         self.boto = session.client(u'ecs')
+        self.events = session.client(u'events')
 
     def describe_services(self, cluster_name, service_name):
         return self.boto.describe_services(
@@ -76,6 +77,17 @@ class EcsClient(object):
             count=count,
             startedBy=started_by,
             overrides=overrides
+        )
+
+    def update_rule(self, rule, arn, target_id, role_arn, task_definition_arn):
+        self.events.put_targets(
+            Rule=rule,
+            Targets=[{
+                'Id': target_id,
+                'Arn': arn,
+                'RoleArn': role_arn,
+                'EcsParameters': {'TaskDefinitionArn': task_definition_arn, 'TaskCount': 1}
+            }]
         )
 
 
@@ -539,6 +551,11 @@ class RunAction(EcsAction):
             return True
         except ClientError as e:
             raise EcsError(str(e))
+
+
+class UpdateAction(EcsAction):
+    def __init__(self, client, cluster_name):
+        super(UpdateAction, self).__init__(client, cluster_name, None)
 
 
 class EcsError(Exception):

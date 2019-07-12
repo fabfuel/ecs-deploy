@@ -7,7 +7,7 @@ from ecs_deploy.cli import get_client, record_deployment
 from ecs_deploy.ecs import EcsClient
 from ecs_deploy.newrelic import Deployment, NewRelicDeploymentException
 from tests.test_ecs import EcsTestClient, CLUSTER_NAME, SERVICE_NAME, \
-    TASK_DEFINITION_ARN_1
+    TASK_DEFINITION_ARN_1, TASK_DEFINITION_ARN_2, RULE_1
 
 
 @pytest.fixture
@@ -427,6 +427,16 @@ def test_deploy_unknown_task_definition_arn(get_client, runner):
     result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '--task', u'arn:aws:ecs:eu-central-1:123456789012:task-definition/foobar:55'))
     assert result.exit_code == 1
     assert u"Unknown task definition arn: arn:aws:ecs:eu-central-1:123456789012:task-definition/foobar:55" in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_update_task_creates_new_revision(get_client, runner):
+    get_client.return_value = EcsTestClient()
+    result = runner.invoke(cli.update, (CLUSTER_NAME, TASK_DEFINITION_ARN_1))
+    assert result.exit_code == 0
+    assert u"Creating new task definition revision" in result.output
+    assert u"Successfully created revision: 2" in result.output
+    assert u"Updated task %s" % TASK_DEFINITION_ARN_2 in result.output
 
 
 @patch('ecs_deploy.cli.get_client')

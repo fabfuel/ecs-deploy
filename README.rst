@@ -36,6 +36,14 @@ Scale up or down a service::
 
     $ ecs scale my-cluster my-service 4
 
+Updating a cron job::
+
+    $ ecs cron my-cluster my-task my-rule
+
+Update a task definition (without running or deploying)::
+
+    $ ecs update my-cluster my-task
+
 
 Installation
 ------------
@@ -72,6 +80,13 @@ run
 ===
 Run a one-off task based on an existing task-definition and optionally override command and/or environment variables.
 
+cron
+======
+Update a task definition and update a rule to use the new task definition.
+
+update
+======
+Update a task definition by creating a new revision.
 
 Usage
 -----
