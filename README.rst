@@ -95,13 +95,16 @@ run
 ===
 Run a one-off task based on an existing task-definition and optionally override command and/or environment variables.
 
-cron
-======
-Update a task definition and update a rule to use the new task definition.
-
 update
 ======
-Update a task definition by creating a new revision.
+Update a task definition by creating a new revision to set a new image,
+environment variable and/or command definition, etc.
+
+cron (scheduled task)
+=====================
+Update a task definition and update a events rule (scheduled task) to use the
+new task definition.
+
 
 Usage
 -----

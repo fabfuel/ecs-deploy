@@ -22,6 +22,7 @@ def ecs():  # pragma: no cover
 def get_client(access_key_id, secret_access_key, region, profile):
     return EcsClient(access_key_id, secret_access_key, region, profile)
 
+
 @click.command()
 @click.argument('cluster')
 @click.argument('service')
@@ -73,6 +74,8 @@ def deploy(cluster, service, tag, image, command, env, secret, role, execution_r
         td.set_secrets(secret, exclusive_secrets)
         td.set_role_arn(role)
         td.set_execution_role_arn(execution_role)
+
+        click.secho('Deploying based on task definition: %s\n' % td.family_revision)
 
         if diff:
             print_diff(td)
@@ -175,28 +178,34 @@ def cron(cluster, task, rule, image, tag, command, env, role, region, access_key
 @click.option('-t', '--tag', help='Changes the tag for ALL container images')
 @click.option('-c', '--command', type=(str, str), multiple=True, help='Overwrites the command in a container: <container> <command>')
 @click.option('-e', '--env', type=(str, str, str), multiple=True, help='Adds or changes an environment variable: <container> <name> <value>')
+@click.option('-s', '--secret', type=(str, str, str), multiple=True, help='Adds or changes a secret environment variable from the AWS Parameter Store (Not available for Fargate): <container> <name> <parameter name>')
 @click.option('-r', '--role', type=str, help='Sets the task\'s role ARN: <task role ARN>')
 @click.option('--region', help='AWS region (e.g. eu-central-1)')
 @click.option('--access-key-id', help='AWS access key id')
 @click.option('--secret-access-key', help='AWS secret access key')
 @click.option('--profile', help='AWS configuration profile name')
 @click.option('--diff/--no-diff', default=True, help='Print what values were changed in the task definition')
-def update(cluster, task, image, tag, command, env, role, region, access_key_id, secret_access_key, profile, diff):
+@click.option('--exclusive-env', is_flag=True, default=False, help='Set the given environment variables exclusively and remove all other pre-existing env variables from all containers')
+@click.option('--exclusive-secrets', is_flag=True, default=False, help='Set the given secrets exclusively and remove all other pre-existing secrets from all containers')
+def update_task(cluster, task, image, tag, command, env, secret, role, region, access_key_id, secret_access_key, profile, diff, exclusive_env, exclusive_secrets):
     """
     Update a task definition by creating a new revision.
 
     \b
     CLUSTER is the name of your cluster (e.g. 'my-custer') within ECS.
-    TASK is the name of your task definition (e.g. 'my-task') within ECS.
+    TASK is the name of your task definition family (e.g. 'my-task') within ECS.
     """
     try:
         client = get_client(access_key_id, secret_access_key, region, profile)
         action = UpdateAction(client, cluster)
 
         td = action.get_task_definition(task)
+        click.secho('Update task definition: %s\n' % td.family_revision)
+
         td.set_images(tag, **{key: value for (key, value) in image})
         td.set_commands(**{key: value for (key, value) in command})
-        td.set_environment(env)
+        td.set_environment(env, exclusive_env)
+        td.set_secrets(secret, exclusive_secrets)
         td.set_role_arn(role)
 
         if diff:
@@ -381,10 +390,6 @@ def get_task_definition(action, task):
         task_definition = action.get_task_definition(task)
     else:
         task_definition = action.get_current_task_definition(action.service)
-        task = task_definition.family_revision
-
-    click.secho('Deploying based on task definition: %s\n' % task)
-
     return task_definition
 
 
@@ -509,7 +514,7 @@ ecs.add_command(deploy)
 ecs.add_command(scale)
 ecs.add_command(run)
 ecs.add_command(cron)
-ecs.add_command(update)
+ecs.add_command(update_task)
 
 if __name__ == '__main__':  # pragma: no cover
     ecs()
