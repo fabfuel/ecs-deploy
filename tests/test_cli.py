@@ -734,7 +734,6 @@ def test_update_task_creates_new_revision(get_client, runner):
     assert result.exit_code == 0
     assert u"Creating new task definition revision" in result.output
     assert u"Successfully created revision: 2" in result.output
-    assert u"Updated task %s" % TASK_DEFINITION_ARN_2 in result.output
 
 
 @patch('ecs_deploy.cli.get_client')
@@ -742,10 +741,9 @@ def test_update_task(get_client, runner):
     get_client.return_value = EcsTestClient('acces_key', 'secret_key')
     result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1,))
 
-    print(result.exception)
     assert result.exit_code == 0
     assert not result.exception
-    assert u"Update task definition: test-task:1" in result.output
+    assert u"Update task definition based on: test-task:1" in result.output
     assert u'Successfully created revision: 2' in result.output
 
 
@@ -755,7 +753,7 @@ def test_update_task_with_role_arn(get_client, runner):
     result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1, '-r', 'arn:new:role'))
     assert result.exit_code == 0
     assert not result.exception
-    assert u"Update task definition: test-task:1" in result.output
+    assert u"Update task definition based on: test-task:1" in result.output
     assert u"Updating task definition" in result.output
     assert u'Changed role_arn to: "arn:new:role" (was: "arn:test:role:1")' in result.output
     assert u'Successfully created revision: 2' in result.output
@@ -767,7 +765,7 @@ def test_update_task_new_tag(get_client, runner):
     result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1, '-t', 'latest'))
     assert result.exit_code == 0
     assert not result.exception
-    assert u"Update task definition: test-task:1" in result.output
+    assert u"Update task definition based on: test-task:1" in result.output
     assert u"Updating task definition" in result.output
     assert u'Changed image of container "webserver" to: "webserver:latest" (was: "webserver:123")' in result.output
     assert u'Changed image of container "application" to: "application:latest" (was: "application:123")' in result.output
@@ -780,7 +778,7 @@ def test_update_task_one_new_image(get_client, runner):
     result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1, '-i', 'application', 'application:latest'))
     assert result.exit_code == 0
     assert not result.exception
-    assert u"Update task definition: test-task:1" in result.output
+    assert u"Update task definition based on: test-task:1" in result.output
     assert u"Updating task definition" in result.output
     assert u'Changed image of container "application" to: "application:latest" (was: "application:123")' in result.output
     assert u'Successfully created revision: 2' in result.output
@@ -793,7 +791,7 @@ def test_update_task_two_new_images(get_client, runner):
                                         '-i', 'webserver', 'webserver:latest'))
     assert result.exit_code == 0
     assert not result.exception
-    assert u"Update task definition: test-task:1" in result.output
+    assert u"Update task definition based on: test-task:1" in result.output
     assert u"Updating task definition" in result.output
     assert u'Changed image of container "webserver" to: "webserver:latest" (was: "webserver:123")' in result.output
     assert u'Changed image of container "application" to: "application:latest" (was: "application:123")' in result.output
@@ -806,7 +804,7 @@ def test_update_task_one_new_command(get_client, runner):
     result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1, '-c', 'application', 'foobar'))
     assert result.exit_code == 0
     assert not result.exception
-    assert u"Update task definition: test-task:1" in result.output
+    assert u"Update task definition based on: test-task:1" in result.output
     assert u"Updating task definition" in result.output
     assert u'Changed command of container "application" to: "foobar" (was: "run")' in result.output
     assert u'Successfully created revision: 2' in result.output
@@ -822,7 +820,7 @@ def test_update_task_one_new_environment_variable(get_client, runner):
     assert result.exit_code == 0
     assert not result.exception
 
-    assert u"Update task definition: test-task:1" in result.output
+    assert u"Update task definition based on: test-task:1" in result.output
     assert u"Updating task definition" in result.output
     assert u'Changed environment "foo" of container "application" to: "bar"' in result.output
     assert u'Changed environment "foo" of container "webserver" to: "baz"' in result.output
@@ -838,7 +836,7 @@ def test_update_task_change_environment_variable_empty_string(get_client, runner
     assert result.exit_code == 0
     assert not result.exception
 
-    assert u"Update task definition: test-task:1" in result.output
+    assert u"Update task definition based on: test-task:1" in result.output
     assert u"Updating task definition" in result.output
     assert u'Changed environment "foo" of container "application" to: ""' in result.output
     assert u'Successfully created revision: 2' in result.output
@@ -852,7 +850,7 @@ def test_update_task_new_empty_environment_variable(get_client, runner):
     assert result.exit_code == 0
     assert not result.exception
 
-    assert u"Update task definition: test-task:1" in result.output
+    assert u"Update task definition based on: test-task:1" in result.output
     assert u"Updating task definition" in result.output
     assert u'Changed environment "new" of container "application" to: ""' in result.output
     assert u'Successfully created revision: 2' in result.output
@@ -866,7 +864,7 @@ def test_update_task_empty_environment_variable_again(get_client, runner):
     assert result.exit_code == 0
     assert not result.exception
 
-    assert u"Update task definition: test-task:1" in result.output
+    assert u"Update task definition based on: test-task:1" in result.output
     assert u"Updating task definition" not in result.output
     assert u'Changed environment' not in result.output
     assert u'Successfully created revision: 2' in result.output
@@ -880,7 +878,7 @@ def test_update_task_previously_empty_environment_variable_with_value(get_client
     assert result.exit_code == 0
     assert not result.exception
 
-    assert u"Update task definition: test-task:1" in result.output
+    assert u"Update task definition based on: test-task:1" in result.output
     assert u"Updating task definition" in result.output
     assert u'Changed environment "empty" of container "webserver" to: "not-empty"' in result.output
     assert u'Successfully created revision: 2' in result.output
@@ -894,7 +892,7 @@ def test_update_task_exclusive_environment(get_client, runner):
     assert result.exit_code == 0
     assert not result.exception
 
-    assert u"Update task definition: test-task:1" in result.output
+    assert u"Update task definition based on: test-task:1" in result.output
     assert u"Updating task definition" in result.output
     assert u'Changed environment "new-env" of container "webserver" to: "new-value"' in result.output
 
@@ -914,7 +912,7 @@ def test_update_task_exclusive_secret(get_client, runner):
     assert result.exit_code == 0
     assert not result.exception
 
-    assert u"Update task definition: test-task:1" in result.output
+    assert u"Update task definition based on: test-task:1" in result.output
     assert u"Updating task definition" in result.output
     assert u'Changed secret "new-secret" of container "webserver" to: "new-place"' in result.output
 
@@ -936,7 +934,7 @@ def test_update_task_one_new_secret_variable(get_client, runner):
     assert result.exit_code == 0
     assert not result.exception
 
-    assert u"Update task definition: test-task:1" in result.output
+    assert u"Update task definition based on: test-task:1" in result.output
     assert u"Updating task definition" in result.output
     assert u'Changed secret "baz" of container "application" to: "qux"' in result.output
     assert u'Changed secret "baz" of container "webserver" to: "quux"' in result.output
@@ -952,7 +950,7 @@ def test_update_task_without_changing_environment_value(get_client, runner):
     assert result.exit_code == 0
     assert not result.exception
 
-    assert u"Update task definition: test-task:1" in result.output
+    assert u"Update task definition based on: test-task:1" in result.output
     assert u"Updating task definition" not in result.output
     assert u'Changed environment' not in result.output
     assert u'Successfully created revision: 2' in result.output
@@ -966,7 +964,7 @@ def test_update_task_without_changing_secrets_value(get_client, runner):
     assert result.exit_code == 0
     assert not result.exception
 
-    assert u"Update task definition: test-task:1" in result.output
+    assert u"Update task definition based on: test-task:1" in result.output
     assert u"Updating task definition" not in result.output
     assert u'Changed secrets' not in result.output
     assert u'Successfully created revision: 2' in result.output
@@ -980,7 +978,7 @@ def test_update_task_without_diff(get_client, runner):
     assert result.exit_code == 0
     assert not result.exception
 
-    assert u"Update task definition: test-task:1" in result.output
+    assert u"Update task definition based on: test-task:1" in result.output
     assert u"Updating task definition" not in result.output
     assert u'Changed environment' not in result.output
     assert u'Successfully created revision: 2' in result.output

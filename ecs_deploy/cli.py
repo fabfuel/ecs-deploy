@@ -199,6 +199,7 @@ def update(task, image, tag, command, env, secret, role, region, access_key_id, 
         action = UpdateAction(client)
 
         td = action.get_task_definition(task)
+        click.secho('Update task definition based on: %s\n' % td.family_revision)
 
         td.set_images(tag, **{key: value for (key, value) in image})
         td.set_commands(**{key: value for (key, value) in command})
