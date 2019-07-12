@@ -489,7 +489,7 @@ def test_client_init(mocked_init, mocked_client):
                                         profile_name=u'profile',
                                         region_name=u'region',
                                         aws_session_token=u'session_token')
-    mocked_client.assert_called_once_with(u'ecs')
+    mocked_client.assert_any_call(u'ecs')
     mocked_client.assert_any_call(u'events')
 
 
