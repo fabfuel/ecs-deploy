@@ -9,7 +9,7 @@ from ecs_deploy.cli import get_client, record_deployment
 from ecs_deploy.ecs import EcsClient
 from ecs_deploy.newrelic import Deployment, NewRelicDeploymentException
 from tests.test_ecs import EcsTestClient, CLUSTER_NAME, SERVICE_NAME, \
-    TASK_DEFINITION_ARN_1, TASK_DEFINITION_ARN_2, RULE_1
+    TASK_DEFINITION_ARN_1, TASK_DEFINITION_ARN_2
 
 
 @pytest.fixture
