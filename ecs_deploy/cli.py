@@ -187,7 +187,7 @@ def cron(cluster, task, rule, image, tag, command, env, role, region, access_key
 @click.option('--diff/--no-diff', default=True, help='Print what values were changed in the task definition')
 @click.option('--exclusive-env', is_flag=True, default=False, help='Set the given environment variables exclusively and remove all other pre-existing env variables from all containers')
 @click.option('--exclusive-secrets', is_flag=True, default=False, help='Set the given secrets exclusively and remove all other pre-existing secrets from all containers')
-def update_task(cluster, task, image, tag, command, env, secret, role, region, access_key_id, secret_access_key, profile, diff, exclusive_env, exclusive_secrets):
+def update(cluster, task, image, tag, command, env, secret, role, region, access_key_id, secret_access_key, profile, diff, exclusive_env, exclusive_secrets):
     """
     Update a task definition by creating a new revision.
 
@@ -514,7 +514,7 @@ ecs.add_command(deploy)
 ecs.add_command(scale)
 ecs.add_command(run)
 ecs.add_command(cron)
-ecs.add_command(update_task)
+ecs.add_command(update)
 
 if __name__ == '__main__':  # pragma: no cover
     ecs()
