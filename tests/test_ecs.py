@@ -489,7 +489,8 @@ def test_client_init(mocked_init, mocked_client):
                                         profile_name=u'profile',
                                         region_name=u'region',
                                         aws_session_token=u'session_token')
-    mocked_client.assert_called_once_with(u'ecs')
+    mocked_client.assert_any_call(u'ecs')
+    mocked_client.assert_any_call(u'events')
 
 
 @pytest.fixture
@@ -905,6 +906,8 @@ class EcsTestClient(object):
 
     def register_task_definition(self, family, containers, volumes, role_arn,
                                  execution_role_arn, additional_properties):
+        if not self.access_key_id or not self.secret_access_key:
+            raise EcsConnectionError(u'Unable to locate credentials. Configure credentials by running "aws configure".')
         return deepcopy(RESPONSE_TASK_DEFINITION_2)
 
     def deregister_task_definition(self, task_definition_arn):
@@ -929,3 +932,9 @@ class EcsTestClient(object):
             error = dict(Error=dict(Code=123, Message="Something went wrong"))
             raise ClientError(error, 'fake_error')
         return dict(tasks=[dict(taskArn='arn:foo:bar'), dict(taskArn='arn:lorem:ipsum')])
+
+    def update_rule(self, cluster, rule, task_definition):
+        if not self.access_key_id or not self.secret_access_key:
+            raise EcsConnectionError(u'Unable to locate credentials. Configure credentials by running "aws configure".')
+        if cluster == 'unknown-cluster':
+            raise EcsConnectionError(u'An error occurred (ClusterNotFoundException) when calling the RunTask operation: Cluster not found.')

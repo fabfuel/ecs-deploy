@@ -9,7 +9,7 @@ from ecs_deploy.cli import get_client, record_deployment
 from ecs_deploy.ecs import EcsClient
 from ecs_deploy.newrelic import Deployment, NewRelicDeploymentException
 from tests.test_ecs import EcsTestClient, CLUSTER_NAME, SERVICE_NAME, \
-    TASK_DEFINITION_ARN_1
+    TASK_DEFINITION_ARN_1, TASK_DEFINITION_ARN_2, TASK_DEFINITION_FAMILY_1
 
 
 @pytest.fixture
@@ -481,13 +481,11 @@ def test_deploy_with_newrelic_errors(get_client, deploy, runner):
 @patch('ecs_deploy.cli.get_client')
 def test_deploy_task_definition_arn(get_client, runner):
     get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '--task', TASK_DEFINITION_ARN_1))
+    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '--task', TASK_DEFINITION_ARN_2))
     assert result.exit_code == 0
     assert not result.exception
-    assert u"Deploying based on task definition: %s" % TASK_DEFINITION_ARN_1 in result.output
-    assert u'Successfully created revision: 2' in result.output
-    assert u'Successfully deregistered revision: 1' in result.output
-    assert u'Successfully changed task definition to: test-task:2' in result.output
+    assert u"Deploying based on task definition: test-task:2" in result.output
+    assert u'Successfully deregistered revision: 2' in result.output
     assert u'Deployment successful' in result.output
 
 
@@ -728,3 +726,295 @@ def test_record_deployment(deployment_init, deployment_deploy, secho):
     secho.assert_any_call('\nDone\n', fg='green')
 
     assert result is True
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_update_without_credentials(get_client, runner):
+    get_client.return_value = EcsTestClient()
+    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1,))
+    assert result.exit_code == 1
+    assert u'Unable to locate credentials. Configure credentials by running "aws configure".\n\n' in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_update_task_creates_new_revision(get_client, runner):
+    get_client.return_value = EcsTestClient('access_key', 'secret_key')
+    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1,))
+    assert result.exit_code == 0
+    assert u"Creating new task definition revision" in result.output
+    assert u"Successfully created revision: 2" in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_update_task(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1,))
+
+    assert result.exit_code == 0
+    assert not result.exception
+    assert u"Update task definition based on: test-task:1" in result.output
+    assert u'Successfully created revision: 2' in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_update_task_with_role_arn(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1, '-r', 'arn:new:role'))
+    assert result.exit_code == 0
+    assert not result.exception
+    assert u"Update task definition based on: test-task:1" in result.output
+    assert u"Updating task definition" in result.output
+    assert u'Changed role_arn to: "arn:new:role" (was: "arn:test:role:1")' in result.output
+    assert u'Successfully created revision: 2' in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_update_task_new_tag(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1, '-t', 'latest'))
+    assert result.exit_code == 0
+    assert not result.exception
+    assert u"Update task definition based on: test-task:1" in result.output
+    assert u"Updating task definition" in result.output
+    assert u'Changed image of container "webserver" to: "webserver:latest" (was: "webserver:123")' in result.output
+    assert u'Changed image of container "application" to: "application:latest" (was: "application:123")' in result.output
+    assert u'Successfully created revision: 2' in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_update_task_one_new_image(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1, '-i', 'application', 'application:latest'))
+    assert result.exit_code == 0
+    assert not result.exception
+    assert u"Update task definition based on: test-task:1" in result.output
+    assert u"Updating task definition" in result.output
+    assert u'Changed image of container "application" to: "application:latest" (was: "application:123")' in result.output
+    assert u'Successfully created revision: 2' in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_update_task_two_new_images(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1, '-i', 'application', 'application:latest',
+                                        '-i', 'webserver', 'webserver:latest'))
+    assert result.exit_code == 0
+    assert not result.exception
+    assert u"Update task definition based on: test-task:1" in result.output
+    assert u"Updating task definition" in result.output
+    assert u'Changed image of container "webserver" to: "webserver:latest" (was: "webserver:123")' in result.output
+    assert u'Changed image of container "application" to: "application:latest" (was: "application:123")' in result.output
+    assert u'Successfully created revision: 2' in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_update_task_one_new_command(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1, '-c', 'application', 'foobar'))
+    assert result.exit_code == 0
+    assert not result.exception
+    assert u"Update task definition based on: test-task:1" in result.output
+    assert u"Updating task definition" in result.output
+    assert u'Changed command of container "application" to: "foobar" (was: "run")' in result.output
+    assert u'Successfully created revision: 2' in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_update_task_one_new_environment_variable(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1,
+                                        '-e', 'application', 'foo', 'bar',
+                                        '-e', 'webserver', 'foo', 'baz'))
+
+    assert result.exit_code == 0
+    assert not result.exception
+
+    assert u"Update task definition based on: test-task:1" in result.output
+    assert u"Updating task definition" in result.output
+    assert u'Changed environment "foo" of container "application" to: "bar"' in result.output
+    assert u'Changed environment "foo" of container "webserver" to: "baz"' in result.output
+    assert u'Changed environment "lorem" of container "webserver" to: "ipsum"' not in result.output
+    assert u'Successfully created revision: 2' in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_update_task_change_environment_variable_empty_string(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1, '-e', 'application', 'foo', ''))
+
+    assert result.exit_code == 0
+    assert not result.exception
+
+    assert u"Update task definition based on: test-task:1" in result.output
+    assert u"Updating task definition" in result.output
+    assert u'Changed environment "foo" of container "application" to: ""' in result.output
+    assert u'Successfully created revision: 2' in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_update_task_new_empty_environment_variable(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1, '-e', 'application', 'new', ''))
+
+    assert result.exit_code == 0
+    assert not result.exception
+
+    assert u"Update task definition based on: test-task:1" in result.output
+    assert u"Updating task definition" in result.output
+    assert u'Changed environment "new" of container "application" to: ""' in result.output
+    assert u'Successfully created revision: 2' in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_update_task_empty_environment_variable_again(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1, '-e', 'webserver', 'empty', ''))
+
+    assert result.exit_code == 0
+    assert not result.exception
+
+    assert u"Update task definition based on: test-task:1" in result.output
+    assert u"Updating task definition" not in result.output
+    assert u'Changed environment' not in result.output
+    assert u'Successfully created revision: 2' in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_update_task_previously_empty_environment_variable_with_value(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1, '-e', 'webserver', 'empty', 'not-empty'))
+
+    assert result.exit_code == 0
+    assert not result.exception
+
+    assert u"Update task definition based on: test-task:1" in result.output
+    assert u"Updating task definition" in result.output
+    assert u'Changed environment "empty" of container "webserver" to: "not-empty"' in result.output
+    assert u'Successfully created revision: 2' in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_update_task_exclusive_environment(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1, '-e', 'webserver', 'new-env', 'new-value', '--exclusive-env'))
+
+    assert result.exit_code == 0
+    assert not result.exception
+
+    assert u"Update task definition based on: test-task:1" in result.output
+    assert u"Updating task definition" in result.output
+    assert u'Changed environment "new-env" of container "webserver" to: "new-value"' in result.output
+
+    assert u'Removed environment "foo" of container "webserver"' in result.output
+    assert u'Removed environment "lorem" of container "webserver"' in result.output
+
+    assert u'Removed secret' not in result.output
+
+    assert u'Successfully created revision: 2' in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_update_task_exclusive_secret(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1, '-s', 'webserver', 'new-secret', 'new-place', '--exclusive-secrets'))
+
+    assert result.exit_code == 0
+    assert not result.exception
+
+    assert u"Update task definition based on: test-task:1" in result.output
+    assert u"Updating task definition" in result.output
+    assert u'Changed secret "new-secret" of container "webserver" to: "new-place"' in result.output
+
+    assert u'Removed secret "baz" of container "webserver"' in result.output
+    assert u'Removed secret "dolor" of container "webserver"' in result.output
+
+    assert u'Removed environment' not in result.output
+
+    assert u'Successfully created revision: 2' in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_update_task_one_new_secret_variable(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1,
+                                        '-s', 'application', 'baz', 'qux',
+                                        '-s', 'webserver', 'baz', 'quux'))
+
+    assert result.exit_code == 0
+    assert not result.exception
+
+    assert u"Update task definition based on: test-task:1" in result.output
+    assert u"Updating task definition" in result.output
+    assert u'Changed secret "baz" of container "application" to: "qux"' in result.output
+    assert u'Changed secret "baz" of container "webserver" to: "quux"' in result.output
+    assert u'Changed secret "dolor" of container "webserver" to: "sit"' not in result.output
+    assert u'Successfully created revision: 2' in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_update_task_without_changing_environment_value(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1, '-e', 'webserver', 'foo', 'bar'))
+
+    assert result.exit_code == 0
+    assert not result.exception
+
+    assert u"Update task definition based on: test-task:1" in result.output
+    assert u"Updating task definition" not in result.output
+    assert u'Changed environment' not in result.output
+    assert u'Successfully created revision: 2' in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_update_task_without_changing_secrets_value(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1, '-s', 'webserver', 'baz', 'qux'))
+
+    assert result.exit_code == 0
+    assert not result.exception
+
+    assert u"Update task definition based on: test-task:1" in result.output
+    assert u"Updating task definition" not in result.output
+    assert u'Changed secrets' not in result.output
+    assert u'Successfully created revision: 2' in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_update_task_without_diff(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1, '-t', 'latest', '-e', 'webserver', 'foo', 'barz', '--no-diff'))
+
+    assert result.exit_code == 0
+    assert not result.exception
+
+    assert u"Update task definition based on: test-task:1" in result.output
+    assert u"Updating task definition" not in result.output
+    assert u'Changed environment' not in result.output
+    assert u'Successfully created revision: 2' in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_cron_without_credentials(get_client, runner):
+    get_client.return_value = EcsTestClient()
+    result = runner.invoke(cli.cron, (CLUSTER_NAME, TASK_DEFINITION_FAMILY_1, 'rule'))
+
+    assert result.exit_code == 1
+    assert u'Unable to locate credentials. Configure credentials by running "aws configure".\n\n' in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_cron(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.cron, (CLUSTER_NAME, TASK_DEFINITION_FAMILY_1, 'rule'))
+    assert not result.exception
+
+    assert result.exit_code == 0
+    assert u'Update task definition based on: test-task:2' in result.output
+    assert u'Creating new task definition revision' in result.output
+    assert u'Successfully created revision: 2' in result.output
+    assert u'Updating scheduled task' in result.output
+    assert u'Deregister task definition revision' in result.output
+    assert u'Successfully deregistered revision: 2' in result.output
+
+
+    print(result.output)
