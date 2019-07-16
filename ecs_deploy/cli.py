@@ -145,6 +145,8 @@ def cron(cluster, task, rule, image, tag, command, env, role, region, access_key
         action = RunAction(client, cluster)
 
         td = action.get_task_definition(task)
+        click.secho('Update task definition based on: %s\n' % td.family_revision)
+
         td.set_images(tag, **{key: value for (key, value) in image})
         td.set_commands(**{key: value for (key, value) in command})
         td.set_environment(env)
@@ -160,7 +162,8 @@ def cron(cluster, task, rule, image, tag, command, env, role, region, access_key
             rule=rule,
             task_definition=new_td
         )
-        click.secho('Updated scheduled task %s' % new_td.arn)
+        click.secho('Updating scheduled task')
+        click.secho('Successfully updated scheduled task %s\n' % rule, fg='green')
 
         record_deployment(tag, newrelic_apikey, newrelic_appid, comment, user)
 
