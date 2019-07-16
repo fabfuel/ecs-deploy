@@ -932,3 +932,9 @@ class EcsTestClient(object):
             error = dict(Error=dict(Code=123, Message="Something went wrong"))
             raise ClientError(error, 'fake_error')
         return dict(tasks=[dict(taskArn='arn:foo:bar'), dict(taskArn='arn:lorem:ipsum')])
+
+    def update_rule(self, cluster, rule, task_definition):
+        if not self.access_key_id or not self.secret_access_key:
+            raise EcsConnectionError(u'Unable to locate credentials. Configure credentials by running "aws configure".')
+        if cluster == 'unknown-cluster':
+            raise EcsConnectionError(u'An error occurred (ClusterNotFoundException) when calling the RunTask operation: Cluster not found.')

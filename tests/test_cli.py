@@ -1002,10 +1002,19 @@ def test_cron_without_credentials(get_client, runner):
     assert u'Unable to locate credentials. Configure credentials by running "aws configure".\n\n' in result.output
 
 
-# @patch('ecs_deploy.cli.get_client')
-# def test_cron(get_client, runner):
-#     get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-#     result = runner.invoke(cli.cron, (CLUSTER_NAME, TASK_DEFINITION_FAMILY_1, 'rule'))
-#     print(result.output)
-#     assert result.exit_code == 0
-#     assert not result.exception
+@patch('ecs_deploy.cli.get_client')
+def test_cron(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.cron, (CLUSTER_NAME, TASK_DEFINITION_FAMILY_1, 'rule'))
+    assert not result.exception
+
+    assert result.exit_code == 0
+    assert u'Update task definition based on: test-task:2' in result.output
+    assert u'Creating new task definition revision' in result.output
+    assert u'Successfully created revision: 2' in result.output
+    assert u'Updating scheduled task' in result.output
+    assert u'Deregister task definition revision' in result.output
+    assert u'Successfully deregistered revision: 2' in result.output
+
+
+    print(result.output)
