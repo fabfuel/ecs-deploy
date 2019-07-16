@@ -33,6 +33,7 @@ def test_ecs(runner):
     assert '  deploy  ' in result.output
     assert '  scale   ' in result.output
 
+
 @patch('ecs_deploy.cli.get_client')
 def test_deploy_without_credentials(get_client, runner):
     get_client.return_value = EcsTestClient()
@@ -728,6 +729,14 @@ def test_record_deployment(deployment_init, deployment_deploy, secho):
 
 
 @patch('ecs_deploy.cli.get_client')
+def test_update_without_credentials(get_client, runner):
+    get_client.return_value = EcsTestClient()
+    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1,))
+    assert result.exit_code == 1
+    assert u'Unable to locate credentials. Configure credentials by running "aws configure".\n\n' in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
 def test_update_task_creates_new_revision(get_client, runner):
     get_client.return_value = EcsTestClient('access_key', 'secret_key')
     result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1,))
@@ -982,3 +991,21 @@ def test_update_task_without_diff(get_client, runner):
     assert u"Updating task definition" not in result.output
     assert u'Changed environment' not in result.output
     assert u'Successfully created revision: 2' in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_cron_without_credentials(get_client, runner):
+    get_client.return_value = EcsTestClient()
+    result = runner.invoke(cli.cron, (CLUSTER_NAME, TASK_DEFINITION_FAMILY_1, 'rule'))
+
+    assert result.exit_code == 1
+    assert u'Unable to locate credentials. Configure credentials by running "aws configure".\n\n' in result.output
+
+
+# @patch('ecs_deploy.cli.get_client')
+# def test_cron(get_client, runner):
+#     get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+#     result = runner.invoke(cli.cron, (CLUSTER_NAME, TASK_DEFINITION_FAMILY_1, 'rule'))
+#     print(result.output)
+#     assert result.exit_code == 0
+#     assert not result.exception
