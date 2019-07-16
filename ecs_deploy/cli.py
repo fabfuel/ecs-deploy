@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 
 from ecs_deploy import VERSION
 from ecs_deploy.ecs import DeployAction, ScaleAction, RunAction, EcsClient, \
-    TaskPlacementError, EcsError, LAUNCH_TYPE_EC2, LAUNCH_TYPE_FARGATE
+    TaskPlacementError, EcsError, UpdateAction, LAUNCH_TYPE_EC2, LAUNCH_TYPE_FARGATE
 from ecs_deploy.newrelic import Deployment, NewRelicException
 
 
@@ -75,6 +75,8 @@ def deploy(cluster, service, tag, image, command, env, secret, role, execution_r
         td.set_role_arn(role)
         td.set_execution_role_arn(execution_role)
 
+        click.secho('Deploying based on task definition: %s\n' % td.family_revision)
+
         if diff:
             print_diff(td)
 
@@ -105,6 +107,119 @@ def deploy(cluster, service, tag, image, command, env, secret, role, execution_r
         record_deployment(tag, newrelic_apikey, newrelic_appid, comment, user)
 
     except (EcsError, NewRelicException) as e:
+        click.secho('%s\n' % str(e), fg='red', err=True)
+        exit(1)
+
+
+@click.command()
+@click.argument('cluster')
+@click.argument('task')
+@click.argument('rule')
+@click.option('-i', '--image', type=(str, str), multiple=True, help='Overwrites the image for a container: <container> <image>')
+@click.option('-t', '--tag', help='Changes the tag for ALL container images')
+@click.option('-c', '--command', type=(str, str), multiple=True, help='Overwrites the command in a container: <container> <command>')
+@click.option('-e', '--env', type=(str, str, str), multiple=True, help='Adds or changes an environment variable: <container> <name> <value>')
+@click.option('-r', '--role', type=str, help='Sets the task\'s role ARN: <task role ARN>')
+@click.option('--region', help='AWS region (e.g. eu-central-1)')
+@click.option('--access-key-id', help='AWS access key id')
+@click.option('--secret-access-key', help='AWS secret access key')
+@click.option('--newrelic-apikey', required=False, help='New Relic API Key for recording the deployment')
+@click.option('--newrelic-appid', required=False, help='New Relic App ID for recording the deployment')
+@click.option('--comment', required=False, help='Description/comment for recording the deployment')
+@click.option('--user', required=False, help='User who executes the deployment (used for recording)')
+@click.option('--profile', help='AWS configuration profile name')
+@click.option('--diff/--no-diff', default=True, help='Print what values were changed in the task definition')
+@click.option('--deregister/--no-deregister', default=True, help='Deregister or keep the old task definition (default: --deregister)')
+@click.option('--rollback/--no-rollback', default=False, help='Rollback to previous revision, if deployment failed (default: --no-rollback)')
+def cron(cluster, task, rule, image, tag, command, env, role, region, access_key_id, secret_access_key, newrelic_apikey, newrelic_appid, comment, user, profile, diff, deregister, rollback):
+    """
+    Update a scheduled task.
+
+    \b
+    CLUSTER is the name of your cluster (e.g. 'my-custer') within ECS.
+    TASK is the name of your task definition (e.g. 'my-task') within ECS.
+    RULE is the name of the rule to use the new task definition.
+    """
+    try:
+        client = get_client(access_key_id, secret_access_key, region, profile)
+        action = RunAction(client, cluster)
+
+        td = action.get_task_definition(task)
+        click.secho('Update task definition based on: %s\n' % td.family_revision)
+
+        td.set_images(tag, **{key: value for (key, value) in image})
+        td.set_commands(**{key: value for (key, value) in command})
+        td.set_environment(env)
+        td.set_role_arn(role)
+
+        if diff:
+            print_diff(td)
+
+        new_td = create_task_definition(action, td)
+
+        client.update_rule(
+            cluster=cluster,
+            rule=rule,
+            task_definition=new_td
+        )
+        click.secho('Updating scheduled task')
+        click.secho('Successfully updated scheduled task %s\n' % rule, fg='green')
+
+        record_deployment(tag, newrelic_apikey, newrelic_appid, comment, user)
+
+        if deregister:
+            deregister_task_definition(action, td)
+
+    except EcsError as e:
+        click.secho('%s\n' % str(e), fg='red', err=True)
+        exit(1)
+
+
+@click.command()
+@click.argument('task')
+@click.option('-i', '--image', type=(str, str), multiple=True, help='Overwrites the image for a container: <container> <image>')
+@click.option('-t', '--tag', help='Changes the tag for ALL container images')
+@click.option('-c', '--command', type=(str, str), multiple=True, help='Overwrites the command in a container: <container> <command>')
+@click.option('-e', '--env', type=(str, str, str), multiple=True, help='Adds or changes an environment variable: <container> <name> <value>')
+@click.option('-s', '--secret', type=(str, str, str), multiple=True, help='Adds or changes a secret environment variable from the AWS Parameter Store (Not available for Fargate): <container> <name> <parameter name>')
+@click.option('-r', '--role', type=str, help='Sets the task\'s role ARN: <task role ARN>')
+@click.option('--region', help='AWS region (e.g. eu-central-1)')
+@click.option('--access-key-id', help='AWS access key id')
+@click.option('--secret-access-key', help='AWS secret access key')
+@click.option('--profile', help='AWS configuration profile name')
+@click.option('--diff/--no-diff', default=True, help='Print what values were changed in the task definition')
+@click.option('--exclusive-env', is_flag=True, default=False, help='Set the given environment variables exclusively and remove all other pre-existing env variables from all containers')
+@click.option('--exclusive-secrets', is_flag=True, default=False, help='Set the given secrets exclusively and remove all other pre-existing secrets from all containers')
+@click.option('--deregister/--no-deregister', default=True, help='Deregister or keep the old task definition (default: --deregister)')
+def update(task, image, tag, command, env, secret, role, region, access_key_id, secret_access_key, profile, diff, exclusive_env, exclusive_secrets, deregister):
+    """
+    Update a task definition.
+
+    \b
+    TASK is the name of your task definition family (e.g. 'my-task') within ECS.
+    """
+    try:
+        client = get_client(access_key_id, secret_access_key, region, profile)
+        action = UpdateAction(client)
+
+        td = action.get_task_definition(task)
+        click.secho('Update task definition based on: %s\n' % td.family_revision)
+
+        td.set_images(tag, **{key: value for (key, value) in image})
+        td.set_commands(**{key: value for (key, value) in command})
+        td.set_environment(env, exclusive_env)
+        td.set_secrets(secret, exclusive_secrets)
+        td.set_role_arn(role)
+
+        if diff:
+            print_diff(td)
+
+        create_task_definition(action, td)
+
+        if deregister:
+            deregister_task_definition(action, td)
+
+    except EcsError as e:
         click.secho('%s\n' % str(e), fg='red', err=True)
         exit(1)
 
@@ -279,10 +394,6 @@ def get_task_definition(action, task):
         task_definition = action.get_task_definition(task)
     else:
         task_definition = action.get_current_task_definition(action.service)
-        task = task_definition.family_revision
-
-    click.secho('Deploying based on task definition: %s\n' % task)
-
     return task_definition
 
 
@@ -406,6 +517,8 @@ def inspect_errors(service, failure_message, ignore_warnings, since, timeout):
 ecs.add_command(deploy)
 ecs.add_command(scale)
 ecs.add_command(run)
+ecs.add_command(cron)
+ecs.add_command(update)
 
 if __name__ == '__main__':  # pragma: no cover
     ecs()
