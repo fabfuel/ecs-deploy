@@ -122,16 +122,21 @@ class EcsClient(object):
             overrides=overrides
         )
 
-    def update_rule(self, rule, arn, target_id, role_arn, task_definition_arn):
+    def update_rule(self, cluster, rule, task_definition):
+        target = self.events.list_targets_by_rule(Rule=rule)['Targets'][0]
         self.events.put_targets(
             Rule=rule,
             Targets=[{
-                'Id': target_id,
-                'Arn': arn,
-                'RoleArn': role_arn,
-                'EcsParameters': {'TaskDefinitionArn': task_definition_arn, 'TaskCount': 1}
+                'Arn': task_definition.arn.partition('task-definition')[0] + 'cluster/' + cluster,
+                'Id': target['Id'],
+                'RoleArn': target['RoleArn'],
+                'EcsParameters': {
+                    'TaskDefinitionArn': task_definition.arn,
+                    'TaskCount': 1
+                }
             }]
         )
+        return target['Id']
 
 
 class EcsService(dict):
