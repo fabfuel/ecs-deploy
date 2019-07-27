@@ -697,19 +697,19 @@ def test_run_task_with_invalid_cluster(get_client, runner):
 
 @patch('ecs_deploy.newrelic.Deployment')
 def test_record_deployment_without_revision(Deployment):
-    result = record_deployment(None, None, None, None, None)
+    result = record_deployment(None, None, None, None, None, None)
     assert result is False
 
 
 @patch('ecs_deploy.newrelic.Deployment')
 def test_record_deployment_without_apikey(Deployment):
-    result = record_deployment('1.2.3', None, None, None, None)
+    result = record_deployment('1.2.3', None, None, None, None, None)
     assert result is False
 
 
 @patch('ecs_deploy.newrelic.Deployment')
 def test_record_deployment_without_appid(Deployment):
-    result = record_deployment('1.2.3', 'APIKEY', None, None, None)
+    result = record_deployment('1.2.3', 'APIKEY',None, None, None, None)
     assert result is False
 
 
@@ -718,9 +718,9 @@ def test_record_deployment_without_appid(Deployment):
 @patch.object(Deployment, '__init__')
 def test_record_deployment(deployment_init, deployment_deploy, secho):
     deployment_init.return_value = None
-    result = record_deployment('1.2.3', 'APIKEY', 'APPID', 'Comment', 'user')
+    result = record_deployment('1.2.3', 'APIKEY', 'APPID', 'EU', 'Comment', 'user')
 
-    deployment_init.assert_called_once_with('APIKEY', 'APPID', 'user')
+    deployment_init.assert_called_once_with('APIKEY', 'APPID', 'user', 'EU')
     deployment_deploy.assert_called_once_with('1.2.3', '', 'Comment')
     secho.assert_any_call('Recording deployment in New Relic', nl=False)
     secho.assert_any_call('\nDone\n', fg='green')
