@@ -39,6 +39,7 @@ setup(
         'pytest',
         'pytest-flake8',
         'pytest-mock',
+        'freezegun',
         'coverage'
     ],
     classifiers=[

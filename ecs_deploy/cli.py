@@ -83,7 +83,7 @@ def deploy(cluster, service, tag, image, command, env, secret, role, execution_r
             getenv('SLACK_URL', slack_url),
             getenv('SLACK_SERVICE_MATCH', slack_service_match)
         )
-        slack.notifiy_start(cluster, tag, td, comment, user, service=service)
+        slack.notify_start(cluster, tag, td, comment, user, service=service)
 
         click.secho('Deploying based on task definition: %s\n' % td.family_revision)
 
@@ -172,7 +172,7 @@ def cron(cluster, task, rule, image, tag, command, env, role, region, access_key
             getenv('SLACK_URL', slack_url),
             getenv('SLACK_SERVICE_MATCH', slack_service_match)
         )
-        slack.notifiy_start(cluster, tag, td, comment, user, rule=rule)
+        slack.notify_start(cluster, tag, td, comment, user, rule=rule)
 
         if diff:
             print_diff(td)
