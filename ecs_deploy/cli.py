@@ -179,11 +179,11 @@ def cron(cluster, task, rule, image, tag, command, env, role, region, access_key
 
         new_td = create_task_definition(action, td)
 
-        #client.update_rule(
-        #    cluster=cluster,
-        #    rule=rule,
-        #    task_definition=new_td
-        #)
+        client.update_rule(
+            cluster=cluster,
+            rule=rule,
+            task_definition=new_td
+        )
         click.secho('Updating scheduled task')
         click.secho('Successfully updated scheduled task %s\n' % rule, fg='green')
 
