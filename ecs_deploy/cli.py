@@ -11,6 +11,7 @@ from ecs_deploy import VERSION
 from ecs_deploy.ecs import DeployAction, ScaleAction, RunAction, EcsClient, \
     TaskPlacementError, EcsError, UpdateAction, LAUNCH_TYPE_EC2, LAUNCH_TYPE_FARGATE
 from ecs_deploy.newrelic import Deployment, NewRelicException
+from ecs_deploy.slack import SlackNotification
 
 
 @click.group()
@@ -50,7 +51,9 @@ def get_client(access_key_id, secret_access_key, region, profile):
 @click.option('--exclusive-env', is_flag=True, default=False, help='Set the given environment variables exclusively and remove all other pre-existing env variables from all containers')
 @click.option('--exclusive-secrets', is_flag=True, default=False, help='Set the given secrets exclusively and remove all other pre-existing secrets from all containers')
 @click.option('--sleep-time', default=1, type=int, help='Amount of seconds to wait between each check of the service (default: 1)')
-def deploy(cluster, service, tag, image, command, env, secret, role, execution_role, task, region, access_key_id, secret_access_key, profile, timeout, newrelic_apikey, newrelic_appid, comment, user, ignore_warnings, diff, deregister, rollback, exclusive_env, exclusive_secrets, sleep_time):
+@click.option('--slack-url', required=False, help='Webhook URL of the Slack integration. Can also be defined via environment variable SLACK_URL')
+@click.option('--slack-service-match', default=".*", required=False, help='A regular expression for defining, which services should be notified. (default: .* =all). Can also be defined via environment variable SLACK_SERVICE_MATCH')
+def deploy(cluster, service, tag, image, command, env, secret, role, execution_role, task, region, access_key_id, secret_access_key, profile, timeout, newrelic_apikey, newrelic_appid, comment, user, ignore_warnings, diff, deregister, rollback, exclusive_env, exclusive_secrets, sleep_time, slack_url, slack_service_match='.*'):
     """
     Redeploy or modify a service.
 
@@ -75,6 +78,12 @@ def deploy(cluster, service, tag, image, command, env, secret, role, execution_r
         td.set_role_arn(role)
         td.set_execution_role_arn(execution_role)
 
+        slack = SlackNotification(
+            getenv('SLACK_URL', slack_url),
+            getenv('SLACK_SERVICE_MATCH', slack_service_match)
+        )
+        slack.notifiy_start(cluster, tag, td, comment, user, service=service)
+
         click.secho('Deploying based on task definition: %s\n' % td.family_revision)
 
         if diff:
@@ -97,6 +106,7 @@ def deploy(cluster, service, tag, image, command, env, secret, role, execution_r
             )
 
         except TaskPlacementError as e:
+            slack.notify_failure(cluster, str(e), service=service)
             if rollback:
                 click.secho('%s\n' % str(e), fg='red', err=True)
                 rollback_task_definition(deployment, td, new_td, sleep_time=sleep_time)
@@ -105,6 +115,8 @@ def deploy(cluster, service, tag, image, command, env, secret, role, execution_r
                 raise
 
         record_deployment(tag, newrelic_apikey, newrelic_appid, comment, user)
+
+        slack.notify_success(cluster, td.revision, service=service)
 
     except (EcsError, NewRelicException) as e:
         click.secho('%s\n' % str(e), fg='red', err=True)
@@ -131,7 +143,9 @@ def deploy(cluster, service, tag, image, command, env, secret, role, execution_r
 @click.option('--diff/--no-diff', default=True, help='Print what values were changed in the task definition')
 @click.option('--deregister/--no-deregister', default=True, help='Deregister or keep the old task definition (default: --deregister)')
 @click.option('--rollback/--no-rollback', default=False, help='Rollback to previous revision, if deployment failed (default: --no-rollback)')
-def cron(cluster, task, rule, image, tag, command, env, role, region, access_key_id, secret_access_key, newrelic_apikey, newrelic_appid, comment, user, profile, diff, deregister, rollback):
+@click.option('--slack-url', required=False, help='Webhook URL of the Slack integration. Can also be defined via environment variable SLACK_URL')
+@click.option('--slack-service-match', default=".*", required=False, help='A regular expression for defining, deployments of which crons should be notified. (default: .* =all). Can also be defined via environment variable SLACK_SERVICE_MATCH')
+def cron(cluster, task, rule, image, tag, command, env, role, region, access_key_id, secret_access_key, newrelic_apikey, newrelic_appid, comment, user, profile, diff, deregister, rollback, slack_url, slack_service_match):
     """
     Update a scheduled task.
 
@@ -152,6 +166,12 @@ def cron(cluster, task, rule, image, tag, command, env, role, region, access_key
         td.set_environment(env)
         td.set_role_arn(role)
 
+        slack = SlackNotification(
+            getenv('SLACK_URL', slack_url),
+            getenv('SLACK_SERVICE_MATCH', slack_service_match)
+        )
+        slack.notifiy_start(cluster, tag, td, comment, user, rule=rule)
+
         if diff:
             print_diff(td)
 
@@ -164,6 +184,8 @@ def cron(cluster, task, rule, image, tag, command, env, role, region, access_key
         )
         click.secho('Updating scheduled task')
         click.secho('Successfully updated scheduled task %s\n' % rule, fg='green')
+
+        slack.notify_success(cluster, td.revision, rule=rule)
 
         record_deployment(tag, newrelic_apikey, newrelic_appid, comment, user)
 
