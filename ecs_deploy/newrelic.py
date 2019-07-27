@@ -10,16 +10,23 @@ class NewRelicDeploymentException(NewRelicException):
 
 
 class Deployment(object):
-    ENDPOINT = 'https://api.newrelic.com/v2/applications/%(app_id)s/deployments.json'
+    API_HOST_US = 'api.newrelic.com'
+    API_HOST_EU = 'api.eu.newrelic.com'
+    ENDPOINT = 'https://%(host)s/v2/applications/%(app_id)s/deployments.json'
 
-    def __init__(self, api_key, app_id, user):
+    def __init__(self, api_key, app_id, user, region):
         self.__api_key = api_key
         self.__app_id = app_id
         self.__user = user
+        self.__region = region.lower() if region else 'us'
 
     @property
     def endpoint(self):
-        return self.ENDPOINT % dict(app_id=self.__app_id)
+        if self.__region == 'eu':
+            host = self.API_HOST_EU
+        else:
+            host = self.API_HOST_US
+        return self.ENDPOINT % dict(host=host, app_id=self.__app_id)
 
     @property
     def headers(self):
