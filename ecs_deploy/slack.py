@@ -1,6 +1,6 @@
 import re
+import requests
 from datetime import datetime
-from requests import post
 
 
 class SlackException(Exception):
@@ -10,8 +10,8 @@ class SlackException(Exception):
 class SlackNotification(object):
     def __init__(self, url, service_match):
         self.__url = url
-        self.__service_match_re = re.compile(service_match)
-        self.__timestamp_start = None
+        self.__service_match_re = re.compile(service_match or '')
+        self.__timestamp_start = datetime.utcnow()
 
     def get_payload(self, title, messages, color=None):
         fields = []
@@ -36,11 +36,9 @@ class SlackNotification(object):
 
         return payload
 
-    def notifiy_start(self, cluster, tag, task_definition, comment, user, service=None, rule=None):
+    def notify_start(self, cluster, tag, task_definition, comment, user, service=None, rule=None):
         if not self.__url or not self.__service_match_re.search(service or rule):
             return
-
-        self.__timestamp_start = datetime.utcnow()
 
         messages = [
             ('Cluster', cluster),
@@ -72,10 +70,7 @@ class SlackNotification(object):
 
         payload = self.get_payload('Deployment has started', messages)
 
-
-        response = post(self.__url, json=payload)
-
-        response.raise_for_status()
+        response = requests.post(self.__url, json=payload)
 
         if response.status_code != 200:
             raise SlackException('Notifying deployment failed')
@@ -102,12 +97,10 @@ class SlackNotification(object):
 
         payload = self.get_payload('Deployment finished successfully', messages, 'good')
 
-        response = post(self.__url, json=payload)
+        response = requests.post(self.__url, json=payload)
 
         if response.status_code != 200:
             raise SlackException('Notifying deployment failed')
-
-        return response
 
     def notify_failure(self, cluster, error, service=None, rule=None):
         if not self.__url or not self.__service_match_re.search(service or rule):
@@ -129,7 +122,7 @@ class SlackNotification(object):
 
         payload = self.get_payload('Deployment failed', messages, 'danger')
 
-        response = post(self.__url, json=payload)
+        response = requests.post(self.__url, json=payload)
 
         if response.status_code != 200:
             raise SlackException('Notifying deployment failed')
