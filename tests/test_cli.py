@@ -9,7 +9,9 @@ from ecs_deploy.cli import get_client, record_deployment
 from ecs_deploy.ecs import EcsClient
 from ecs_deploy.newrelic import Deployment, NewRelicDeploymentException
 from tests.test_ecs import EcsTestClient, CLUSTER_NAME, SERVICE_NAME, \
-    TASK_DEFINITION_ARN_1, TASK_DEFINITION_ARN_2, TASK_DEFINITION_FAMILY_1
+    TASK_DEFINITION_ARN_1, TASK_DEFINITION_ARN_2, TASK_DEFINITION_FAMILY_1, \
+    TASK_DEFINITION_REVISION_2, TASK_DEFINITION_REVISION_1, \
+    TASK_DEFINITION_REVISION_3
 
 
 @pytest.fixture
@@ -1016,5 +1018,45 @@ def test_cron(get_client, runner):
     assert u'Deregister task definition revision' in result.output
     assert u'Successfully deregistered revision: 2' in result.output
 
-
     print(result.output)
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_diff(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.diff, (TASK_DEFINITION_FAMILY_1, str(TASK_DEFINITION_REVISION_1), str(TASK_DEFINITION_REVISION_3)))
+
+    expected = '''change: containers.webserver.image
+    - "webserver:123"
+    + "webserver:456"
+change: containers.webserver.command
+    - "run"
+    + "execute"
+change: containers.webserver.environment.foo
+    - "bar"
+    + "foobar"
+change: containers.webserver.environment.lorem
+    - "ipsum"
+    + "loremipsum"
+remove: containers.webserver.environment
+    - empty: 
+change: containers.webserver.secrets.baz
+    - "qux"
+    + "foobaz"
+change: containers.webserver.secrets.dolor
+    - "sit"
+    + "loremdolor"
+change: role_arn
+    - "arn:test:role:1"
+    + "arn:test:another-role:1"
+change: execution_role_arn
+    - "arn:test:role:1"
+    + "arn:test:another-role:1"
+'''
+
+    assert result.output == expected
+
+    #assert not result.exception
+    #assert result.exit_code == 0
+    #assert u"Update task definition based on: test-task:1" in result.output
+    #assert u'Successfully created revision: 2' in result.output
