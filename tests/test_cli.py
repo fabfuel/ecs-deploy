@@ -1018,45 +1018,38 @@ def test_cron(get_client, runner):
     assert u'Deregister task definition revision' in result.output
     assert u'Successfully deregistered revision: 2' in result.output
 
-    print(result.output)
-
 
 @patch('ecs_deploy.cli.get_client')
 def test_diff(get_client, runner):
     get_client.return_value = EcsTestClient('acces_key', 'secret_key')
     result = runner.invoke(cli.diff, (TASK_DEFINITION_FAMILY_1, str(TASK_DEFINITION_REVISION_1), str(TASK_DEFINITION_REVISION_3)))
 
-    expected = '''change: containers.webserver.image
-    - "webserver:123"
-    + "webserver:456"
-change: containers.webserver.command
-    - "run"
-    + "execute"
-change: containers.webserver.environment.foo
-    - "bar"
-    + "foobar"
-change: containers.webserver.environment.lorem
-    - "ipsum"
-    + "loremipsum"
-remove: containers.webserver.environment
-    - empty: 
-change: containers.webserver.secrets.baz
-    - "qux"
-    + "foobaz"
-change: containers.webserver.secrets.dolor
-    - "sit"
-    + "loremdolor"
-change: role_arn
-    - "arn:test:role:1"
-    + "arn:test:another-role:1"
-change: execution_role_arn
-    - "arn:test:role:1"
-    + "arn:test:another-role:1"
-'''
+    assert not result.exception
+    assert result.exit_code == 0
 
-    assert result.output == expected
-
-    #assert not result.exception
-    #assert result.exit_code == 0
-    #assert u"Update task definition based on: test-task:1" in result.output
-    #assert u'Successfully created revision: 2' in result.output
+    assert 'change: containers.webserver.image' in result.output
+    assert '- "webserver:123"' in result.output
+    assert '+ "webserver:456"' in result.output
+    assert 'change: containers.webserver.command' in result.output
+    assert '- "run"' in result.output
+    assert '+ "execute"' in result.output
+    assert 'change: containers.webserver.environment.foo' in result.output
+    assert '- "bar"' in result.output
+    assert '+ "foobar"' in result.output
+    assert 'change: containers.webserver.environment.lorem' in result.output
+    assert '- "ipsum"' in result.output
+    assert '+ "loremipsum"' in result.output
+    assert 'remove: containers.webserver.environment' in result.output
+    assert '- empty: ' in result.output
+    assert 'change: containers.webserver.secrets.baz' in result.output
+    assert '- "qux"' in result.output
+    assert '+ "foobaz"' in result.output
+    assert 'change: containers.webserver.secrets.dolor' in result.output
+    assert '- "sit"' in result.output
+    assert '+ "loremdolor"' in result.output
+    assert 'change: role_arn' in result.output
+    assert '- "arn:test:role:1"' in result.output
+    assert '+ "arn:test:another-role:1"' in result.output
+    assert 'change: execution_role_arn' in result.output
+    assert '- "arn:test:role:1"' in result.output
+    assert '+ "arn:test:another-role:1"' in result.output
