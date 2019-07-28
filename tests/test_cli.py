@@ -1036,9 +1036,6 @@ def test_diff(get_client, runner):
     assert 'change: containers.webserver.environment.foo' in result.output
     assert '- "bar"' in result.output
     assert '+ "foobar"' in result.output
-    assert 'change: containers.webserver.environment.lorem' in result.output
-    assert '- "ipsum"' in result.output
-    assert '+ "loremipsum"' in result.output
     assert 'remove: containers.webserver.environment' in result.output
     assert '- empty: ' in result.output
     assert 'change: containers.webserver.secrets.baz' in result.output
@@ -1053,3 +1050,14 @@ def test_diff(get_client, runner):
     assert 'change: execution_role_arn' in result.output
     assert '- "arn:test:role:1"' in result.output
     assert '+ "arn:test:another-role:1"' in result.output
+    assert 'add: containers.webserver.environment' in result.output
+    assert '+ newvar: "new value"' in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_diff_without_credentials(get_client, runner):
+    get_client.return_value = EcsTestClient()
+    result = runner.invoke(cli.diff, (TASK_DEFINITION_FAMILY_1, str(TASK_DEFINITION_REVISION_1), str(TASK_DEFINITION_REVISION_3)))
+
+    assert result.exit_code == 1
+    assert u'Unable to locate credentials. Configure credentials by running "aws configure".\n\n' in result.output
