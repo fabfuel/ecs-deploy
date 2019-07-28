@@ -4,11 +4,12 @@ from os import getenv
 from time import sleep
 
 import click
+import json
 import getpass
 from datetime import datetime, timedelta
 
 from ecs_deploy import VERSION
-from ecs_deploy.ecs import DeployAction, ScaleAction, RunAction, EcsClient, \
+from ecs_deploy.ecs import DeployAction, ScaleAction, RunAction, EcsClient, DiffAction, \
     TaskPlacementError, EcsError, UpdateAction, LAUNCH_TYPE_EC2, LAUNCH_TYPE_FARGATE
 from ecs_deploy.newrelic import Deployment, NewRelicException
 from ecs_deploy.slack import SlackNotification
@@ -348,6 +349,51 @@ def run(cluster, task, count, command, env, secret, launchtype, subnet, security
         exit(1)
 
 
+@click.command()
+@click.argument('task')
+@click.argument('revision_a')
+@click.argument('revision_b')
+@click.option('--region', help='AWS region (e.g. eu-central-1)')
+@click.option('--access-key-id', help='AWS access key id')
+@click.option('--secret-access-key', help='AWS secret access key')
+@click.option('--profile', help='AWS configuration profile name')
+def diff(task, revision_a, revision_b, region, access_key_id, secret_access_key, profile):
+    """
+    Compare two task definition revisions.
+
+    \b
+    TASK is the name of your task definition (e.g. 'my-task') within ECS.
+    COUNT is the number of tasks your service should run.
+    """
+
+    try:
+        client = get_client(access_key_id, secret_access_key, region, profile)
+        action = DiffAction(client)
+
+        td_a = action.get_task_definition('%s:%s' % (task, revision_a))
+        td_b = action.get_task_definition('%s:%s' % (task, revision_b))
+
+        result = td_a.diff_raw(td_b)
+        for difference in result:
+            click.secho('%s: %s' % (difference[0], difference[1]))
+
+            if difference[0] == 'add':
+                for added in difference[2]:
+                    click.secho('    + %s: %s' % (added[0], json.dumps(added[1])))
+
+            if difference[0] == 'change':
+                click.secho('    - %s' % json.dumps(difference[2][0]))
+                click.secho('    + %s' % json.dumps(difference[2][1]))
+
+            if difference[0] == 'remove':
+                for removed in difference[2]:
+                    click.secho('    - %s: %s' % removed)
+
+    except EcsError as e:
+        click.secho('%s\n' % str(e), fg='red', err=True)
+        exit(1)
+
+
 def wait_for_finish(action, timeout, title, success_message, failure_message,
                     ignore_warnings, sleep_time=1):
     click.secho(title, nl=False)
@@ -544,6 +590,7 @@ ecs.add_command(scale)
 ecs.add_command(run)
 ecs.add_command(cron)
 ecs.add_command(update)
+ecs.add_command(diff)
 
 if __name__ == '__main__':  # pragma: no cover
     ecs()

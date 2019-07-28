@@ -9,7 +9,9 @@ from ecs_deploy.cli import get_client, record_deployment
 from ecs_deploy.ecs import EcsClient
 from ecs_deploy.newrelic import Deployment, NewRelicDeploymentException
 from tests.test_ecs import EcsTestClient, CLUSTER_NAME, SERVICE_NAME, \
-    TASK_DEFINITION_ARN_1, TASK_DEFINITION_ARN_2, TASK_DEFINITION_FAMILY_1
+    TASK_DEFINITION_ARN_1, TASK_DEFINITION_ARN_2, TASK_DEFINITION_FAMILY_1, \
+    TASK_DEFINITION_REVISION_2, TASK_DEFINITION_REVISION_1, \
+    TASK_DEFINITION_REVISION_3
 
 
 @pytest.fixture
@@ -1017,4 +1019,45 @@ def test_cron(get_client, runner):
     assert u'Successfully deregistered revision: 2' in result.output
 
 
-    print(result.output)
+@patch('ecs_deploy.cli.get_client')
+def test_diff(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.diff, (TASK_DEFINITION_FAMILY_1, str(TASK_DEFINITION_REVISION_1), str(TASK_DEFINITION_REVISION_3)))
+
+    assert not result.exception
+    assert result.exit_code == 0
+
+    assert 'change: containers.webserver.image' in result.output
+    assert '- "webserver:123"' in result.output
+    assert '+ "webserver:456"' in result.output
+    assert 'change: containers.webserver.command' in result.output
+    assert '- "run"' in result.output
+    assert '+ "execute"' in result.output
+    assert 'change: containers.webserver.environment.foo' in result.output
+    assert '- "bar"' in result.output
+    assert '+ "foobar"' in result.output
+    assert 'remove: containers.webserver.environment' in result.output
+    assert '- empty: ' in result.output
+    assert 'change: containers.webserver.secrets.baz' in result.output
+    assert '- "qux"' in result.output
+    assert '+ "foobaz"' in result.output
+    assert 'change: containers.webserver.secrets.dolor' in result.output
+    assert '- "sit"' in result.output
+    assert '+ "loremdolor"' in result.output
+    assert 'change: role_arn' in result.output
+    assert '- "arn:test:role:1"' in result.output
+    assert '+ "arn:test:another-role:1"' in result.output
+    assert 'change: execution_role_arn' in result.output
+    assert '- "arn:test:role:1"' in result.output
+    assert '+ "arn:test:another-role:1"' in result.output
+    assert 'add: containers.webserver.environment' in result.output
+    assert '+ newvar: "new value"' in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_diff_without_credentials(get_client, runner):
+    get_client.return_value = EcsTestClient()
+    result = runner.invoke(cli.diff, (TASK_DEFINITION_FAMILY_1, str(TASK_DEFINITION_REVISION_1), str(TASK_DEFINITION_REVISION_3)))
+
+    assert result.exit_code == 1
+    assert u'Unable to locate credentials. Configure credentials by running "aws configure".\n\n' in result.output
