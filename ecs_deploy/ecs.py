@@ -125,17 +125,11 @@ class EcsClient(object):
 
     def update_rule(self, cluster, rule, task_definition):
         target = self.events.list_targets_by_rule(Rule=rule)['Targets'][0]
+        ecs_parameters = target.setdefault('EcsParameters', {})
+        ecs_parameters['TaskDefinitionArn'] = task_definition.arn
         self.events.put_targets(
             Rule=rule,
-            Targets=[{
-                'Arn': task_definition.arn.partition('task-definition')[0] + 'cluster/' + cluster,
-                'Id': target['Id'],
-                'RoleArn': target['RoleArn'],
-                'EcsParameters': {
-                    'TaskDefinitionArn': task_definition.arn,
-                    'TaskCount': 1
-                }
-            }]
+            Targets=[target]
         )
         return target['Id']
 
