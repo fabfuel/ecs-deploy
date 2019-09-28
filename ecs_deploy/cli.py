@@ -101,8 +101,7 @@ def deploy(cluster, service, tag, image, command, env, secret, role, execution_r
                 success_message='Deployment successful',
                 failure_message='Deployment failed',
                 timeout=timeout,
-                deregister=deregister,
-                previous_task_definition=td,
+                task_definition_to_deregister=deregister and td,
                 ignore_warnings=ignore_warnings,
                 sleep_time=sleep_time
             )
@@ -433,9 +432,8 @@ def wait_for_finish(action, timeout, title, success_message, failure_message,
     click.secho('\n%s\n' % success_message, fg='green')
 
 
-def deploy_task_definition(deployment, task_definition, title, success_message,
-                           failure_message, timeout, deregister,
-                           previous_task_definition, ignore_warnings, sleep_time):
+def deploy_task_definition(deployment, task_definition, title, success_message, failure_message, timeout,
+                           ignore_warnings, sleep_time, task_definition_to_deregister=None):
     click.secho('Updating service')
     deployment.deploy(task_definition)
 
@@ -456,8 +454,8 @@ def deploy_task_definition(deployment, task_definition, title, success_message,
         sleep_time=sleep_time
     )
 
-    if deregister:
-        deregister_task_definition(deployment, previous_task_definition)
+    if task_definition_to_deregister:
+        deregister_task_definition(deployment, task_definition_to_deregister)
 
 
 def get_task_definition(action, task):
@@ -501,8 +499,7 @@ def rollback_task_definition(deployment, old, new, timeout=600, sleep_time=1):
         success_message='Rollback successful',
         failure_message='Rollback failed. Please check ECS Console',
         timeout=timeout,
-        deregister=True,
-        previous_task_definition=new,
+        task_definition_to_deregister=new,
         ignore_warnings=False,
         sleep_time=sleep_time
     )
