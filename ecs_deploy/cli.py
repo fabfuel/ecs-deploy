@@ -375,19 +375,20 @@ def diff(task, revision_a, revision_b, region, access_key_id, secret_access_key,
 
         result = td_a.diff_raw(td_b)
         for difference in result:
-            click.secho('%s: %s' % (difference[0], difference[1]))
-
             if difference[0] == 'add':
+                click.secho('%s: %s' % (difference[0], difference[1]), fg='green')
                 for added in difference[2]:
-                    click.secho('    + %s: %s' % (added[0], json.dumps(added[1])))
+                    click.secho('    + %s: %s' % (added[0], json.dumps(added[1])), fg='green')
 
             if difference[0] == 'change':
-                click.secho('    - %s' % json.dumps(difference[2][0]))
-                click.secho('    + %s' % json.dumps(difference[2][1]))
+                click.secho('%s: %s' % (difference[0], difference[1]), fg='yellow')
+                click.secho('    - %s' % json.dumps(difference[2][0]), fg='red')
+                click.secho('    + %s' % json.dumps(difference[2][1]), fg='green')
 
             if difference[0] == 'remove':
+                click.secho('%s: %s' % (difference[0], difference[1]), fg='red')
                 for removed in difference[2]:
-                    click.secho('    - %s: %s' % removed)
+                    click.secho('    - %s: %s' % removed, fg='red')
 
     except EcsError as e:
         click.secho('%s\n' % str(e), fg='red', err=True)
