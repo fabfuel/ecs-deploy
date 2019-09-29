@@ -4,13 +4,15 @@ from os import getenv
 from time import sleep
 
 import click
+import json
 import getpass
 from datetime import datetime, timedelta
 
 from ecs_deploy import VERSION
-from ecs_deploy.ecs import DeployAction, ScaleAction, RunAction, EcsClient, \
+from ecs_deploy.ecs import DeployAction, ScaleAction, RunAction, EcsClient, DiffAction, \
     TaskPlacementError, EcsError, UpdateAction, LAUNCH_TYPE_EC2, LAUNCH_TYPE_FARGATE
 from ecs_deploy.newrelic import Deployment, NewRelicException
+from ecs_deploy.slack import SlackNotification
 
 
 @click.group()
@@ -40,8 +42,9 @@ def get_client(access_key_id, secret_access_key, region, profile):
 @click.option('--profile', required=False, help='AWS configuration profile name')
 @click.option('--timeout', required=False, default=300, type=int, help='Amount of seconds to wait for deployment before command fails (default: 300). To disable timeout (fire and forget) set to -1')
 @click.option('--ignore-warnings', is_flag=True, help='Do not fail deployment on warnings (port already in use or insufficient memory/CPU)')
-@click.option('--newrelic-apikey', required=False, help='New Relic API Key for recording the deployment')
-@click.option('--newrelic-appid', required=False, help='New Relic App ID for recording the deployment')
+@click.option('--newrelic-apikey', required=False, help='New Relic API Key for recording the deployment. Can also be defined via environment variable NEW_RELIC_API_KEY')
+@click.option('--newrelic-appid', required=False, help='New Relic App ID for recording the deployment. Can also be defined via environment variable NEW_RELIC_APP_ID')
+@click.option('--newrelic-region', required=False, help='New Relic region: US or EU (default: US). Can also be defined via environment variable NEW_RELIC_REGION')
 @click.option('--comment', required=False, help='Description/comment for recording the deployment')
 @click.option('--user', required=False, help='User who executes the deployment (used for recording)')
 @click.option('--diff/--no-diff', default=True, help='Print which values were changed in the task definition (default: --diff)')
@@ -50,7 +53,9 @@ def get_client(access_key_id, secret_access_key, region, profile):
 @click.option('--exclusive-env', is_flag=True, default=False, help='Set the given environment variables exclusively and remove all other pre-existing env variables from all containers')
 @click.option('--exclusive-secrets', is_flag=True, default=False, help='Set the given secrets exclusively and remove all other pre-existing secrets from all containers')
 @click.option('--sleep-time', default=1, type=int, help='Amount of seconds to wait between each check of the service (default: 1)')
-def deploy(cluster, service, tag, image, command, env, secret, role, execution_role, task, region, access_key_id, secret_access_key, profile, timeout, newrelic_apikey, newrelic_appid, comment, user, ignore_warnings, diff, deregister, rollback, exclusive_env, exclusive_secrets, sleep_time):
+@click.option('--slack-url', required=False, help='Webhook URL of the Slack integration. Can also be defined via environment variable SLACK_URL')
+@click.option('--slack-service-match', default=".*", required=False, help='A regular expression for defining, which services should be notified. (default: .* =all). Can also be defined via environment variable SLACK_SERVICE_MATCH')
+def deploy(cluster, service, tag, image, command, env, secret, role, execution_role, task, region, access_key_id, secret_access_key, profile, timeout, newrelic_apikey, newrelic_appid, newrelic_region, comment, user, ignore_warnings, diff, deregister, rollback, exclusive_env, exclusive_secrets, sleep_time, slack_url, slack_service_match='.*'):
     """
     Redeploy or modify a service.
 
@@ -75,6 +80,12 @@ def deploy(cluster, service, tag, image, command, env, secret, role, execution_r
         td.set_role_arn(role)
         td.set_execution_role_arn(execution_role)
 
+        slack = SlackNotification(
+            getenv('SLACK_URL', slack_url),
+            getenv('SLACK_SERVICE_MATCH', slack_service_match)
+        )
+        slack.notify_start(cluster, tag, td, comment, user, service=service)
+
         click.secho('Deploying based on task definition: %s\n' % td.family_revision)
 
         if diff:
@@ -97,6 +108,7 @@ def deploy(cluster, service, tag, image, command, env, secret, role, execution_r
             )
 
         except TaskPlacementError as e:
+            slack.notify_failure(cluster, str(e), service=service)
             if rollback:
                 click.secho('%s\n' % str(e), fg='red', err=True)
                 rollback_task_definition(deployment, td, new_td, sleep_time=sleep_time)
@@ -104,7 +116,9 @@ def deploy(cluster, service, tag, image, command, env, secret, role, execution_r
             else:
                 raise
 
-        record_deployment(tag, newrelic_apikey, newrelic_appid, comment, user)
+        record_deployment(tag, newrelic_apikey, newrelic_appid, newrelic_region, comment, user)
+
+        slack.notify_success(cluster, td.revision, service=service)
 
     except (EcsError, NewRelicException) as e:
         click.secho('%s\n' % str(e), fg='red', err=True)
@@ -123,15 +137,18 @@ def deploy(cluster, service, tag, image, command, env, secret, role, execution_r
 @click.option('--region', help='AWS region (e.g. eu-central-1)')
 @click.option('--access-key-id', help='AWS access key id')
 @click.option('--secret-access-key', help='AWS secret access key')
-@click.option('--newrelic-apikey', required=False, help='New Relic API Key for recording the deployment')
-@click.option('--newrelic-appid', required=False, help='New Relic App ID for recording the deployment')
+@click.option('--newrelic-apikey', required=False, help='New Relic API Key for recording the deployment. Can also be defined via environment variable NEW_RELIC_API_KEY')
+@click.option('--newrelic-appid', required=False, help='New Relic App ID for recording the deployment. Can also be defined via environment variable NEW_RELIC_APP_ID')
+@click.option('--newrelic-region', required=False, help='New Relic region: US or EU (default: US). Can also be defined via environment variable NEW_RELIC_REGION')
 @click.option('--comment', required=False, help='Description/comment for recording the deployment')
 @click.option('--user', required=False, help='User who executes the deployment (used for recording)')
 @click.option('--profile', help='AWS configuration profile name')
 @click.option('--diff/--no-diff', default=True, help='Print what values were changed in the task definition')
 @click.option('--deregister/--no-deregister', default=True, help='Deregister or keep the old task definition (default: --deregister)')
 @click.option('--rollback/--no-rollback', default=False, help='Rollback to previous revision, if deployment failed (default: --no-rollback)')
-def cron(cluster, task, rule, image, tag, command, env, role, region, access_key_id, secret_access_key, newrelic_apikey, newrelic_appid, comment, user, profile, diff, deregister, rollback):
+@click.option('--slack-url', required=False, help='Webhook URL of the Slack integration. Can also be defined via environment variable SLACK_URL')
+@click.option('--slack-service-match', default=".*", required=False, help='A regular expression for defining, deployments of which crons should be notified. (default: .* =all). Can also be defined via environment variable SLACK_SERVICE_MATCH')
+def cron(cluster, task, rule, image, tag, command, env, role, region, access_key_id, secret_access_key, newrelic_apikey, newrelic_appid, newrelic_region, comment, user, profile, diff, deregister, rollback, slack_url, slack_service_match):
     """
     Update a scheduled task.
 
@@ -152,6 +169,12 @@ def cron(cluster, task, rule, image, tag, command, env, role, region, access_key
         td.set_environment(env)
         td.set_role_arn(role)
 
+        slack = SlackNotification(
+            getenv('SLACK_URL', slack_url),
+            getenv('SLACK_SERVICE_MATCH', slack_service_match)
+        )
+        slack.notify_start(cluster, tag, td, comment, user, rule=rule)
+
         if diff:
             print_diff(td)
 
@@ -165,7 +188,9 @@ def cron(cluster, task, rule, image, tag, command, env, role, region, access_key
         click.secho('Updating scheduled task')
         click.secho('Successfully updated scheduled task %s\n' % rule, fg='green')
 
-        record_deployment(tag, newrelic_apikey, newrelic_appid, comment, user)
+        slack.notify_success(cluster, td.revision, rule=rule)
+
+        record_deployment(tag, newrelic_apikey, newrelic_appid, newrelic_region, comment, user)
 
         if deregister:
             deregister_task_definition(action, td)
@@ -324,6 +349,52 @@ def run(cluster, task, count, command, env, secret, launchtype, subnet, security
         exit(1)
 
 
+@click.command()
+@click.argument('task')
+@click.argument('revision_a')
+@click.argument('revision_b')
+@click.option('--region', help='AWS region (e.g. eu-central-1)')
+@click.option('--access-key-id', help='AWS access key id')
+@click.option('--secret-access-key', help='AWS secret access key')
+@click.option('--profile', help='AWS configuration profile name')
+def diff(task, revision_a, revision_b, region, access_key_id, secret_access_key, profile):
+    """
+    Compare two task definition revisions.
+
+    \b
+    TASK is the name of your task definition (e.g. 'my-task') within ECS.
+    COUNT is the number of tasks your service should run.
+    """
+
+    try:
+        client = get_client(access_key_id, secret_access_key, region, profile)
+        action = DiffAction(client)
+
+        td_a = action.get_task_definition('%s:%s' % (task, revision_a))
+        td_b = action.get_task_definition('%s:%s' % (task, revision_b))
+
+        result = td_a.diff_raw(td_b)
+        for difference in result:
+            if difference[0] == 'add':
+                click.secho('%s: %s' % (difference[0], difference[1]), fg='green')
+                for added in difference[2]:
+                    click.secho('    + %s: %s' % (added[0], json.dumps(added[1])), fg='green')
+
+            if difference[0] == 'change':
+                click.secho('%s: %s' % (difference[0], difference[1]), fg='yellow')
+                click.secho('    - %s' % json.dumps(difference[2][0]), fg='red')
+                click.secho('    + %s' % json.dumps(difference[2][1]), fg='green')
+
+            if difference[0] == 'remove':
+                click.secho('%s: %s' % (difference[0], difference[1]), fg='red')
+                for removed in difference[2]:
+                    click.secho('    - %s: %s' % removed, fg='red')
+
+    except EcsError as e:
+        click.secho('%s\n' % str(e), fg='red', err=True)
+        exit(1)
+
+
 def wait_for_finish(action, timeout, title, success_message, failure_message,
                     ignore_warnings, sleep_time=1):
     click.secho(title, nl=False)
@@ -441,9 +512,10 @@ def rollback_task_definition(deployment, old, new, timeout=600, sleep_time=1):
     )
 
 
-def record_deployment(revision, api_key, app_id, comment, user):
+def record_deployment(revision, api_key, app_id, region, comment, user):
     api_key = getenv('NEW_RELIC_API_KEY', api_key)
     app_id = getenv('NEW_RELIC_APP_ID', app_id)
+    region = getenv('NEW_RELIC_REGION', region)
 
     if not revision or not api_key or not app_id:
         return False
@@ -452,7 +524,7 @@ def record_deployment(revision, api_key, app_id, comment, user):
 
     click.secho('Recording deployment in New Relic', nl=False)
 
-    deployment = Deployment(api_key, app_id, user)
+    deployment = Deployment(api_key, app_id, user, region)
     deployment.deploy(revision, '', comment)
 
     click.secho('\nDone\n', fg='green')
@@ -519,6 +591,7 @@ ecs.add_command(scale)
 ecs.add_command(run)
 ecs.add_command(cron)
 ecs.add_command(update)
+ecs.add_command(diff)
 
 if __name__ == '__main__':  # pragma: no cover
     ecs()

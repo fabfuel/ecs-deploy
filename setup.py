@@ -11,7 +11,7 @@ def readme():
         return f.read()
 
 
-dependencies = ['click<7.0.0', 'botocore>=1.12.0', 'boto3>=1.4.7', 'future', 'requests']
+dependencies = ['click<7.0.0', 'botocore>=1.12.0', 'boto3>=1.4.7', 'future', 'requests', 'dictdiffer==0.8.0']
 
 setup(
     name='ecs-deploy',
@@ -39,6 +39,7 @@ setup(
         'pytest',
         'pytest-flake8',
         'pytest-mock',
+        'freezegun',
         'coverage'
     ],
     classifiers=[

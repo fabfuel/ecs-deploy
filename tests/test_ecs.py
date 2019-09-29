@@ -30,6 +30,7 @@ TASK_DEFINITION_CONTAINERS_1 = [
      u'secrets': ({"name": "baz", "valueFrom": "qux"}, {"name": "dolor", "valueFrom": "sit"})},
     {u'name': u'application', u'image': u'application:123', u'command': u'run', u'environment': ()}
 ]
+
 TASK_DEFINITION_FAMILY_2 = u'test-task'
 TASK_DEFINITION_REVISION_2 = 2
 TASK_DEFINITION_ARN_2 = u'arn:aws:ecs:eu-central-1:123456789012:task-definition/%s:%s' % (TASK_DEFINITION_FAMILY_2,
@@ -41,6 +42,18 @@ TASK_DEFINITION_CONTAINERS_2 = [
      u'secrets': ({"name": "baz", "valueFrom": "qux"}, {"name": "dolor", "valueFrom": "sit"})},
     {u'name': u'application', u'image': u'application:123', u'command': u'run', u'environment': ()}
 ]
+
+TASK_DEFINITION_REVISION_3 = 3
+TASK_DEFINITION_ARN_3 = u'arn:aws:ecs:eu-central-1:123456789012:task-definition/%s:%s' % (TASK_DEFINITION_FAMILY_1,
+                                                                                          TASK_DEFINITION_REVISION_3)
+TASK_DEFINITION_VOLUMES_3 = []
+TASK_DEFINITION_CONTAINERS_3 = [
+    {u'name': u'webserver', u'image': u'webserver:456', u'command': u'execute',
+     u'environment': ({"name": "foo", "value": "foobar"}, {"name": "newvar", "value": "new value"}),
+     u'secrets': ({"name": "baz", "valueFrom": "foobaz"}, {"name": "dolor", "valueFrom": "loremdolor"})},
+    {u'name': u'application', u'image': u'application:123', u'command': u'run', u'environment': ()}
+]
+TASK_DEFINITION_ROLE_ARN_3 = u'arn:test:another-role:1'
 
 PAYLOAD_TASK_DEFINITION_1 = {
     u'taskDefinitionArn': TASK_DEFINITION_ARN_1,
@@ -65,6 +78,22 @@ PAYLOAD_TASK_DEFINITION_2 = {
     u'volumes': deepcopy(TASK_DEFINITION_VOLUMES_2),
     u'containerDefinitions': deepcopy(TASK_DEFINITION_CONTAINERS_2),
     u'status': u'active',
+    u'unknownProperty': u'lorem-ipsum',
+    u'compatibilities': [u'EC2'],
+}
+
+PAYLOAD_TASK_DEFINITION_3 = {
+    u'taskDefinitionArn': TASK_DEFINITION_ARN_3,
+    u'family': TASK_DEFINITION_FAMILY_1,
+    u'revision': TASK_DEFINITION_REVISION_3,
+    u'taskRoleArn': TASK_DEFINITION_ROLE_ARN_3,
+    u'executionRoleArn': TASK_DEFINITION_ROLE_ARN_3,
+    u'volumes': deepcopy(TASK_DEFINITION_VOLUMES_3),
+    u'containerDefinitions': deepcopy(TASK_DEFINITION_CONTAINERS_3),
+    u'status': u'active',
+    u'requiresAttributes': {},
+    u'networkMode': u'host',
+    u'placementConstraints': {},
     u'unknownProperty': u'lorem-ipsum',
     u'compatibilities': [u'EC2'],
 }
@@ -166,11 +195,17 @@ RESPONSE_TASK_DEFINITION_2 = {
     u"taskDefinition": PAYLOAD_TASK_DEFINITION_2
 }
 
+RESPONSE_TASK_DEFINITION_3 = {
+    u"taskDefinition": PAYLOAD_TASK_DEFINITION_3
+}
+
 RESPONSE_TASK_DEFINITIONS = {
     TASK_DEFINITION_ARN_1: RESPONSE_TASK_DEFINITION,
     TASK_DEFINITION_ARN_2: RESPONSE_TASK_DEFINITION_2,
+    TASK_DEFINITION_ARN_3: RESPONSE_TASK_DEFINITION_3,
     u'test-task:1': RESPONSE_TASK_DEFINITION,
     u'test-task:2': RESPONSE_TASK_DEFINITION_2,
+    u'test-task:3': RESPONSE_TASK_DEFINITION_3,
     u'test-task': RESPONSE_TASK_DEFINITION_2,
 }
 
@@ -892,6 +927,8 @@ class EcsTestClient(object):
         }
 
     def describe_task_definition(self, task_definition_arn):
+        if not self.access_key_id or not self.secret_access_key:
+            raise EcsConnectionError(u'Unable to locate credentials. Configure credentials by running "aws configure".')
         if task_definition_arn in RESPONSE_TASK_DEFINITIONS:
             return deepcopy(RESPONSE_TASK_DEFINITIONS[task_definition_arn])
         raise UnknownTaskDefinitionError('Unknown task definition arn: %s' % task_definition_arn)

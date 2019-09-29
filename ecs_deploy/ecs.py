@@ -5,6 +5,7 @@ import re
 from boto3.session import Session
 from botocore.exceptions import ClientError, NoCredentialsError
 from dateutil.tz.tz import tzlocal
+from dictdiffer import diff
 
 JSON_LIST_REGEX = re.compile(r'^\[.*\]$')
 
@@ -124,18 +125,9 @@ class EcsClient(object):
 
     def update_rule(self, cluster, rule, task_definition):
         target = self.events.list_targets_by_rule(Rule=rule)['Targets'][0]
-        self.events.put_targets(
-            Rule=rule,
-            Targets=[{
-                'Arn': task_definition.arn.partition('task-definition')[0] + 'cluster/' + cluster,
-                'Id': target['Id'],
-                'RoleArn': target['RoleArn'],
-                'EcsParameters': {
-                    'TaskDefinitionArn': task_definition.arn,
-                    'TaskCount': 1
-                }
-            }]
-        )
+        target['Arn'] = task_definition.arn.partition('task-definition')[0] + 'cluster/' + cluster
+        target['EcsParameters']['TaskDefinitionArn'] = task_definition.arn
+        self.events.put_targets(Rule=rule, Targets=[target])
         return target['Id']
 
 
@@ -236,6 +228,47 @@ class EcsTaskDefinition(object):
     @property
     def diff(self):
         return self._diff
+
+    def diff_raw(self, task_b):
+        containers_a = {c['name']: c for c in self.containers}
+        containers_b = {c['name']: c for c in task_b.containers}
+
+        requirements_a = sorted([r['name'] for r in self.requires_attributes])
+        requirements_b = sorted([r['name'] for r in task_b.requires_attributes])
+
+        for container in containers_a:
+            containers_a[container]['environment'] = {e['name']: e['value'] for e in containers_a[container].get('environment', {})}
+
+        for container in containers_b:
+            containers_b[container]['environment'] = {e['name']: e['value'] for e in containers_b[container].get('environment', {})}
+
+        for container in containers_a:
+            containers_a[container]['secrets'] = {e['name']: e['valueFrom'] for e in containers_a[container].get('secrets', {})}
+
+        for container in containers_b:
+            containers_b[container]['secrets'] = {e['name']: e['valueFrom'] for e in containers_b[container].get('secrets', {})}
+
+        composite_a = {
+            'containers': containers_a,
+            'volumes': self.volumes,
+            'requires_attributes': requirements_a,
+            'role_arn': self.role_arn,
+            'execution_role_arn': self.execution_role_arn,
+            'compatibilities': self.compatibilities,
+            'additional_properties': self.additional_properties,
+        }
+
+        composite_b = {
+            'containers': containers_b,
+            'volumes': task_b.volumes,
+            'requires_attributes': requirements_b,
+            'role_arn': task_b.role_arn,
+            'execution_role_arn': task_b.execution_role_arn,
+            'compatibilities': task_b.compatibilities,
+            'additional_properties': task_b.additional_properties,
+        }
+
+        return list(diff(composite_a, composite_b))
 
     def get_overrides(self):
         override = dict()
@@ -668,6 +701,11 @@ class RunAction(EcsAction):
 class UpdateAction(EcsAction):
     def __init__(self, client):
         super(UpdateAction, self).__init__(client, None, None)
+
+
+class DiffAction(EcsAction):
+    def __init__(self, client):
+        super(DiffAction, self).__init__(client, None, None)
 
 
 class EcsError(Exception):
