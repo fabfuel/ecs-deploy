@@ -726,7 +726,8 @@ class DeployBlueGreenAction(EcsAction):
             raise EcsError('CodeDeploy Deployment Failed.')
 
         for task_set in deployment_target['ecsTarget']['taskSetsInfo']:
-            return task_set['taskSetLabel'] == 'Green' and task_set["trafficWeight"] > self._traffic_health_percentage
+            if task_set['taskSetLabel'] == 'Green':
+                return task_set["trafficWeight"] > self._traffic_health_percentage
 
     def _get_revision_content(self, task_definition):
         return json.dumps({
