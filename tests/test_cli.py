@@ -533,6 +533,20 @@ def test_deploy_unknown_task_definition_arn(get_client, runner):
 
 
 @patch('ecs_deploy.cli.get_client')
+def test_deploy_no_new_task(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key', wait=2)
+    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '--no-new-task'))
+    assert result.exit_code == 0
+    assert not result.exception
+    assert u"Deploying based on task definition: test-task:1" in result.output
+    assert u'Successfully created revision: 2' not in result.output
+    assert u'Successfully deregistered revision: 1' not in result.output
+    assert u'Successfully changed task definition to: test-task:1' in result.output
+    assert u'Deployment successful' in result.output
+    assert u"Updating task definition" not in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
 def test_scale_without_credentials(get_client, runner):
     get_client.return_value = EcsTestClient()
     result = runner.invoke(cli.scale, (CLUSTER_NAME, SERVICE_NAME, '2'))

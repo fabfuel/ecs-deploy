@@ -36,6 +36,7 @@ def get_client(access_key_id, secret_access_key, region, profile):
 @click.option('-r', '--role', type=str, help='Sets the task\'s role ARN: <task role ARN>')
 @click.option('-x', '--execution-role', type=str, help='Sets the execution\'s role ARN: <execution role ARN>')
 @click.option('--task', type=str, help='Task definition to be deployed. Can be a task ARN or a task family with optional revision')
+@click.option('--new-task/--no-new-task', default=True, help='Creates a new task definition based on the currently used task or the given one')
 @click.option('--region', required=False, help='AWS region (e.g. eu-central-1)')
 @click.option('--access-key-id', required=False, help='AWS access key id')
 @click.option('--secret-access-key', required=False, help='AWS secret access key')
@@ -55,7 +56,7 @@ def get_client(access_key_id, secret_access_key, region, profile):
 @click.option('--sleep-time', default=1, type=int, help='Amount of seconds to wait between each check of the service (default: 1)')
 @click.option('--slack-url', required=False, help='Webhook URL of the Slack integration. Can also be defined via environment variable SLACK_URL')
 @click.option('--slack-service-match', default=".*", required=False, help='A regular expression for defining, which services should be notified. (default: .* =all). Can also be defined via environment variable SLACK_SERVICE_MATCH')
-def deploy(cluster, service, tag, image, command, env, secret, role, execution_role, task, region, access_key_id, secret_access_key, profile, timeout, newrelic_apikey, newrelic_appid, newrelic_region, comment, user, ignore_warnings, diff, deregister, rollback, exclusive_env, exclusive_secrets, sleep_time, slack_url, slack_service_match='.*'):
+def deploy(cluster, service, tag, image, command, env, secret, role, execution_role, task, new_task, region, access_key_id, secret_access_key, profile, timeout, newrelic_apikey, newrelic_appid, newrelic_region, comment, user, ignore_warnings, diff, deregister, rollback, exclusive_env, exclusive_secrets, sleep_time, slack_url, slack_service_match='.*'):
     """
     Redeploy or modify a service.
 
@@ -91,12 +92,16 @@ def deploy(cluster, service, tag, image, command, env, secret, role, execution_r
         if diff:
             print_diff(td)
 
-        new_td = create_task_definition(deployment, td)
+        if new_task:
+            deploy_td = create_task_definition(deployment, td)
+        else:
+            deploy_td = td
+            deregister = False
 
         try:
             deploy_task_definition(
                 deployment=deployment,
-                task_definition=new_td,
+                task_definition=deploy_td,
                 title='Deploying new task definition',
                 success_message='Deployment successful',
                 failure_message='Deployment failed',
