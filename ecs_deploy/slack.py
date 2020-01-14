@@ -34,7 +34,9 @@ class SlackLogger(object):
 
     def get_deploy_start_payload(self, service, task_definition):
         #import pdb;pdb.set_trace()
-        return "Deploying service %s on cluster %s \nImage: %s" % (service.name, service.cluster, ",".join( [c['image'] for c in task_definition.containers]) )
+        service_link = "https://us-west-2.console.aws.amazon.com/ecs/home?region=us-west-2#/clusters/%s/services/%s/deployments" % (service.cluster, service.name)
+        cluster_link = "https://us-west-2.console.aws.amazon.com/ecs/home?region=us-west-2#/clusters/%s/services" % service.cluster
+        return "Deploying service <%s|%s> on cluster <%s|%s> \nImage: %s" % (service_link, service.name, cluster_link, service.cluster, ",".join( [c['image'] for c in task_definition.containers]) )
 
     def get_deploy_progress_payload(self, service, task_definition):
         primary = [dep for dep in service['deployments'] if dep['status']=='PRIMARY'][0]
