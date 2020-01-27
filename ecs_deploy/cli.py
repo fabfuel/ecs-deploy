@@ -156,8 +156,19 @@ def deploy(cluster, service, tag, image, command, cpu, memory, memoryreservation
 @click.option('-i', '--image', type=(str, str), multiple=True, help='Overwrites the image for a container: <container> <image>')
 @click.option('-t', '--tag', help='Changes the tag for ALL container images')
 @click.option('-c', '--command', type=(str, str), multiple=True, help='Overwrites the command in a container: <container> <command>')
+@click.option('--cpu', type=(str, int), multiple=True, help='Overwrites the cpu value for a container: <container> <cpu>')
+@click.option('--memory', type=(str, int), multiple=True, help='Overwrites the memory value for a container: <container> <memory>')
+@click.option('--memoryreservation', type=(str, int), multiple=True, help='Overwrites the memory reservation value for a container: <container> <memoryreservation>')
+@click.option('--privileged', type=(str, bool), multiple=True, help='Overwrites the memory reservation value for a container: <container> <memoryreservation>')
 @click.option('-e', '--env', type=(str, str, str), multiple=True, help='Adds or changes an environment variable: <container> <name> <value>')
+@click.option('-s', '--secret', type=(str, str, str), multiple=True, help='Adds or changes a secret environment variable from the AWS Parameter Store (Not available for Fargate): <container> <name> <parameter name>')
+@click.option('-u', '--ulimit', type=(str, str, int, int), multiple=True, help='Adds or changes a ulimit variable in the container description (Not available for Fargate): <container> <ulimit name> <softlimit value> <hardlimit value>')
+@click.option('--system-control', type=(str, str, str), multiple=True, help='Adds or changes a system control variable in the container description (Not available for Fargate): <container> <namespace> <value>')
+@click.option('-p', '--port', type=(str, int, int), multiple=True, help='Adds or changes a port mappings in the container description (Not available for Fargate): <container> <container port value> <host port value>')
+@click.option('-m', '--mount', type=(str, str, str), multiple=True, help='Adds or changes a mount points in the container description (Not available for Fargate): <container> <container port value> <host port value>')
+@click.option('-l', '--log', type=(str, str, str, str), multiple=True, help='Adds or changes a log configuration in the container description (Not available for Fargate): <container> <log driver> <option name> <option value>')
 @click.option('-r', '--role', type=str, help='Sets the task\'s role ARN: <task role ARN>')
+@click.option('-x', '--execution-role', type=str, help='Sets the execution\'s role ARN: <execution role ARN>')
 @click.option('--region', help='AWS region (e.g. eu-central-1)')
 @click.option('--access-key-id', help='AWS access key id')
 @click.option('--secret-access-key', help='AWS secret access key')
@@ -170,9 +181,16 @@ def deploy(cluster, service, tag, image, command, cpu, memory, memoryreservation
 @click.option('--diff/--no-diff', default=True, help='Print what values were changed in the task definition')
 @click.option('--deregister/--no-deregister', default=True, help='Deregister or keep the old task definition (default: --deregister)')
 @click.option('--rollback/--no-rollback', default=False, help='Rollback to previous revision, if deployment failed (default: --no-rollback)')
+@click.option('--exclusive-env', is_flag=True, default=False, help='Set the given environment variables exclusively and remove all other pre-existing env variables from all containers')
+@click.option('--exclusive-secrets', is_flag=True, default=False, help='Set the given secrets exclusively and remove all other pre-existing secrets from all containers')
 @click.option('--slack-url', required=False, help='Webhook URL of the Slack integration. Can also be defined via environment variable SLACK_URL')
 @click.option('--slack-service-match', default=".*", required=False, help='A regular expression for defining, deployments of which crons should be notified. (default: .* =all). Can also be defined via environment variable SLACK_SERVICE_MATCH')
-def cron(cluster, task, rule, image, tag, command, env, role, region, access_key_id, secret_access_key, newrelic_apikey, newrelic_appid, newrelic_region, comment, user, profile, diff, deregister, rollback, slack_url, slack_service_match):
+@click.option('--exclusive-ulimits', is_flag=True, default=False, help='Set the given ulimits exclusively and remove all other pre-existing ulimits from all containers')
+@click.option('--exclusive-system-controls', is_flag=True, default=False, help='Set the given system controls exclusively and remove all other pre-existing system controls from all containers')
+@click.option('--exclusive-ports', is_flag=True, default=False, help='Set the given port mappings exclusively and remove all other pre-existing port mappings from all containers')
+@click.option('--exclusive-mounts', is_flag=True, default=False, help='Set the given mount points exclusively and remove all other pre-existing mount points from all containers')
+@click.option('--volume', type=(str, str), multiple=True, required=False, help='Set volume mapping from host to container in the task definition.')
+def cron(cluster, task, rule, image, tag, command, cpu, memory, memoryreservation, privileged, env, secret, ulimit, system_control, port, mount, log, role, execution_role, region, access_key_id, secret_access_key, newrelic_apikey, newrelic_appid, newrelic_region, comment, user, profile, diff, deregister, rollback, exclusive_env, exclusive_secrets, slack_url, slack_service_match, exclusive_ulimits, exclusive_system_controls, exclusive_ports, exclusive_mounts, volume):
     """
     Update a scheduled task.
 
@@ -190,8 +208,20 @@ def cron(cluster, task, rule, image, tag, command, env, role, region, access_key
 
         td.set_images(tag, **{key: value for (key, value) in image})
         td.set_commands(**{key: value for (key, value) in command})
-        td.set_environment(env)
+        td.set_cpu(**{key: value for (key, value) in cpu})
+        td.set_memory(**{key: value for (key, value) in memory})
+        td.set_memoryreservation(**{key: value for (key, value) in memoryreservation})
+        td.set_privileged(**{key: value for (key, value) in privileged})
+        td.set_environment(env, exclusive_env)
+        td.set_secrets(secret, exclusive_secrets)
+        td.set_ulimits(ulimit, exclusive_ulimits)
+        td.set_system_controls(system_control, exclusive_system_controls)
+        td.set_port_mappings(port, exclusive_ports)
+        td.set_mount_points(mount, exclusive_mounts)
+        td.set_log_configurations(log)
         td.set_role_arn(role)
+        td.set_execution_role_arn(execution_role)
+        td.set_volumes(volume)
 
         slack = SlackNotification(
             getenv('SLACK_URL', slack_url),
