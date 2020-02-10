@@ -121,6 +121,39 @@ def test_notify_start(post_mock, url, service_match, task_definition):
 
 
 @patch('requests.post')
+def test_notify_start_without_tag(post_mock, url, service_match, task_definition):
+    post_mock.return_value = NotifyResponseSuccessfulMock()
+
+    task_definition.set_images(webserver=u'new-image:my-tag', application=u'app-image:another-tag')
+    task_definition.set_environment((('webserver', 'foo', 'baz'),))
+
+    slack = SlackNotification(url, service_match)
+    slack.notify_start('my-cluster', None, task_definition, 'my-comment', 'my-user', 'my-service', 'my-rule')
+
+    payload = {
+        'username': 'ECS Deploy',
+        'attachments': [
+            {
+                'pretext': 'Deployment has started',
+                'color': None,
+                'fields': [
+                    {'title': 'Cluster', 'value': 'my-cluster', 'short': True},
+                    {'title': 'Service', 'value': 'my-service', 'short': True},
+                    {'title': 'Scheduled Task', 'value': 'my-rule', 'short': True},
+                    {'title': 'User', 'value': 'my-user', 'short': True},
+                    {'title': 'Comment', 'value': 'my-comment', 'short': True},
+                    {'title': 'image', 'value': 'new-image:my-tag', 'short': True},
+                    {'title': 'image', 'value': 'app-image:another-tag', 'short': True},
+                    {'title': 'Environment', 'value': '_sensitive (therefore hidden)_', 'short': True}
+                ]
+            }
+        ]
+    }
+
+    post_mock.assert_called_with(url, json=payload)
+
+
+@patch('requests.post')
 @freeze_time()
 def test_notify_success(post_mock, url, service_match, task_definition):
     post_mock.return_value = NotifyResponseSuccessfulMock()
