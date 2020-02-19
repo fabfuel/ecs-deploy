@@ -6,6 +6,8 @@ build/
 env/
 *.egg-info/
 
+venv/
+
 .tox/
 .coverage
 .cache
