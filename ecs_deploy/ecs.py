@@ -194,6 +194,30 @@ class EcsService(dict):
         return errors
 
 
+class EcsTask(dict):
+    def __init__(self, cluster, task=None, **kwargs):
+        self._cluster = cluster
+        super(EcsTask, self).__init__(task, **kwargs)
+
+    @property
+    def status(self):
+        return self.get(u'lastStatus')
+
+    @property
+    def is_stopped(self):
+        return self.status == u'STOPPED'
+
+    @property
+    def exit_code(self):
+        if not self.is_stopped:
+            raise ValueError('exit_code only can be invoked when task is stopped')
+
+        exit_code = 0
+        for container in self.get(u'containers'):
+            exit_code = exit_code or container.get(u'exitCode')
+        return exit_code
+
+
 class EcsTaskDefinition(object):
     def __init__(self, containerDefinitions, volumes, family, revision,
                  status, taskDefinitionArn, requiresAttributes=None,
@@ -696,6 +720,13 @@ class RunAction(EcsAction):
             return True
         except ClientError as e:
             raise EcsError(str(e))
+
+    def get_tasks(self, tasks_arn):
+        tasks_details = self._client.describe_tasks(
+            cluster_name=self._cluster_name,
+            task_arns=tasks_arn,
+        )
+        return map(lambda payload: EcsTask(cluster=self._cluster_name, task=payload), tasks_details['tasks'])
 
 
 class UpdateAction(EcsAction):

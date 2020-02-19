@@ -101,8 +101,7 @@ def deploy(cluster, service, tag, image, command, env, secret, role, execution_r
                 success_message='Deployment successful',
                 failure_message='Deployment failed',
                 timeout=timeout,
-                deregister=deregister,
-                previous_task_definition=td,
+                task_definition_to_deregister=deregister and td,
                 ignore_warnings=ignore_warnings,
                 sleep_time=sleep_time
             )
@@ -297,9 +296,12 @@ def scale(cluster, service, desired_count, access_key_id, secret_access_key, reg
 @click.argument('cluster')
 @click.argument('task')
 @click.argument('count', required=False, default=1)
+@click.option('-t', '--tag', help='Changes the tag for ALL container images')
+@click.option('-i', '--image', type=(str, str), multiple=True, help='Overwrites the image for a container: <container> <image>')
 @click.option('-c', '--command', type=(str, str), multiple=True, help='Overwrites the command in a container: <container> <command>')
 @click.option('-e', '--env', type=(str, str, str), multiple=True, help='Adds or changes an environment variable: <container> <name> <value>')
 @click.option('-s', '--secret', type=(str, str, str), multiple=True, help='Adds or changes a secret environment variable from the AWS Parameter Store (Not available for Fargate): <container> <name> <parameter name>')
+@click.option('-r', '--role', type=str, help='Sets the task\'s role ARN: <task role ARN>')
 @click.option('--launchtype', type=click.Choice([LAUNCH_TYPE_EC2, LAUNCH_TYPE_FARGATE]), default=LAUNCH_TYPE_EC2, help='ECS Launch type (default: EC2)')
 @click.option('--subnet', type=str, multiple=True, help='A subnet ID to launch the task within. Required for launch type FARGATE (multiple values possible)')
 @click.option('--securitygroup', type=str, multiple=True, help='A security group ID to launch the task within. Required for launch type FARGATE (multiple values possible)')
@@ -308,8 +310,13 @@ def scale(cluster, service, desired_count, access_key_id, secret_access_key, reg
 @click.option('--access-key-id', help='AWS access key id')
 @click.option('--secret-access-key', help='AWS secret access key')
 @click.option('--profile', help='AWS configuration profile name')
+@click.option('--timeout', default=300, type=int, help='Amount of seconds to wait for task to finish before command fails (default: 300). To disable timeout (fire and forget) set to -1')
+@click.option('--sleep-time', default=1, type=int, help='Amount of seconds to wait between each check of the service (default: 1)')
 @click.option('--diff/--no-diff', default=True, help='Print what values were changed in the task definition')
-def run(cluster, task, count, command, env, secret, launchtype, subnet, securitygroup, public_ip, region, access_key_id, secret_access_key, profile, diff):
+@click.option('--exclusive-env', is_flag=True, default=False, help='Set the given environment variables exclusively and remove all other pre-existing env variables from all containers')
+@click.option('--exclusive-secrets', is_flag=True, default=False, help='Set the given secrets exclusively and remove all other pre-existing secrets from all containers')
+@click.option('--deregister/--no-deregister', default=True, help='Deregister or keep the old task definition (default: --deregister)')
+def run(cluster, task, count, tag, image, command, env, secret, role, launchtype, subnet, securitygroup, public_ip, region, access_key_id, secret_access_key, profile, timeout, sleep_time, diff, exclusive_env, exclusive_secrets, deregister):
     """
     Run a one-off task.
 
@@ -318,17 +325,23 @@ def run(cluster, task, count, command, env, secret, launchtype, subnet, security
     TASK is the name of your task definition (e.g. 'my-task') within ECS.
     COUNT is the number of tasks your service should run.
     """
+    should_create_task_definition = image or tag or role
     try:
         client = get_client(access_key_id, secret_access_key, region, profile)
         action = RunAction(client, cluster)
 
-        td = action.get_task_definition(task)
+        td = td_old = action.get_task_definition(task)
+        td.set_images(tag, **{key: value for (key, value) in image})
         td.set_commands(**{key: value for (key, value) in command})
-        td.set_environment(env)
-        td.set_secrets(secret)
+        td.set_environment(env, exclusive_env)
+        td.set_secrets(secret, exclusive_secrets)
+        td.set_role_arn(role)
 
         if diff:
             print_diff(td, 'Using task definition: %s' % task)
+
+        if should_create_task_definition:
+            td = create_task_definition(action, td)
 
         action.run(td, count, 'ECS Deploy', launchtype, subnet, securitygroup, public_ip)
 
@@ -343,6 +356,18 @@ def run(cluster, task, count, command, env, secret, launchtype, subnet, security
         for started_task in action.started_tasks:
             click.secho('- %s' % started_task['taskArn'], fg='green')
         click.secho(' ')
+
+        exit_code = wait_for_task(
+            action=action,
+            timeout=timeout,
+            title='Running task',
+            sleep_time=sleep_time,
+        )
+
+        if should_create_task_definition and deregister:
+            deregister_task_definition(action, td_old)
+
+        exit(exit_code)
 
     except EcsError as e:
         click.secho('%s\n' % str(e), fg='red', err=True)
@@ -395,6 +420,33 @@ def diff(task, revision_a, revision_b, region, access_key_id, secret_access_key,
         exit(1)
 
 
+def wait_for_task(action, timeout, title, sleep_time=1):
+    click.secho(title, nl=False)
+    waiting_timeout = datetime.now() + timedelta(seconds=timeout)
+    tasks_arn = [task[u'taskArn'] for task in action.started_tasks]
+
+    if timeout == -1:
+        waiting = False
+    else:
+        waiting = True
+
+    exit_code = 0
+
+    while waiting and datetime.now() < waiting_timeout:
+        click.secho('.', nl=False)
+        waiting = False
+
+        for task in action.get_tasks(tasks_arn):
+            if task.is_stopped:
+                exit_code = exit_code or task.exit_code
+            else:
+                waiting = True
+        if waiting:
+            sleep(sleep_time)
+
+    return exit_code
+
+
 def wait_for_finish(action, timeout, title, success_message, failure_message,
                     ignore_warnings, sleep_time=1):
     click.secho(title, nl=False)
@@ -433,9 +485,8 @@ def wait_for_finish(action, timeout, title, success_message, failure_message,
     click.secho('\n%s\n' % success_message, fg='green')
 
 
-def deploy_task_definition(deployment, task_definition, title, success_message,
-                           failure_message, timeout, deregister,
-                           previous_task_definition, ignore_warnings, sleep_time):
+def deploy_task_definition(deployment, task_definition, title, success_message, failure_message, timeout,
+                           ignore_warnings, sleep_time, task_definition_to_deregister=None):
     click.secho('Updating service')
     deployment.deploy(task_definition)
 
@@ -456,8 +507,8 @@ def deploy_task_definition(deployment, task_definition, title, success_message,
         sleep_time=sleep_time
     )
 
-    if deregister:
-        deregister_task_definition(deployment, previous_task_definition)
+    if task_definition_to_deregister:
+        deregister_task_definition(deployment, task_definition_to_deregister)
 
 
 def get_task_definition(action, task):
@@ -501,8 +552,7 @@ def rollback_task_definition(deployment, old, new, timeout=600, sleep_time=1):
         success_message='Rollback successful',
         failure_message='Rollback failed. Please check ECS Console',
         timeout=timeout,
-        deregister=True,
-        previous_task_definition=new,
+        task_definition_to_deregister=new,
         ignore_warnings=False,
         sleep_time=sleep_time
     )
