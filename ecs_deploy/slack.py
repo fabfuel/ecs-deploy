@@ -60,7 +60,7 @@ class SlackNotification(object):
             messages.append(('Comment', comment))
 
         for diff in task_definition.diff:
-            if diff.field == 'image' and diff.value.endswith(':' + tag):
+            if tag and diff.field == 'image' and diff.value.endswith(':' + tag):
                 continue
             if diff.field == 'environment':
                 messages.append(('Environment', '_sensitive (therefore hidden)_'))
