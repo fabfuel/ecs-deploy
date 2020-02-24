@@ -623,35 +623,264 @@ def test_run_task(get_client, runner):
     assert result.exit_code == 0
 
     assert u"Successfully started 2 instances of task: test-task:2" in result.output
+    assert u'Successfully deregistered revision: 2' not in result.output
     assert u"- arn:foo:bar" in result.output
     assert u"- arn:lorem:ipsum" in result.output
 
 
 @patch('ecs_deploy.cli.get_client')
-def test_run_task_with_command(get_client, runner):
+def test_run_with_role_arn_deregister_old_task_definiion(get_client, runner):
     get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.run, (CLUSTER_NAME, 'test-task', '2', '-c', 'webserver', 'date'))
-
-    assert not result.exception
+    result = runner.invoke(cli.run, (CLUSTER_NAME, 'test-task:1', '2', '-r', 'arn:new:role'))
     assert result.exit_code == 0
-
+    assert not result.exception
     assert u"Using task definition: test-task" in result.output
-    assert u'Changed command of container "webserver" to: "date" (was: "run")' in result.output
+    assert u'Changed role_arn to: "arn:new:role" (was: "arn:test:role:1")' in result.output
+    assert u"Creating new task definition revision" in result.output
+    assert u'Successfully created revision: 2' in result.output
+    assert u"Successfully started 2 instances of task: test-task:2" in result.output
+    assert u'Successfully deregistered revision: 1' in result.output
+    assert u"- arn:foo:bar" in result.output
+    assert u"- arn:lorem:ipsum" in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_run_with_role_arn_keep_old_task_definiion(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.run, (CLUSTER_NAME, 'test-task:1', '2', '-r', 'arn:new:role', '--no-deregister'))
+    assert result.exit_code == 0
+    assert not result.exception
+    assert u"Using task definition: test-task" in result.output
+    assert u'Changed role_arn to: "arn:new:role" (was: "arn:test:role:1")' in result.output
+    assert u"Creating new task definition revision" in result.output
+    assert u'Successfully created revision: 2' in result.output
+    assert u"Successfully started 2 instances of task: test-task:2" in result.output
+    assert u'Successfully deregistered revision: 1' not in result.output
+    assert u"- arn:foo:bar" in result.output
+    assert u"- arn:lorem:ipsum" in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_run_new_tag(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.run, (CLUSTER_NAME, 'test-task', '2', '-t', 'latest'))
+    assert result.exit_code == 0
+    assert not result.exception
+    assert u"Using task definition: test-task" in result.output
+    assert u"Creating new task definition revision" in result.output
+    assert u'Changed image of container "webserver" to: "webserver:latest" (was: "webserver:123")' in result.output
+    assert u'Changed image of container "application" to: "application:latest" (was: "application:123")' in result.output
+    assert u'Successfully created revision: 2' in result.output
     assert u"Successfully started 2 instances of task: test-task:2" in result.output
     assert u"- arn:foo:bar" in result.output
     assert u"- arn:lorem:ipsum" in result.output
 
 
 @patch('ecs_deploy.cli.get_client')
-def test_run_task_with_environment_var(get_client, runner):
+def test_run_one_new_image(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.run, (CLUSTER_NAME, 'test-task', '2', '-i', 'application', 'application:latest'))
+    assert result.exit_code == 0
+    assert not result.exception
+    assert u"Using task definition: test-task" in result.output
+    assert u"Creating new task definition revision" in result.output
+    assert u'Changed image of container "application" to: "application:latest" (was: "application:123")' in result.output
+    assert u'Successfully created revision: 2' in result.output
+    assert u"Successfully started 2 instances of task: test-task:2" in result.output
+    assert u"- arn:foo:bar" in result.output
+    assert u"- arn:lorem:ipsum" in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_run_two_new_images(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.run, (CLUSTER_NAME, 'test-task', '2', '-i', 'application', 'application:latest',
+                                        '-i', 'webserver', 'webserver:latest'))
+    assert result.exit_code == 0
+    assert not result.exception
+    assert u"Using task definition: test-task" in result.output
+    assert u"Creating new task definition revision" in result.output
+    assert u'Changed image of container "webserver" to: "webserver:latest" (was: "webserver:123")' in result.output
+    assert u'Changed image of container "application" to: "application:latest" (was: "application:123")' in result.output
+    assert u"Successfully started 2 instances of task: test-task:2" in result.output
+    assert u"- arn:foo:bar" in result.output
+    assert u"- arn:lorem:ipsum" in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_run_one_new_command(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.run, (CLUSTER_NAME, 'test-task', '2', '-c', 'application', 'date'))
+    assert result.exit_code == 0
+    assert not result.exception
+    assert u"Using task definition: test-task" in result.output
+    assert u'Changed command of container "application" to: "date" (was: "run")' in result.output
+    assert u"Successfully started 2 instances of task: test-task:2" in result.output
+    assert u"- arn:foo:bar" in result.output
+    assert u"- arn:lorem:ipsum" in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_run_one_new_environment_variable(get_client, runner):
     get_client.return_value = EcsTestClient('acces_key', 'secret_key')
     result = runner.invoke(cli.run, (CLUSTER_NAME, 'test-task', '2', '-e', 'application', 'foo', 'bar'))
 
-    assert not result.exception
     assert result.exit_code == 0
+    assert not result.exception
 
     assert u"Using task definition: test-task" in result.output
     assert u'Changed environment "foo" of container "application" to: "bar"' in result.output
+    assert u"Successfully started 2 instances of task: test-task:2" in result.output
+    assert u"- arn:foo:bar" in result.output
+    assert u"- arn:lorem:ipsum" in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_run_change_environment_variable_empty_string(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.run, (CLUSTER_NAME, 'test-task', '2', '-e', 'application', 'foo', ''))
+
+    assert result.exit_code == 0
+    assert not result.exception
+
+    assert u"Using task definition: test-task" in result.output
+    assert u'Changed environment "foo" of container "application" to: ""' in result.output
+    assert u"Successfully started 2 instances of task: test-task:2" in result.output
+    assert u"- arn:foo:bar" in result.output
+    assert u"- arn:lorem:ipsum" in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_run_new_empty_environment_variable(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.run, (CLUSTER_NAME, 'test-task', '2', '-e', 'application', 'new', ''))
+
+    assert result.exit_code == 0
+    assert not result.exception
+
+    assert u"Using task definition: test-task" in result.output
+    assert u'Changed environment "new" of container "application" to: ""' in result.output
+    assert u"Successfully started 2 instances of task: test-task:2" in result.output
+    assert u"- arn:foo:bar" in result.output
+    assert u"- arn:lorem:ipsum" in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_run_empty_environment_variable_again(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.run, (CLUSTER_NAME, 'test-task', '2', '-e', 'webserver', 'empty', ''))
+
+    assert result.exit_code == 0
+    assert not result.exception
+
+    assert u"Using task definition: test-task" not in result.output
+    assert u'Changed environment' not in result.output
+    assert u"Successfully started 2 instances of task: test-task:2" in result.output
+    assert u"- arn:foo:bar" in result.output
+    assert u"- arn:lorem:ipsum" in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_run_previously_empty_environment_variable_with_value(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.run, (CLUSTER_NAME, 'test-task', '2', '-e', 'webserver', 'empty', 'not-empty'))
+
+    assert result.exit_code == 0
+    assert not result.exception
+
+    assert u"Using task definition: test-task" in result.output
+    assert u'Changed environment "empty" of container "webserver" to: "not-empty"' in result.output
+    assert u"Successfully started 2 instances of task: test-task:2" in result.output
+    assert u"- arn:foo:bar" in result.output
+    assert u"- arn:lorem:ipsum" in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_run_exclusive_environment(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.run, (CLUSTER_NAME, 'test-task', '2', '-e', 'webserver', 'new-env', 'new-value', '--exclusive-env'))
+
+    assert result.exit_code == 0
+    assert not result.exception
+
+    assert u"Using task definition: test-task" in result.output
+    assert u'Changed environment "new-env" of container "webserver" to: "new-value"' in result.output
+
+    assert u'Removed environment "foo" of container "webserver"' in result.output
+    assert u'Removed environment "lorem" of container "webserver"' in result.output
+
+    assert u'Removed secret' not in result.output
+
+    assert u"Successfully started 2 instances of task: test-task:2" in result.output
+    assert u"- arn:foo:bar" in result.output
+    assert u"- arn:lorem:ipsum" in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_run_exclusive_secret(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.run, (CLUSTER_NAME, 'test-task', '2', '-s', 'webserver', 'new-secret', 'new-place', '--exclusive-secrets'))
+
+    assert result.exit_code == 0
+    assert not result.exception
+
+    assert u"Using task definition: test-task" in result.output
+    assert u'Changed secret "new-secret" of container "webserver" to: "new-place"' in result.output
+
+    assert u'Removed secret "baz" of container "webserver"' in result.output
+    assert u'Removed secret "dolor" of container "webserver"' in result.output
+
+    assert u'Removed environment' not in result.output
+
+    assert u"Successfully started 2 instances of task: test-task:2" in result.output
+    assert u"- arn:foo:bar" in result.output
+    assert u"- arn:lorem:ipsum" in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_run_one_new_secret_variable(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.run, (CLUSTER_NAME, 'test-task', '2',
+                                        '-s', 'application', 'baz', 'qux',
+                                        '-s', 'webserver', 'baz', 'quux'))
+
+    assert result.exit_code == 0
+    assert not result.exception
+
+    assert u"Using task definition: test-task" in result.output
+    assert u'Changed secret "baz" of container "application" to: "qux"' in result.output
+    assert u'Changed secret "baz" of container "webserver" to: "quux"' in result.output
+    assert u'Changed secret "dolor" of container "webserver" to: "sit"' not in result.output
+    assert u"Successfully started 2 instances of task: test-task:2" in result.output
+    assert u"- arn:foo:bar" in result.output
+    assert u"- arn:lorem:ipsum" in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_run_without_changing_environment_value(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.run, (CLUSTER_NAME, 'test-task', '2', '-e', 'webserver', 'foo', 'bar'))
+
+    assert result.exit_code == 0
+    assert not result.exception
+
+    assert u"Using task definition: test-task" not in result.output
+    assert u'Changed environment' not in result.output
+    assert u"Successfully started 2 instances of task: test-task:2" in result.output
+    assert u"- arn:foo:bar" in result.output
+    assert u"- arn:lorem:ipsum" in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_run_without_changing_secrets_value(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.run, (CLUSTER_NAME, 'test-task', '2', '-s', 'webserver', 'baz', 'qux'))
+
+    assert result.exit_code == 0
+    assert not result.exception
+
+    assert u"Using task definition: test-task" not in result.output
+    assert u'Changed secrets' not in result.output
     assert u"Successfully started 2 instances of task: test-task:2" in result.output
     assert u"- arn:foo:bar" in result.output
     assert u"- arn:lorem:ipsum" in result.output
