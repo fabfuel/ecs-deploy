@@ -34,7 +34,8 @@ def get_client(access_key_id, secret_access_key, region, profile):
 @click.option('--cpu', type=(str, int), multiple=True, help='Overwrites the cpu value for a container: <container> <cpu>')
 @click.option('--memory', type=(str, int), multiple=True, help='Overwrites the memory value for a container: <container> <memory>')
 @click.option('--memoryreservation', type=(str, int), multiple=True, help='Overwrites the memory reservation value for a container: <container> <memoryreservation>')
-@click.option('--privileged', type=(str, bool), multiple=True, help='Overwrites the memory reservation value for a container: <container> <memoryreservation>')
+@click.option('--privileged', type=(str, bool), multiple=True, help='Overwrites the privileged value for a container: <container> <privileged>')
+@click.option('--essential', type=(str, bool), multiple=True, help='Overwrites the essential value for a container: <container> <essential>')
 @click.option('-e', '--env', type=(str, str, str), multiple=True, help='Adds or changes an environment variable: <container> <name> <value>')
 @click.option('-s', '--secret', type=(str, str, str), multiple=True, help='Adds or changes a secret environment variable from the AWS Parameter Store (Not available for Fargate): <container> <name> <parameter name>')
 @click.option('-u', '--ulimit', type=(str, str, int, int), multiple=True, help='Adds or changes a ulimit variable in the container description (Not available for Fargate): <container> <ulimit name> <softlimit value> <hardlimit value>')
@@ -69,7 +70,9 @@ def get_client(access_key_id, secret_access_key, region, profile):
 @click.option('--exclusive-ports', is_flag=True, default=False, help='Set the given port mappings exclusively and remove all other pre-existing port mappings from all containers')
 @click.option('--exclusive-mounts', is_flag=True, default=False, help='Set the given mount points exclusively and remove all other pre-existing mount points from all containers')
 @click.option('--volume', type=(str, str), multiple=True, required=False, help='Set volume mapping from host to container in the task definition.')
-def deploy(cluster, service, tag, image, command, cpu, memory, memoryreservation, privileged, env, secret, ulimit, system_control, port, mount, log, role, execution_role, task, region, access_key_id, secret_access_key, profile, timeout, newrelic_apikey, newrelic_appid, newrelic_region, comment, user, ignore_warnings, diff, deregister, rollback, exclusive_env, exclusive_secrets, sleep_time, exclusive_ulimits, exclusive_system_controls, exclusive_ports, exclusive_mounts, volume, slack_url, slack_service_match='.*'):
+@click.option('--add-container', type=str, multiple=True, required=False, help='Add a placeholder container in the task definition.')
+@click.option('--remove-container', type=str, multiple=True, required=False, help='Remove a container from the task definition.')
+def deploy(cluster, service, tag, image, command, cpu, memory, memoryreservation, privileged, essential, env, secret, ulimit, system_control, port, mount, log, role, execution_role, task, region, access_key_id, secret_access_key, profile, timeout, newrelic_apikey, newrelic_appid, newrelic_region, comment, user, ignore_warnings, diff, deregister, rollback, exclusive_env, exclusive_secrets, sleep_time, exclusive_ulimits, exclusive_system_controls, exclusive_ports, exclusive_mounts, volume, add_container, remove_container, slack_url, slack_service_match='.*'):
     """
     Redeploy or modify a service.
 
@@ -87,12 +90,16 @@ def deploy(cluster, service, tag, image, command, cpu, memory, memoryreservation
         deployment = DeployAction(client, cluster, service)
 
         td = get_task_definition(deployment, task)
+        # If there is a new container, add it at frist.
+        td.add_containers(add_container)
+        td.remove_containers(remove_container)
         td.set_images(tag, **{key: value for (key, value) in image})
         td.set_commands(**{key: value for (key, value) in command})
         td.set_cpu(**{key: value for (key, value) in cpu})
         td.set_memory(**{key: value for (key, value) in memory})
         td.set_memoryreservation(**{key: value for (key, value) in memoryreservation})
         td.set_privileged(**{key: value for (key, value) in privileged})
+        td.set_essential(**{key: value for (key, value) in essential})
         td.set_environment(env, exclusive_env)
         td.set_secrets(secret, exclusive_secrets)
         td.set_ulimits(ulimit, exclusive_ulimits)
@@ -597,7 +604,6 @@ def print_diff(task_definition, title='Updating task definition'):
 def inspect_errors(service, failure_message, ignore_warnings, since, timeout):
     error = False
     last_error_timestamp = since
-
     warnings = service.get_warnings(since)
     for timestamp in warnings:
         message = warnings[timestamp]
@@ -605,14 +611,14 @@ def inspect_errors(service, failure_message, ignore_warnings, since, timeout):
         if ignore_warnings:
             last_error_timestamp = timestamp
             click.secho(
-                text='%s\nWARNING: %s' % (timestamp, message),
+                '%s\nWARNING: %s' % (timestamp, message),
                 fg='yellow',
                 err=False
             )
             click.secho('Continuing.', nl=False)
         else:
             click.secho(
-                text='%s\nERROR: %s\n' % (timestamp, message),
+                '%s\nERROR: %s\n' % (timestamp, message),
                 fg='red',
                 err=True
             )

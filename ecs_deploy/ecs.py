@@ -201,6 +201,7 @@ class EcsTaskDefinition(object):
                  taskRoleArn=None, executionRoleArn=None, compatibilities=None,
                  **kwargs):
         self.containers = containerDefinitions
+        self.new_containers = {}
         self.volumes = volumes
         self.family = family
         self.revision = revision
@@ -398,14 +399,32 @@ class EcsTaskDefinition(object):
         for container in self.containers:
             if container[u'name'] in privileged:
                 new_privileged = bool(privileged[container[u'name']])
-                diff = EcsTaskDefinitionDiff(
-                    container=container[u'name'],
-                    field=u'privileged',
-                    value=new_privileged,
-                    old_value=container.get(u'privileged')
-                )
-                self._diff.append(diff)
-                container[u'privileged'] = new_privileged
+                old_privileged = container.get(u'privileged')
+                if not new_privileged == old_privileged: 
+                    diff = EcsTaskDefinitionDiff(
+                        container=container[u'name'],
+                        field=u'privileged',
+                        value=new_privileged,
+                        old_value=old_privileged
+                    )
+                    self._diff.append(diff)
+                    container[u'privileged'] = new_privileged
+
+    def set_essential(self, **essential):
+        self.validate_container_options(**essential)
+        for container in self.containers:
+            if container[u'name'] in essential:
+                new_essential = bool(essential[container[u'name']])
+                old_essential = container.get(u'essential')
+                if not new_essential == old_essential: 
+                    diff = EcsTaskDefinitionDiff(
+                        container=container[u'name'],
+                        field=u'essential',
+                        value=new_essential,
+                        old_value=old_essential
+                    )
+                    self._diff.append(diff)
+                    container[u'essential'] = new_essential
 
     def set_log_configurations(self, log_configurations_list):
         log_configurations = {}
@@ -830,6 +849,72 @@ class EcsTaskDefinition(object):
             )
             self.volumes = volumes
             self._diff.append(diff)
+
+    def add_containers(self, containers_list):
+        """Add new containers.
+
+        For every new container specified a placeholder container is added to the task defintion:
+          * 'name' is the string givenin the parameter list.
+          * 'image' is just 'PLACEHOLDER'.
+
+        The idea is to actually set sensible values for this container when deploying.
+        """
+
+        if containers_list:
+            containers_tmp = list(self.containers)
+            for container in set(containers_list):
+                if container in self.container_names:
+                    print(f"\033[93mCannot add container '{container}', already in the task definition.\033[0m")
+                    continue
+                mapping = {}
+                mapping["name"] = container
+                mapping["image"] = "PLACEHOLDER"
+                mapping["cpu"] = 0
+                mapping["memoryReservation"] = 128
+                mapping["essential"] = True
+                self.containers.append(mapping)
+
+            if not self.containers == containers_tmp:
+                diff = EcsTaskDefinitionDiff(
+                    container=None,
+                    field=u'containers',
+                    value=self.containers,
+                    old_value=containers_tmp
+                )
+                self._diff.append(diff)
+
+    def remove_containers(self, containers_list):
+        """Remove containers.
+        """
+        if containers_list:
+            # Remove possible duplicates.
+            containers_ = set(containers_list)
+
+            containers_tmp = list(self.containers)
+            containers = list()
+            for container in self.containers:
+                if container["name"] not in containers_:
+                    # Leave container.
+                    containers.append(container)
+
+            containers_not_found = list(containers_ - set(self.container_names))
+            # Remaining containers could not be found.
+            for container in containers_not_found: 
+                print(f"\033[93mCannot remove container '{container}', not in the task definition.\033[0m")
+
+            if containers:
+                self.containers = containers
+            else:
+                print(f"\033[93mNo container left after removal. Using original containers, not removing '{containers_}'.\033[0m")
+
+            if not self.containers == containers_tmp:
+                diff = EcsTaskDefinitionDiff(
+                    container=None,
+                    field=u'containers',
+                    value=self.containers,
+                    old_value=containers_tmp
+                )
+                self._diff.append(diff)
 
 
 class EcsTaskDefinitionDiff(object):

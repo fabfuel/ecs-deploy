@@ -1,16 +1,55 @@
 ECS Deploy
 ----------
 
-.. image:: https://travis-ci.org/fabfuel/ecs-deploy.svg?branch=develop
-    :target: https://travis-ci.org/fabfuel/ecs-deploy
-
-.. image:: https://scrutinizer-ci.com/g/fabfuel/ecs-deploy/badges/coverage.png?b=develop
-    :target: https://scrutinizer-ci.com/g/fabfuel/ecs-deploy
-
-.. image:: https://scrutinizer-ci.com/g/fabfuel/ecs-deploy/badges/quality-score.png?b=develop
-    :target: https://scrutinizer-ci.com/g/fabfuel/ecs-deploy
-
 `ecs-deploy` simplifies deployments on Amazon ECS by providing a convinience CLI tool for complex actions, which are executed pretty often.
+
+---
+
+This is a fork
+--------------
+
+This is a fork of https://github.com/fabfuel/ecs-deploy.
+
+This fork has the following, additional features compared to the original:
+* Set the `cpu` value for a task definition:  `--cpu <container_name> 0`.
+* Set the `memory` value (hard limit) for a task definition: `--memory <container_name> 256`.
+* Set the `memoryreservation` value (soft limit) for a task definition: `--memoryreservation <container_name> 256`.
+* Set the `privliged` value for a task definition: `--privileged <container_name> True|False`.
+* Set the `essential` value for a task definition: `--essential <container_name> True|False`.
+* Set the `logConfiguration` value for a task definition:
+    ```
+        --log <container_name> awslogs awslogs-group <log_group_name>
+        --log <container_name> awslogs awslogs-region <region>
+        --log <container_name> awslogs awslogs-stream-prefix <stream_prefix>
+    ```
+* Set the `port mappings` for a task defintion: `--port <container_name> <container_port> <host_port>`.
+    - Supports `--exclusive-ports`.
+    - The `protocol` is fixed to `tcp`.
+* Set the `volumes` `--volume <volume_name> /host/path`.
+    - `<volume_name>` can then be used with  `--mount`.
+* Set the `mount points` `--mount <container_name> <volume_name> /container/path`.
+    - Supports `--exclusive-mounts`.
+    - `<volume_name> is the one set by `--volume`.
+* Set the `ulimits`: `--ulimit <container_name> memlock 67108864 67108864`.
+    - Supports `--exclusive-ulimits`.
+* Set the `systemControls`: `--system-control <container_name> net.core.somaxconn 511`.
+    - Supports `--exclusive-system-controls`.
+* Add placeholder containers: `--add-container <container_name>`.
+    - To comply with the minimum requirements for a task definition, a placeholder container is set like this:
+        + The contaienr name is `<container_name>`.
+        + The container image is `PLACEHOLDER`.
+        + The container soft limit is `128`.
+    - The idea is to set sensible values with the deployment.
+    - It is possible to add and define a new container with the same deployment:
+        ```
+            --add-container redis --image redis redis:6 --port redis 6379 6379
+        ```
+* Containers can be removed: `--remove-container <container_name>`.
+    - Leaves the original containers, if all containers would be removed.
+
+All but the container flags can be used with `ecs deploy` and `ecs cron`.
+
+---
 
 Key Features
 ------------

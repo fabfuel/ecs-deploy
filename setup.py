@@ -11,16 +11,16 @@ def readme():
         return f.read()
 
 
-dependencies = ['click', 'botocore>=1.12.0', 'boto3>=1.4.7', 'future', 'requests', 'dictdiffer==0.8.0']
+dependencies = ['click', 'botocore>=1.12.0', 'boto3>=1.4.7', 'future', 'requests', 'dictdiffer>=0.8.0']
 
 setup(
     name='ecs-deploy',
     version=VERSION,
-    url='https://github.com/fabfuel/ecs-deploy',
+    url='https://github.com/normoes/ecs-deploy',
     download_url='https://github.com/fabfuel/ecs-deploy/archive/%s.tar.gz' % VERSION,
     license='BSD-3-Clause',
-    author='Fabian Fuelling',
-    author_email='pypi@fabfuel.de',
+    author='Fabian Fuelling, Norman Moeschter-Schenck',
+    author_email='pypi@fabfuel.de, norman.moeschter@gmail.com',
     description='Powerful CLI tool to simplify Amazon ECS deployments, '
                 'rollbacks & scaling',
     long_description=readme(),
