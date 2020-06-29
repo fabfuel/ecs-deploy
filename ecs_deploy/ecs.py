@@ -637,6 +637,17 @@ class EcsAction(object):
                 running_count += 1
         return running_count
 
+    def get_tasks_count_by_status(self, desired_status, task_arns):
+        running_count = 0
+        tasks_details = self._client.describe_tasks(
+            cluster_name=self._cluster_name,
+            task_arns=task_arns
+        )
+        for task in tasks_details[u'tasks']:
+            if task[u'lastStatus'] == desired_status:
+                running_count += 1
+        return running_count
+
     @property
     def client(self):
         return self._client
