@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 
 from ecs_deploy import VERSION
 from ecs_deploy.ecs import DeployAction, ScaleAction, RunAction, EcsClient, DiffAction, \
-    TaskPlacementError, EcsError, UpdateAction, LAUNCH_TYPE_EC2, LAUNCH_TYPE_FARGATE
+    TaskPlacementError, EcsError, UpdateAction, LAUNCH_TYPE_EC2, LAUNCH_TYPE_FARGATE, EcsAction
 from ecs_deploy.newrelic import Deployment, NewRelicException
 from ecs_deploy.slack import SlackNotification
 
@@ -309,7 +309,10 @@ def scale(cluster, service, desired_count, access_key_id, secret_access_key, reg
 @click.option('--secret-access-key', help='AWS secret access key')
 @click.option('--profile', help='AWS configuration profile name')
 @click.option('--diff/--no-diff', default=True, help='Print what values were changed in the task definition')
-def run(cluster, task, count, command, env, secret, launchtype, subnet, securitygroup, public_ip, region, access_key_id, secret_access_key, profile, diff):
+@click.option('--timeout', default=300, type=int, help='Amount of seconds to wait for deployment before command fails (default: 300). To disable timeout (fire and forget) set to -1')
+@click.option('--ignore-warnings', is_flag=True, help='Do not fail deployment on warnings (port already in use or insufficient memory/CPU)')
+@click.option('--sleep-time', default=1, type=int, help='Amount of seconds to wait between each check of the service (default: 1)')
+def run(cluster, task, count, command, env, secret, launchtype, subnet, securitygroup, public_ip, region, access_key_id, secret_access_key, profile, diff, timeout, ignore_warnings, sleep_time):
     """
     Run a one-off task.
 
@@ -343,6 +346,15 @@ def run(cluster, task, count, command, env, secret, launchtype, subnet, security
         for started_task in action.started_tasks:
             click.secho('- %s' % started_task['taskArn'], fg='green')
         click.secho(' ')
+
+        wait_for_tasks(
+            action=action,
+            timeout=timeout,
+            title='Running task',
+            success_message='Successful task execution',
+            failure_message='Task execution failed',
+            sleep_time=sleep_time
+        )
 
     except EcsError as e:
         click.secho('%s\n' % str(e), fg='red', err=True)
@@ -393,6 +405,34 @@ def diff(task, revision_a, revision_b, region, access_key_id, secret_access_key,
     except EcsError as e:
         click.secho('%s\n' % str(e), fg='red', err=True)
         exit(1)
+
+
+def wait_for_tasks(action, timeout, title, success_message, failure_message, sleep_time=1):
+    if not isinstance(action, EcsAction):
+        click.secho("The 'action' must be 'EcsAction' instance", fg='red', err=True)
+        exit(1)
+
+    click.secho(title, nl=False)
+    waiting_timeout = datetime.now() + timedelta(seconds=timeout)
+
+    if timeout == -1:
+        waiting = False
+    else:
+        waiting = True
+
+    task_arns = [task['taskArn'] for task in action.started_tasks]
+    while waiting and datetime.now() < waiting_timeout:
+        click.secho('.', nl=False)
+        running_tasks = action.get_tasks_count_by_status(u'STOPPED', task_arns)
+
+        if running_tasks > 0:
+            click.secho('\n%s\n' % success_message, fg='green')
+            return
+
+        sleep(sleep_time)
+
+    failure_message += ' due to timeout.'
+    raise TaskPlacementError(failure_message)
 
 
 def wait_for_finish(action, timeout, title, success_message, failure_message,
