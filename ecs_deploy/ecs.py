@@ -595,7 +595,6 @@ class EcsAction(object):
             volumes=task_definition.volumes,
             role_arn=task_definition.role_arn,
             execution_role_arn=task_definition.execution_role_arn,
-            tags=task_definition.tags,
             additional_properties=task_definition.additional_properties
         )
         new_task_definition = EcsTaskDefinition(**response[u'taskDefinition'])
