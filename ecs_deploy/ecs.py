@@ -40,7 +40,10 @@ class EcsClient(object):
     def describe_task_definition(self, task_definition_arn):
         try:
             return self.boto.describe_task_definition(
-                taskDefinition=task_definition_arn
+                taskDefinition=task_definition_arn,
+                include=[
+                    'TAGS',
+                ]
             )
         except ClientError:
             raise UnknownTaskDefinitionError(
@@ -592,6 +595,7 @@ class EcsAction(object):
             volumes=task_definition.volumes,
             role_arn=task_definition.role_arn,
             execution_role_arn=task_definition.execution_role_arn,
+            tags=task_definition.tags,
             additional_properties=task_definition.additional_properties
         )
         new_task_definition = EcsTaskDefinition(**response[u'taskDefinition'])
