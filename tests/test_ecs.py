@@ -711,6 +711,7 @@ def test_update_task_definition(client, task_definition):
         volumes=task_definition.volumes,
         role_arn=task_definition.role_arn,
         execution_role_arn=task_definition.execution_role_arn,
+        tags=task_definition.tags,
         additional_properties={
             u'networkMode': u'host',
             u'placementConstraints': {},
