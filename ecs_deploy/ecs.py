@@ -206,7 +206,7 @@ class EcsTaskDefinition(object):
     def __init__(self, containerDefinitions, volumes, family, revision,
                  status, taskDefinitionArn, requiresAttributes=None,
                  taskRoleArn=None, executionRoleArn=None, compatibilities=None,
-                 **kwargs):
+                 tags=None, **kwargs):
         self.containers = containerDefinitions
         self.volumes = volumes
         self.family = family
