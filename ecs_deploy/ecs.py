@@ -590,7 +590,7 @@ class EcsAction(object):
         )
 
         task_definition = EcsTaskDefinition(
-            tags=task_definition_payload['tags'],
+            tags=task_definition_payload.get('tags', None),
             **task_definition_payload[u'taskDefinition']
         )
         return task_definition
