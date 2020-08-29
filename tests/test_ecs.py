@@ -587,6 +587,7 @@ def test_client_register_task_definition(client):
         volumes=task_definition.volumes,
         role_arn=task_definition.role_arn,
         execution_role_arn=execution_role_arn,
+        tags=task_definition.tags,
         additional_properties=task_definition.additional_properties
     )
 
@@ -944,7 +945,7 @@ class EcsTestClient(object):
         return deepcopy(RESPONSE_DESCRIBE_TASKS)
 
     def register_task_definition(self, family, containers, volumes, role_arn,
-                                 execution_role_arn, additional_properties):
+                                 execution_role_arn, tags, additional_properties):
         if not self.access_key_id or not self.secret_access_key:
             raise EcsConnectionError(u'Unable to locate credentials. Configure credentials by running "aws configure".')
         return deepcopy(RESPONSE_TASK_DEFINITION_2)
