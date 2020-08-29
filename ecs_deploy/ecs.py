@@ -91,7 +91,7 @@ class EcsClient(object):
 
     def run_task(self, cluster, task_definition, count, started_by, overrides,
                  launchtype='EC2', subnets=(), security_groups=(),
-                 public_ip=False):
+                 public_ip=False, platform_version=None):
 
         if launchtype == LAUNCH_TYPE_FARGATE:
             if not subnets or not security_groups:
@@ -108,6 +108,9 @@ class EcsClient(object):
                 }
             }
 
+            if platform_version is None:
+                platform_version = 'LATEST'
+
             return self.boto.run_task(
                 cluster=cluster,
                 taskDefinition=task_definition,
@@ -115,7 +118,8 @@ class EcsClient(object):
                 startedBy=started_by,
                 overrides=overrides,
                 launchType=launchtype,
-                networkConfiguration=network_configuration
+                networkConfiguration=network_configuration,
+                platformVersion=platform_version,
             )
 
         return self.boto.run_task(
@@ -682,7 +686,7 @@ class RunAction(EcsAction):
         self.started_tasks = []
 
     def run(self, task_definition, count, started_by, launchtype, subnets,
-            security_groups, public_ip):
+            security_groups, public_ip, platform_version):
         try:
             result = self._client.run_task(
                 cluster=self._cluster_name,
@@ -693,7 +697,8 @@ class RunAction(EcsAction):
                 launchtype=launchtype,
                 subnets=subnets,
                 security_groups=security_groups,
-                public_ip=public_ip
+                public_ip=public_ip,
+                platform_version=platform_version,
             )
             self.started_tasks = result['tasks']
             return True

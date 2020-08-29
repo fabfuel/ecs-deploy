@@ -304,12 +304,13 @@ def scale(cluster, service, desired_count, access_key_id, secret_access_key, reg
 @click.option('--subnet', type=str, multiple=True, help='A subnet ID to launch the task within. Required for launch type FARGATE (multiple values possible)')
 @click.option('--securitygroup', type=str, multiple=True, help='A security group ID to launch the task within. Required for launch type FARGATE (multiple values possible)')
 @click.option('--public-ip', is_flag=True, default=False, help='Should a public IP address be assigned to the task (default: False)')
+@click.option('--platform-version', help='The version of the Fargate platform on which to run the task. Optional, FARGATE launch type only.', required=False)
 @click.option('--region', help='AWS region (e.g. eu-central-1)')
 @click.option('--access-key-id', help='AWS access key id')
 @click.option('--secret-access-key', help='AWS secret access key')
 @click.option('--profile', help='AWS configuration profile name')
 @click.option('--diff/--no-diff', default=True, help='Print what values were changed in the task definition')
-def run(cluster, task, count, command, env, secret, launchtype, subnet, securitygroup, public_ip, region, access_key_id, secret_access_key, profile, diff):
+def run(cluster, task, count, command, env, secret, launchtype, subnet, securitygroup, public_ip, platform_version, region, access_key_id, secret_access_key, profile, diff):
     """
     Run a one-off task.
 
@@ -330,7 +331,7 @@ def run(cluster, task, count, command, env, secret, launchtype, subnet, security
         if diff:
             print_diff(td, 'Using task definition: %s' % task)
 
-        action.run(td, count, 'ECS Deploy', launchtype, subnet, securitygroup, public_ip)
+        action.run(td, count, 'ECS Deploy', launchtype, subnet, securitygroup, public_ip, platform_version)
 
         click.secho(
             'Successfully started %d instances of task: %s' % (

@@ -411,7 +411,7 @@ def test_task_set_command_with_multiple_arguments(task_definition):
             assert container[u'command'] == [u'run-application', u'arg1', u'arg2']
 
 def test_task_set_command_with_empty_argument(task_definition):
-    empty_argument = " " 
+    empty_argument = " "
     task_definition.set_commands(webserver=empty_argument + u'run-webserver arg1 arg2')
     for container in task_definition.containers:
         if container[u'name'] == u'webserver':
@@ -856,7 +856,7 @@ def test_run_action(client):
 def test_run_action_run(client, task_definition):
     action = RunAction(client, CLUSTER_NAME)
     client.run_task.return_value = dict(tasks=[dict(taskArn='A'), dict(taskArn='B')])
-    action.run(task_definition, 2, 'test', LAUNCH_TYPE_EC2, (), (), False)
+    action.run(task_definition, 2, 'test', LAUNCH_TYPE_EC2, (), (), False, None)
 
     client.run_task.assert_called_once_with(
         cluster=CLUSTER_NAME,
@@ -867,7 +867,8 @@ def test_run_action_run(client, task_definition):
         launchtype=LAUNCH_TYPE_EC2,
         subnets=(),
         security_groups=(),
-        public_ip=False
+        public_ip=False,
+        platform_version=None,
     )
 
     assert len(action.started_tasks) == 2
@@ -960,7 +961,7 @@ class EcsTestClient(object):
 
     def run_task(self, cluster, task_definition, count, started_by, overrides,
                  launchtype='EC2', subnets=(), security_groups=(),
-                 public_ip=False):
+                 public_ip=False, platform_version=None):
         if not self.access_key_id or not self.secret_access_key:
             raise EcsConnectionError(u'Unable to locate credentials. Configure credentials by running "aws configure".')
         if cluster == 'unknown-cluster':
