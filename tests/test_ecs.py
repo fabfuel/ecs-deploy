@@ -543,7 +543,7 @@ def test_client_describe_services(client):
 
 def test_client_describe_task_definition(client):
     client.describe_task_definition(u'task_definition_arn')
-    client.boto.describe_task_definition.assert_called_once_with(taskDefinition=u'task_definition_arn')
+    client.boto.describe_task_definition.assert_called_once_with(include=['TAGS'], taskDefinition=u'task_definition_arn')
 
 
 def test_client_describe_unknown_task_definition(client):
@@ -597,6 +597,7 @@ def test_client_register_task_definition(client):
         volumes=volumes,
         taskRoleArn=role_arn,
         executionRoleArn=execution_role_arn,
+        tags=task_definition.tags,
         unkownProperty='foobar'
     )
 
