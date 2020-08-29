@@ -216,6 +216,7 @@ class EcsTaskDefinition(object):
         self.requires_attributes = requiresAttributes or {}
         self.role_arn = taskRoleArn or u''
         self.execution_role_arn = executionRoleArn or u''
+        self.tags = tags
         self.additional_properties = kwargs
         self._diff = []
 
