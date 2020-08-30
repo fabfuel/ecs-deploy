@@ -575,6 +575,9 @@ def test_client_register_task_definition(client):
         revision=1,
         taskRoleArn=role_arn,
         executionRoleArn=execution_role_arn,
+        tags={
+            'Name': 'test_client_register_task_definition'
+        },
         status='active',
         taskDefinitionArn='arn:task',
         requiresAttributes={},
