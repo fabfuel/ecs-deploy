@@ -40,7 +40,10 @@ class EcsClient(object):
     def describe_task_definition(self, task_definition_arn):
         try:
             return self.boto.describe_task_definition(
-                taskDefinition=task_definition_arn
+                taskDefinition=task_definition_arn,
+                include=[
+                    'TAGS',
+                ]
             )
         except ClientError:
             raise UnknownTaskDefinitionError(
@@ -57,13 +60,14 @@ class EcsClient(object):
         return self.boto.describe_tasks(cluster=cluster_name, tasks=task_arns)
 
     def register_task_definition(self, family, containers, volumes, role_arn,
-                                 execution_role_arn, additional_properties):
+                                 execution_role_arn, tags, additional_properties):
         return self.boto.register_task_definition(
             family=family,
             containerDefinitions=containers,
             volumes=volumes,
             taskRoleArn=role_arn,
             executionRoleArn=execution_role_arn,
+            tags=tags,
             **additional_properties
         )
 
@@ -202,7 +206,7 @@ class EcsTaskDefinition(object):
     def __init__(self, containerDefinitions, volumes, family, revision,
                  status, taskDefinitionArn, requiresAttributes=None,
                  taskRoleArn=None, executionRoleArn=None, compatibilities=None,
-                 **kwargs):
+                 tags=None, **kwargs):
         self.containers = containerDefinitions
         self.volumes = volumes
         self.family = family
@@ -212,6 +216,7 @@ class EcsTaskDefinition(object):
         self.requires_attributes = requiresAttributes or {}
         self.role_arn = taskRoleArn or u''
         self.execution_role_arn = executionRoleArn or u''
+        self.tags = tags
         self.additional_properties = kwargs
         self._diff = []
 
@@ -585,6 +590,7 @@ class EcsAction(object):
         )
 
         task_definition = EcsTaskDefinition(
+            tags=task_definition_payload.get('tags', None),
             **task_definition_payload[u'taskDefinition']
         )
         return task_definition
@@ -596,6 +602,7 @@ class EcsAction(object):
             volumes=task_definition.volumes,
             role_arn=task_definition.role_arn,
             execution_role_arn=task_definition.execution_role_arn,
+            tags=task_definition.tags,
             additional_properties=task_definition.additional_properties
         )
         new_task_definition = EcsTaskDefinition(**response[u'taskDefinition'])
