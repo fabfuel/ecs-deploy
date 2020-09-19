@@ -543,7 +543,7 @@ def test_client_describe_services(client):
 
 def test_client_describe_task_definition(client):
     client.describe_task_definition(u'task_definition_arn')
-    client.boto.describe_task_definition.assert_called_once_with(taskDefinition=u'task_definition_arn')
+    client.boto.describe_task_definition.assert_called_once_with(include=['TAGS'], taskDefinition=u'task_definition_arn')
 
 
 def test_client_describe_unknown_task_definition(client):
@@ -575,6 +575,9 @@ def test_client_register_task_definition(client):
         revision=1,
         taskRoleArn=role_arn,
         executionRoleArn=execution_role_arn,
+        tags={
+            'Name': 'test_client_register_task_definition'
+        },
         status='active',
         taskDefinitionArn='arn:task',
         requiresAttributes={},
@@ -587,6 +590,7 @@ def test_client_register_task_definition(client):
         volumes=task_definition.volumes,
         role_arn=task_definition.role_arn,
         execution_role_arn=execution_role_arn,
+        tags=task_definition.tags,
         additional_properties=task_definition.additional_properties
     )
 
@@ -596,6 +600,7 @@ def test_client_register_task_definition(client):
         volumes=volumes,
         taskRoleArn=role_arn,
         executionRoleArn=execution_role_arn,
+        tags=task_definition.tags,
         unkownProperty='foobar'
     )
 
@@ -711,6 +716,7 @@ def test_update_task_definition(client, task_definition):
         volumes=task_definition.volumes,
         role_arn=task_definition.role_arn,
         execution_role_arn=task_definition.execution_role_arn,
+        tags=task_definition.tags,
         additional_properties={
             u'networkMode': u'host',
             u'placementConstraints': {},
@@ -943,7 +949,7 @@ class EcsTestClient(object):
         return deepcopy(RESPONSE_DESCRIBE_TASKS)
 
     def register_task_definition(self, family, containers, volumes, role_arn,
-                                 execution_role_arn, additional_properties):
+                                 execution_role_arn, tags, additional_properties):
         if not self.access_key_id or not self.secret_access_key:
             raise EcsConnectionError(u'Unable to locate credentials. Configure credentials by running "aws configure".')
         return deepcopy(RESPONSE_TASK_DEFINITION_2)
