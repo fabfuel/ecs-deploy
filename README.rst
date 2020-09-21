@@ -361,7 +361,7 @@ Or implicitly via environment variables ``NEW_RELIC_API_KEY`` and ``NEW_RELIC_AP
 
 Optionally you can provide additional information for the deployment:
     
-    ``--comment "New feature X"`` - comment to the deployment 
+    ``--comment "New feature X"`` - comment to the deployment
     ``--user john.doe`` - the name of the user who deployed with
     ``--newrelic-revision 1.0.0`` - explicitly set the revison to use for the deployment
 
