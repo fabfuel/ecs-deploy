@@ -61,13 +61,15 @@ class EcsClient(object):
 
     def register_task_definition(self, family, containers, volumes, role_arn,
                                  execution_role_arn, tags, additional_properties):
+        if tags:
+            additional_properties['tags'] = tags
+
         return self.boto.register_task_definition(
             family=family,
             containerDefinitions=containers,
             volumes=volumes,
             taskRoleArn=role_arn,
             executionRoleArn=execution_role_arn,
-            tags=tags,
             **additional_properties
         )
 
