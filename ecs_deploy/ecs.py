@@ -1,4 +1,5 @@
 from datetime import datetime
+import time
 import json
 import re
 
@@ -30,6 +31,7 @@ class EcsClient(object):
                           profile_name=profile)
         self.boto = session.client(u'ecs')
         self.events = session.client(u'events')
+        self.codedeploy = session.client(u'codedeploy')
 
     def describe_services(self, cluster_name, service_name):
         return self.boto.describe_services(
@@ -552,7 +554,7 @@ class EcsTaskDefinitionDiff(object):
 
 
 class EcsAction(object):
-    def __init__(self, client, cluster_name, service_name):
+    def __init__(self, client, cluster_name, service_name, **kwargs):
         self._client = client
         self._cluster_name = cluster_name
         self._service_name = service_name
@@ -674,6 +676,88 @@ class DeployAction(EcsAction):
             return self.update_service(self._service)
         except ClientError as e:
             raise EcsError(str(e))
+
+
+class DeployBlueGreenAction(EcsAction):
+    def __init__(self, *args, **kwargs):
+        super(DeployBlueGreenAction, self).__init__(*args, **kwargs)
+        self.cd_application_name = kwargs['cd_application_name']
+        self._cd_group_name = None
+        self._deployment_target_id = None
+        self._deployment_id = None
+        self._traffic_health_percentage = 90
+
+    @property
+    def deployment_id(self):
+        if not self._deployment_id:
+            raise EcsError('CodeDeploy deployment not defined')
+        return self._deployment_id
+
+    @property
+    def cd_group_name(self):
+        if not self._cd_group_name:
+            self._cd_group_name = self.client.codedeploy.list_deployment_groups(
+                applicationName=self.cd_application_name,
+            )['deploymentGroups'][0]
+        return self._cd_group_name
+
+    @property
+    def deployment_target_id(self):
+        while not self._deployment_target_id:
+            try:
+                self._deployment_target_id = self.client.codedeploy.list_deployment_targets(
+                    deploymentId=self.deployment_id
+                )['targetIds'][0]
+            except ClientError as e:
+                if e.response['Error']['Code'] == 'DeploymentNotStartedException':
+                    time.sleep(1)
+                    continue
+                raise e
+        return self._deployment_target_id
+
+    def deploy(self, task_definition):
+        response = self.client.codedeploy.create_deployment(
+            applicationName=self.cd_application_name,
+            deploymentGroupName=self.cd_group_name,
+            revision={
+                'revisionType': 'String',
+                'string': {
+                    'content': self._get_revision_content(task_definition)
+                }
+            }
+        )
+        self._deployment_id = response['deploymentId']
+        return self._deployment_id
+
+    def is_deployed(self, service):
+        deployment_target = self.client.codedeploy.get_deployment_target(
+            deploymentId=self.deployment_id,
+            targetId=self.deployment_target_id
+        )['deploymentTarget']
+
+        if deployment_target['ecsTarget']['status'] == 'Failed':
+            raise EcsError('CodeDeploy Deployment Failed.')
+
+        for task_set in deployment_target['ecsTarget']['taskSetsInfo']:
+            if task_set['taskSetLabel'] == 'Green':
+                return task_set["trafficWeight"] > self._traffic_health_percentage
+
+    def _get_revision_content(self, task_definition):
+        return json.dumps({
+            'version': 1,
+            'Resources': [{
+                'TargetService': {
+                    'Type': 'AWS::ECS::Service',
+                    'Properties': {
+                        'TaskDefinition': task_definition.arn,
+                        'LoadBalancerInfo': {
+                            'ContainerName': self.service['loadBalancers'][0]['containerName'],
+                            'ContainerPort': int(self.service['loadBalancers'][0]['containerPort'])
+                        }
+                    }
+                }
+            }]
+        })
 
 
 class ScaleAction(EcsAction):

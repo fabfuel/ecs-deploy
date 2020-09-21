@@ -9,7 +9,7 @@ import getpass
 from datetime import datetime, timedelta
 
 from ecs_deploy import VERSION
-from ecs_deploy.ecs import DeployAction, ScaleAction, RunAction, EcsClient, DiffAction, \
+from ecs_deploy.ecs import DeployAction,  DeployBlueGreenAction, ScaleAction, RunAction, EcsClient, DiffAction, \
     TaskPlacementError, EcsError, UpdateAction, LAUNCH_TYPE_EC2, LAUNCH_TYPE_FARGATE
 from ecs_deploy.newrelic import Deployment, NewRelicException
 from ecs_deploy.slack import SlackNotification
@@ -55,7 +55,8 @@ def get_client(access_key_id, secret_access_key, region, profile):
 @click.option('--sleep-time', default=1, type=int, help='Amount of seconds to wait between each check of the service (default: 1)')
 @click.option('--slack-url', required=False, help='Webhook URL of the Slack integration. Can also be defined via environment variable SLACK_URL')
 @click.option('--slack-service-match', default=".*", required=False, help='A regular expression for defining, which services should be notified. (default: .* =all). Can also be defined via environment variable SLACK_SERVICE_MATCH')
-def deploy(cluster, service, tag, image, command, env, secret, role, execution_role, task, region, access_key_id, secret_access_key, profile, timeout, newrelic_apikey, newrelic_appid, newrelic_region, comment, user, ignore_warnings, diff, deregister, rollback, exclusive_env, exclusive_secrets, sleep_time, slack_url, slack_service_match='.*'):
+@click.option('--cd-application-name', required=False, help='CodeDeploy Application name from Blue/Green deployment')
+def deploy(cluster, service, tag, image, command, env, secret, role, execution_role, task, region, access_key_id, secret_access_key, profile, timeout, newrelic_apikey, newrelic_appid, newrelic_region, comment, user, ignore_warnings, diff, deregister, rollback, exclusive_env, exclusive_secrets, sleep_time, slack_url, slack_service_match='.*', cd_application_name=None):
     """
     Redeploy or modify a service.
 
@@ -70,7 +71,10 @@ def deploy(cluster, service, tag, image, command, env, secret, role, execution_r
 
     try:
         client = get_client(access_key_id, secret_access_key, region, profile)
-        deployment = DeployAction(client, cluster, service)
+        if cd_application_name:
+            deployment = DeployBlueGreenAction(client, cluster, service, cd_application_name=cd_application_name)
+        else:
+            deployment = DeployAction(client, cluster, service)
 
         td = get_task_definition(deployment, task)
         td.set_images(tag, **{key: value for (key, value) in image})
@@ -438,12 +442,17 @@ def deploy_task_definition(deployment, task_definition, title, success_message,
                            failure_message, timeout, deregister,
                            previous_task_definition, ignore_warnings, sleep_time):
     click.secho('Updating service')
-    deployment.deploy(task_definition)
+    deploy_response = deployment.deploy(task_definition)
 
     message = 'Successfully changed task definition to: %s:%s\n' % (
         task_definition.family,
         task_definition.revision
     )
+
+    if type(deployment) == DeployBlueGreenAction:
+        _cd_deploy_url = 'https://us-east-1.console.aws.amazon.com/codesuite/codedeploy/deployments/'
+        click.secho('\nDeployment created: %s' % deploy_response, fg='green')
+        click.secho('\t%s%s\n' % (_cd_deploy_url, deploy_response), fg='yellow')
 
     click.secho(message, fg='green')
 
