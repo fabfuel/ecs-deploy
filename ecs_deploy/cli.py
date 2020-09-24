@@ -117,8 +117,7 @@ def deploy(cluster, service, tag, image, command, env, secret, role, execution_r
             else:
                 raise
 
-        deployment_revision = newrelic_revision if newrelic_revision else tag
-        record_deployment(deployment_revision, newrelic_apikey, newrelic_appid, newrelic_region, comment, user)
+        record_deployment(tag, newrelic_apikey, newrelic_appid, newrelic_region, newrelic_revision, comment, user)
 
         slack.notify_success(cluster, td.revision, service=service)
 
@@ -193,8 +192,7 @@ def cron(cluster, task, rule, image, tag, command, env, role, region, access_key
 
         slack.notify_success(cluster, td.revision, rule=rule)
 
-        deployment_revision = newrelic_revision if newrelic_revision else tag
-        record_deployment(deployment_revision, newrelic_apikey, newrelic_appid, newrelic_region, comment, user)
+        record_deployment(tag, newrelic_apikey, newrelic_appid, newrelic_region, newrelic_revision, comment, user)
 
         if deregister:
             deregister_task_definition(action, td)
@@ -517,15 +515,16 @@ def rollback_task_definition(deployment, old, new, timeout=600, sleep_time=1):
     )
 
 
-def record_deployment(revision, api_key, app_id, region, comment, user):
+def record_deployment(tag, api_key, app_id, region, revision, comment, user):
     api_key = getenv('NEW_RELIC_API_KEY', api_key)
     app_id = getenv('NEW_RELIC_APP_ID', app_id)
     region = getenv('NEW_RELIC_REGION', region)
-    revision = getenv('NEW_RELIC_REVISION', revision)
-    
+    revision = getenv('NEW_RELIC_REVISION', revision) or tag
+
     if not revision or not api_key or not app_id:
-        click.secho('Missing required parameters for recording New Relic deployment.' \
-                    'Please see https://github.com/fabfuel/ecs-deploy#new-relic')
+        if api_key:
+            click.secho('Missing required parameters for recording New Relic deployment.' \
+                        'Please see https://github.com/fabfuel/ecs-deploy#new-relic')
         return False
 
     user = user or getpass.getuser()
