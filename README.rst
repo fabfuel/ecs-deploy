@@ -365,7 +365,7 @@ Optionally you can provide additional information for the deployment:
 - ``--user john.doe`` - the name of the user who deployed with
 - ``--newrelic-revision 1.0.0`` - explicitly set the revison to use for the deployment
 
-Note: If one of ``--tag`` or ``--newrelic-revision`` is not provided, the deployment will not be recorded.
+Note: If neither ``--tag`` nor ``--newrelic-revision`` are provided, the deployment will not be recorded.
 
 
 Troubleshooting
