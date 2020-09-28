@@ -441,7 +441,7 @@ def test_deploy_ignore_warnings(get_client, runner):
 
 @patch('ecs_deploy.newrelic.Deployment.deploy')
 @patch('ecs_deploy.cli.get_client')
-def test_deploy_with_newrelic(get_client, newrelic, runner):
+def test_deploy_with_newrelic_tag(get_client, newrelic, runner):
     get_client.return_value = EcsTestClient('acces_key', 'secret_key')
     result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME,
                                         '-t', 'my-tag',
@@ -459,6 +459,58 @@ def test_deploy_with_newrelic(get_client, newrelic, runner):
 
     newrelic.assert_called_once_with(
         'my-tag',
+        '',
+        'Lorem Ipsum'
+    )
+
+
+@patch('ecs_deploy.newrelic.Deployment.deploy')
+@patch('ecs_deploy.cli.get_client')
+def test_deploy_with_newrelic_revision(get_client, newrelic, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME,
+                                        '-i', 'application', 'application:latest',
+                                        '--newrelic-apikey', 'test',
+                                        '--newrelic-appid', 'test',
+                                        '--newrelic-revision', '1.0.0',
+                                        '--comment', 'Lorem Ipsum'))
+    assert result.exit_code == 0
+    assert not result.exception
+    assert u"Deploying based on task definition: test-task:1" in result.output
+    assert u'Successfully created revision: 2' in result.output
+    assert u'Successfully deregistered revision: 1' in result.output
+    assert u'Successfully changed task definition to: test-task:2' in result.output
+    assert u'Deployment successful' in result.output
+    assert u"Recording deployment in New Relic" in result.output
+
+    newrelic.assert_called_once_with(
+        '1.0.0',
+        '',
+        'Lorem Ipsum'
+    )
+
+
+@patch('ecs_deploy.newrelic.Deployment.deploy')
+@patch('ecs_deploy.cli.get_client')
+def test_deploy_with_newrelic_tag_revision(get_client, newrelic, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME,
+                                        '-t', 'my-tag',
+                                        '--newrelic-apikey', 'test',
+                                        '--newrelic-appid', 'test',
+                                        '--newrelic-revision', '1.0.0',
+                                        '--comment', 'Lorem Ipsum'))
+    assert result.exit_code == 0
+    assert not result.exception
+    assert u"Deploying based on task definition: test-task:1" in result.output
+    assert u'Successfully created revision: 2' in result.output
+    assert u'Successfully deregistered revision: 1' in result.output
+    assert u'Successfully changed task definition to: test-task:2' in result.output
+    assert u'Deployment successful' in result.output
+    assert u"Recording deployment in New Relic" in result.output
+
+    newrelic.assert_called_once_with(
+        '1.0.0',
         '',
         'Lorem Ipsum'
     )
@@ -699,28 +751,30 @@ def test_run_task_with_invalid_cluster(get_client, runner):
 
 @patch('ecs_deploy.newrelic.Deployment')
 def test_record_deployment_without_revision(Deployment):
-    result = record_deployment(None, None, None, None, None, None)
+    result = record_deployment(None, None, None, None, None, None, None)
     assert result is False
 
 
 @patch('ecs_deploy.newrelic.Deployment')
 def test_record_deployment_without_apikey(Deployment):
-    result = record_deployment('1.2.3', None, None, None, None, None)
+    result = record_deployment('1.2.3', None, None, None, None, None, None)
     assert result is False
 
 
+@patch('click.secho')
 @patch('ecs_deploy.newrelic.Deployment')
-def test_record_deployment_without_appid(Deployment):
-    result = record_deployment('1.2.3', 'APIKEY',None, None, None, None)
+def test_record_deployment_without_appid(Deployment, secho):
+    result = record_deployment('1.2.3', 'APIKEY',None, None, None, None, None)
+    secho.assert_any_call('Missing required parameters for recording New Relic deployment.Please see https://github.com/fabfuel/ecs-deploy#new-relic')
     assert result is False
 
 
 @patch('click.secho')
 @patch.object(Deployment, 'deploy')
 @patch.object(Deployment, '__init__')
-def test_record_deployment(deployment_init, deployment_deploy, secho):
+def test_record_deployment_tag(deployment_init, deployment_deploy, secho):
     deployment_init.return_value = None
-    result = record_deployment('1.2.3', 'APIKEY', 'APPID', 'EU', 'Comment', 'user')
+    result = record_deployment('1.2.3', 'APIKEY', 'APPID', 'EU', None, 'Comment', 'user')
 
     deployment_init.assert_called_once_with('APIKEY', 'APPID', 'user', 'EU')
     deployment_deploy.assert_called_once_with('1.2.3', '', 'Comment')

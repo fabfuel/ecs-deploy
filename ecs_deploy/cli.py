@@ -45,6 +45,7 @@ def get_client(access_key_id, secret_access_key, region, profile):
 @click.option('--newrelic-apikey', required=False, help='New Relic API Key for recording the deployment. Can also be defined via environment variable NEW_RELIC_API_KEY')
 @click.option('--newrelic-appid', required=False, help='New Relic App ID for recording the deployment. Can also be defined via environment variable NEW_RELIC_APP_ID')
 @click.option('--newrelic-region', required=False, help='New Relic region: US or EU (default: US). Can also be defined via environment variable NEW_RELIC_REGION')
+@click.option('--newrelic-revision', required=False, help='New Relic revision for recording the deployment (default: --tag value). Can also be defined via environment variable NEW_RELIC_REVISION')
 @click.option('--comment', required=False, help='Description/comment for recording the deployment')
 @click.option('--user', required=False, help='User who executes the deployment (used for recording)')
 @click.option('--diff/--no-diff', default=True, help='Print which values were changed in the task definition (default: --diff)')
@@ -55,7 +56,7 @@ def get_client(access_key_id, secret_access_key, region, profile):
 @click.option('--sleep-time', default=1, type=int, help='Amount of seconds to wait between each check of the service (default: 1)')
 @click.option('--slack-url', required=False, help='Webhook URL of the Slack integration. Can also be defined via environment variable SLACK_URL')
 @click.option('--slack-service-match', default=".*", required=False, help='A regular expression for defining, which services should be notified. (default: .* =all). Can also be defined via environment variable SLACK_SERVICE_MATCH')
-def deploy(cluster, service, tag, image, command, env, secret, role, execution_role, task, region, access_key_id, secret_access_key, profile, timeout, newrelic_apikey, newrelic_appid, newrelic_region, comment, user, ignore_warnings, diff, deregister, rollback, exclusive_env, exclusive_secrets, sleep_time, slack_url, slack_service_match='.*'):
+def deploy(cluster, service, tag, image, command, env, secret, role, execution_role, task, region, access_key_id, secret_access_key, profile, timeout, newrelic_apikey, newrelic_appid, newrelic_region, newrelic_revision, comment, user, ignore_warnings, diff, deregister, rollback, exclusive_env, exclusive_secrets, sleep_time, slack_url, slack_service_match='.*'):
     """
     Redeploy or modify a service.
 
@@ -116,7 +117,7 @@ def deploy(cluster, service, tag, image, command, env, secret, role, execution_r
             else:
                 raise
 
-        record_deployment(tag, newrelic_apikey, newrelic_appid, newrelic_region, comment, user)
+        record_deployment(tag, newrelic_apikey, newrelic_appid, newrelic_region, newrelic_revision, comment, user)
 
         slack.notify_success(cluster, td.revision, service=service)
 
@@ -140,6 +141,7 @@ def deploy(cluster, service, tag, image, command, env, secret, role, execution_r
 @click.option('--newrelic-apikey', required=False, help='New Relic API Key for recording the deployment. Can also be defined via environment variable NEW_RELIC_API_KEY')
 @click.option('--newrelic-appid', required=False, help='New Relic App ID for recording the deployment. Can also be defined via environment variable NEW_RELIC_APP_ID')
 @click.option('--newrelic-region', required=False, help='New Relic region: US or EU (default: US). Can also be defined via environment variable NEW_RELIC_REGION')
+@click.option('--newrelic-revision', required=False, help='New Relic revision for recording the deployment (default: --tag value). Can also be defined via environment variable NEW_RELIC_REVISION')
 @click.option('--comment', required=False, help='Description/comment for recording the deployment')
 @click.option('--user', required=False, help='User who executes the deployment (used for recording)')
 @click.option('--profile', help='AWS configuration profile name')
@@ -148,7 +150,7 @@ def deploy(cluster, service, tag, image, command, env, secret, role, execution_r
 @click.option('--rollback/--no-rollback', default=False, help='Rollback to previous revision, if deployment failed (default: --no-rollback)')
 @click.option('--slack-url', required=False, help='Webhook URL of the Slack integration. Can also be defined via environment variable SLACK_URL')
 @click.option('--slack-service-match', default=".*", required=False, help='A regular expression for defining, deployments of which crons should be notified. (default: .* =all). Can also be defined via environment variable SLACK_SERVICE_MATCH')
-def cron(cluster, task, rule, image, tag, command, env, role, region, access_key_id, secret_access_key, newrelic_apikey, newrelic_appid, newrelic_region, comment, user, profile, diff, deregister, rollback, slack_url, slack_service_match):
+def cron(cluster, task, rule, image, tag, command, env, role, region, access_key_id, secret_access_key, newrelic_apikey, newrelic_appid, newrelic_region, newrelic_revision, comment, user, profile, diff, deregister, rollback, slack_url, slack_service_match):
     """
     Update a scheduled task.
 
@@ -190,7 +192,7 @@ def cron(cluster, task, rule, image, tag, command, env, role, region, access_key
 
         slack.notify_success(cluster, td.revision, rule=rule)
 
-        record_deployment(tag, newrelic_apikey, newrelic_appid, newrelic_region, comment, user)
+        record_deployment(tag, newrelic_apikey, newrelic_appid, newrelic_region, newrelic_revision, comment, user)
 
         if deregister:
             deregister_task_definition(action, td)
@@ -513,12 +515,16 @@ def rollback_task_definition(deployment, old, new, timeout=600, sleep_time=1):
     )
 
 
-def record_deployment(revision, api_key, app_id, region, comment, user):
+def record_deployment(tag, api_key, app_id, region, revision, comment, user):
     api_key = getenv('NEW_RELIC_API_KEY', api_key)
     app_id = getenv('NEW_RELIC_APP_ID', app_id)
     region = getenv('NEW_RELIC_REGION', region)
+    revision = getenv('NEW_RELIC_REVISION', revision) or tag
 
     if not revision or not api_key or not app_id:
+        if api_key:
+            click.secho('Missing required parameters for recording New Relic deployment.' \
+                        'Please see https://github.com/fabfuel/ecs-deploy#new-relic')
         return False
 
     user = user or getpass.getuser()
