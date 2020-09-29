@@ -59,13 +59,13 @@ Instead of installing **ecs-deploy** locally, which requires a Python environmen
 
 Running **ecs-deploy** via Docker is easy as::
 
-    docker run fabfuel/ecs-deploy:1.7.1
+    docker run fabfuel/ecs-deploy:1.10.2
     
-In this example, the stable version 1.7.1 is executed. Alternatively you can use Docker tags ``master`` or ``latest`` for the latest stable version or Docker tag ``develop`` for the newest development version of **ecs-deploy**.
+In this example, the stable version 1.10.2 is executed. Alternatively you can use Docker tags ``master`` or ``latest`` for the latest stable version or Docker tag ``develop`` for the newest development version of **ecs-deploy**.
 
 Please be aware, that when running **ecs-deploy** via Docker, the configuration - as described below - does not apply. You have to provide credentials and the AWS region via the command as attributes or environment variables::
 
-    docker run fabfuel/ecs-deploy:1.7.1 ecs deploy my-cluster my-service --region eu-central-1 --access-key-id ABC --secret-access-key ABC
+    docker run fabfuel/ecs-deploy:1.10.2 ecs deploy my-cluster my-service --region eu-central-1 --access-key-id ABC --secret-access-key ABC
 
 
 Configuration
