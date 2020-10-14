@@ -382,7 +382,7 @@ class EcsTaskDefinition(object):
         if None not in env_file[0]:
             for env in env_file:
                 l = read_env_file(env[0], env[1])
-        environment_list = l + environment_list
+                environment_list = l + environment_list
         for env in environment_list:
             environment.setdefault(env[0], {})
             environment[env[0]][env[1]] = env[2]
