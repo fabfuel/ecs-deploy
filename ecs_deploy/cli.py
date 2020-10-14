@@ -37,6 +37,7 @@ def get_client(access_key_id, secret_access_key, region, profile):
 @click.option('-x', '--execution-role', type=str, help='Sets the execution\'s role ARN: <execution role ARN>')
 @click.option('--task', type=str, help='Task definition to be deployed. Can be a task ARN or a task family with optional revision')
 @click.option('--region', required=False, help='AWS region (e.g. eu-central-1)')
+@click.option('--env-file', type=(str, str), default=((None, None),), multiple=True, required=False, help='load environment variables from file')
 @click.option('--access-key-id', required=False, help='AWS access key id')
 @click.option('--secret-access-key', required=False, help='AWS secret access key')
 @click.option('--profile', required=False, help='AWS configuration profile name')
@@ -56,7 +57,7 @@ def get_client(access_key_id, secret_access_key, region, profile):
 @click.option('--sleep-time', default=1, type=int, help='Amount of seconds to wait between each check of the service (default: 1)')
 @click.option('--slack-url', required=False, help='Webhook URL of the Slack integration. Can also be defined via environment variable SLACK_URL')
 @click.option('--slack-service-match', default=".*", required=False, help='A regular expression for defining, which services should be notified. (default: .* =all). Can also be defined via environment variable SLACK_SERVICE_MATCH')
-def deploy(cluster, service, tag, image, command, env, secret, role, execution_role, task, region, access_key_id, secret_access_key, profile, timeout, newrelic_apikey, newrelic_appid, newrelic_region, newrelic_revision, comment, user, ignore_warnings, diff, deregister, rollback, exclusive_env, exclusive_secrets, sleep_time, slack_url, slack_service_match='.*'):
+def deploy(cluster, service, tag, image, command, env, env_file, secret, role, execution_role, task, region, access_key_id, secret_access_key, profile, timeout, newrelic_apikey, newrelic_appid, newrelic_region, newrelic_revision, comment, user, ignore_warnings, diff, deregister, rollback, exclusive_env, exclusive_secrets, sleep_time, slack_url, slack_service_match='.*'):
     """
     Redeploy or modify a service.
 
@@ -76,7 +77,7 @@ def deploy(cluster, service, tag, image, command, env, secret, role, execution_r
         td = get_task_definition(deployment, task)
         td.set_images(tag, **{key: value for (key, value) in image})
         td.set_commands(**{key: value for (key, value) in command})
-        td.set_environment(env, exclusive_env)
+        td.set_environment(env, env_file, exclusive_env)
         td.set_secrets(secret, exclusive_secrets)
         td.set_role_arn(role)
         td.set_execution_role_arn(execution_role)
@@ -136,6 +137,7 @@ def deploy(cluster, service, tag, image, command, env, secret, role, execution_r
 @click.option('-e', '--env', type=(str, str, str), multiple=True, help='Adds or changes an environment variable: <container> <name> <value>')
 @click.option('-r', '--role', type=str, help='Sets the task\'s role ARN: <task role ARN>')
 @click.option('--region', help='AWS region (e.g. eu-central-1)')
+@click.option('--env-file', type=(str, str), default=((None, None),), multiple=True, required=False, help='load environment variables from file')
 @click.option('--access-key-id', help='AWS access key id')
 @click.option('--secret-access-key', help='AWS secret access key')
 @click.option('--newrelic-apikey', required=False, help='New Relic API Key for recording the deployment. Can also be defined via environment variable NEW_RELIC_API_KEY')
@@ -150,7 +152,7 @@ def deploy(cluster, service, tag, image, command, env, secret, role, execution_r
 @click.option('--rollback/--no-rollback', default=False, help='Rollback to previous revision, if deployment failed (default: --no-rollback)')
 @click.option('--slack-url', required=False, help='Webhook URL of the Slack integration. Can also be defined via environment variable SLACK_URL')
 @click.option('--slack-service-match', default=".*", required=False, help='A regular expression for defining, deployments of which crons should be notified. (default: .* =all). Can also be defined via environment variable SLACK_SERVICE_MATCH')
-def cron(cluster, task, rule, image, tag, command, env, role, region, access_key_id, secret_access_key, newrelic_apikey, newrelic_appid, newrelic_region, newrelic_revision, comment, user, profile, diff, deregister, rollback, slack_url, slack_service_match):
+def cron(cluster, task, rule, image, tag, command, env, env_file, role, region, access_key_id, secret_access_key, newrelic_apikey, newrelic_appid, newrelic_region, newrelic_revision, comment, user, profile, diff, deregister, rollback, slack_url, slack_service_match):
     """
     Update a scheduled task.
 
@@ -168,7 +170,7 @@ def cron(cluster, task, rule, image, tag, command, env, role, region, access_key
 
         td.set_images(tag, **{key: value for (key, value) in image})
         td.set_commands(**{key: value for (key, value) in command})
-        td.set_environment(env)
+        td.set_environment(env, env_file)
         td.set_role_arn(role)
 
         slack = SlackNotification(
@@ -211,6 +213,7 @@ def cron(cluster, task, rule, image, tag, command, env, role, region, access_key
 @click.option('-s', '--secret', type=(str, str, str), multiple=True, help='Adds or changes a secret environment variable from the AWS Parameter Store (Not available for Fargate): <container> <name> <parameter name>')
 @click.option('-r', '--role', type=str, help='Sets the task\'s role ARN: <task role ARN>')
 @click.option('--region', help='AWS region (e.g. eu-central-1)')
+@click.option('--env-file', type=(str,str), default=((None, None),), multiple=True, required=False, help='load environment variables from file')
 @click.option('--access-key-id', help='AWS access key id')
 @click.option('--secret-access-key', help='AWS secret access key')
 @click.option('--profile', help='AWS configuration profile name')
@@ -218,7 +221,7 @@ def cron(cluster, task, rule, image, tag, command, env, role, region, access_key
 @click.option('--exclusive-env', is_flag=True, default=False, help='Set the given environment variables exclusively and remove all other pre-existing env variables from all containers')
 @click.option('--exclusive-secrets', is_flag=True, default=False, help='Set the given secrets exclusively and remove all other pre-existing secrets from all containers')
 @click.option('--deregister/--no-deregister', default=True, help='Deregister or keep the old task definition (default: --deregister)')
-def update(task, image, tag, command, env, secret, role, region, access_key_id, secret_access_key, profile, diff, exclusive_env, exclusive_secrets, deregister):
+def update(task, image, tag, command, env, env_file, secret, role, region, access_key_id, secret_access_key, profile, diff, exclusive_env, exclusive_secrets, deregister):
     """
     Update a task definition.
 
@@ -234,7 +237,7 @@ def update(task, image, tag, command, env, secret, role, region, access_key_id, 
 
         td.set_images(tag, **{key: value for (key, value) in image})
         td.set_commands(**{key: value for (key, value) in command})
-        td.set_environment(env, exclusive_env)
+        td.set_environment(env, env_file, exclusive_env)
         td.set_secrets(secret, exclusive_secrets)
         td.set_role_arn(role)
 
@@ -303,6 +306,7 @@ def scale(cluster, service, desired_count, access_key_id, secret_access_key, reg
 @click.option('-e', '--env', type=(str, str, str), multiple=True, help='Adds or changes an environment variable: <container> <name> <value>')
 @click.option('-s', '--secret', type=(str, str, str), multiple=True, help='Adds or changes a secret environment variable from the AWS Parameter Store (Not available for Fargate): <container> <name> <parameter name>')
 @click.option('--launchtype', type=click.Choice([LAUNCH_TYPE_EC2, LAUNCH_TYPE_FARGATE]), default=LAUNCH_TYPE_EC2, help='ECS Launch type (default: EC2)')
+@click.option('--env-file', type=(str, str), default=((None, None),), multiple=True, required=False, help='load environment variables from file')
 @click.option('--subnet', type=str, multiple=True, help='A subnet ID to launch the task within. Required for launch type FARGATE (multiple values possible)')
 @click.option('--securitygroup', type=str, multiple=True, help='A security group ID to launch the task within. Required for launch type FARGATE (multiple values possible)')
 @click.option('--public-ip', is_flag=True, default=False, help='Should a public IP address be assigned to the task (default: False)')
@@ -312,7 +316,7 @@ def scale(cluster, service, desired_count, access_key_id, secret_access_key, reg
 @click.option('--secret-access-key', help='AWS secret access key')
 @click.option('--profile', help='AWS configuration profile name')
 @click.option('--diff/--no-diff', default=True, help='Print what values were changed in the task definition')
-def run(cluster, task, count, command, env, secret, launchtype, subnet, securitygroup, public_ip, platform_version, region, access_key_id, secret_access_key, profile, diff):
+def run(cluster, task, count, command, env, env_file, secret, launchtype, subnet, securitygroup, public_ip, platform_version, region, access_key_id, secret_access_key, profile, diff):
     """
     Run a one-off task.
 
@@ -327,7 +331,7 @@ def run(cluster, task, count, command, env, secret, launchtype, subnet, security
 
         td = action.get_task_definition(task)
         td.set_commands(**{key: value for (key, value) in command})
-        td.set_environment(env)
+        td.set_environment(env, env_file)
         td.set_secrets(secret)
 
         if diff:
