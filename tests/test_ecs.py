@@ -2,7 +2,8 @@ from copy import deepcopy
 from datetime import datetime, timedelta
 
 import pytest
-
+import tempfile
+import os
 from boto3.session import Session
 from botocore.exceptions import ClientError, NoCredentialsError
 from dateutil.tz import tzlocal
@@ -359,7 +360,13 @@ def test_task_set_environment(task_definition):
 def test_task_set_environment_from_e_and_env_file(task_definition):
     assert len(task_definition.containers[0]['environment']) == 3
 
-    task_definition.set_environment(((u'webserver', u'foo', u'baz'), (u'webserver', u'some-name', u'some-value')), ((u'webserver',u'envtestfile.env'),))
+    tmp = tempfile.NamedTemporaryFile(delete=False)
+    tmp.write(b'some-name-from-env-file=some-value-from-env-file')
+    tmp.read()
+
+    task_definition.set_environment(((u'webserver', u'foo', u'baz'), (u'webserver', u'some-name', u'some-value')), ((u'webserver',tmp.name),))
+    os.unlink(tmp.name)
+    tmp.close()
 
     assert len(task_definition.containers[0]['environment']) == 5
 
@@ -370,7 +377,14 @@ def test_task_set_environment_from_e_and_env_file(task_definition):
 
 def test_task_set_environment_from_env_file(task_definition):
     assert len(task_definition.containers[0]['environment']) == 3
-    task_definition.set_environment((),((u'webserver',u'envtestfile.env'),))
+
+    tmp = tempfile.NamedTemporaryFile(delete=False)
+    tmp.write(b'some-name-from-env-file=some-value-from-env-file')
+    tmp.read()
+
+    task_definition.set_environment(((u'webserver', u'foo', u'baz'), (u'webserver', u'some-name', u'some-value')), ((u'webserver',tmp.name),))
+    os.unlink(tmp.name)
+    tmp.close()
 
     assert len(task_definition.containers[0]['environment']) == 4
 
