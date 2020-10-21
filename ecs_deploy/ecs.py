@@ -19,17 +19,17 @@ LAUNCH_TYPE_EC2 = 'EC2'
 LAUNCH_TYPE_FARGATE = 'FARGATE'
 
 
-def read_env_file(container_name, file):
+def read_env_file(container_name,file):
     env_vars = []
     try:
         with open(file) as f:
             for line in f:
-                if line.startswith('#') or not line.strip():
+                if line.startswith('#') or not line.strip() or '=' not in line:
                     continue
                 key, value = line.strip().split('=', 1)
-                env_vars.append((container_name, key, value))
-    except:
-        print("WARNING: invalid environment file name for container " + container_name + "! Defaults will be used.")
+                env_vars.append((container_name,key,value))
+    except Exception as e:
+        print("WARNING: invalid environment file name for container " + container_name +"! Defaults will be used.")
     return tuple(env_vars)
 
 

@@ -357,6 +357,15 @@ def test_task_set_environment(task_definition):
     assert {'name': 'foo', 'value': 'baz'} in task_definition.containers[0]['environment']
     assert {'name': 'some-name', 'value': 'some-value'} in task_definition.containers[0]['environment']
 
+def test_read_env_file_wrong_env_format():
+    tmp = tempfile.NamedTemporaryFile(delete=False)
+    tmp.write(b'#comment\n  \nIncompleteDescription')
+    tmp.read()
+    l = read_env_file('webserver',tmp.name)
+    os.unlink(tmp.name)
+    tmp.close()
+    assert l == ()
+
 def test_task_set_environment_from_e_and_env_file(task_definition):
     assert len(task_definition.containers[0]['environment']) == 3
 
