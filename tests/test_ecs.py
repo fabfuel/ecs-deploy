@@ -366,6 +366,10 @@ def test_read_env_file_wrong_env_format():
     tmp.close()
     assert l == ()
 
+def test_env_file_wrong_file_name():
+    with pytest.raises(EcsTaskDefinitionCommandError):
+        read_env_file('webserver','WrongFileName')
+
 def test_task_set_environment_from_e_and_env_file(task_definition):
     assert len(task_definition.containers[0]['environment']) == 3
 

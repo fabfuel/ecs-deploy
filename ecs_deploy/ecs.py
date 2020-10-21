@@ -29,7 +29,7 @@ def read_env_file(container_name,file):
                 key, value = line.strip().split('=', 1)
                 env_vars.append((container_name,key,value))
     except Exception as e:
-        print("WARNING: invalid environment file name for container " + container_name +"! Defaults will be used.")
+        raise EcsTaskDefinitionCommandError(str(e))
     return tuple(env_vars)
 
 
