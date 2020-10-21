@@ -382,7 +382,7 @@ def test_task_set_environment_from_env_file(task_definition):
     tmp.write(b'some-name-from-env-file=some-value-from-env-file')
     tmp.read()
 
-    task_definition.set_environment(((u'webserver', u'foo', u'baz'), (u'webserver', u'some-name', u'some-value')), ((u'webserver',tmp.name),))
+    task_definition.set_environment((), ((u'webserver',tmp.name),))
     os.unlink(tmp.name)
     tmp.close()
 
