@@ -77,7 +77,7 @@ def deploy(cluster, service, tag, image, command, env, env_file, secret, role, e
         td = get_task_definition(deployment, task)
         td.set_images(tag, **{key: value for (key, value) in image})
         td.set_commands(**{key: value for (key, value) in command})
-        td.set_environment(env, env_file, exclusive_env)
+        td.set_environment(env, exclusive_env, env_file)
         td.set_secrets(secret, exclusive_secrets)
         td.set_role_arn(role)
         td.set_execution_role_arn(execution_role)
