@@ -377,7 +377,7 @@ class EcsTaskDefinition(object):
                 self._diff.append(diff)
                 container[u'command'] = self.parse_command(new_command)
 
-    def set_environment(self, environment_list, env_file=((None, None),), exclusive=False):
+    def set_environment(self, environment_list, exclusive=False, env_file=((None, None),)):
         environment = {}
         if None not in env_file[0]:
             for env in env_file:

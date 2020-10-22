@@ -237,7 +237,7 @@ def update(task, image, tag, command, env, env_file, secret, role, region, acces
 
         td.set_images(tag, **{key: value for (key, value) in image})
         td.set_commands(**{key: value for (key, value) in command})
-        td.set_environment(env, env_file, exclusive_env)
+        td.set_environment(env, exclusive_env, env_file)
         td.set_secrets(secret, exclusive_secrets)
         td.set_role_arn(role)
 
