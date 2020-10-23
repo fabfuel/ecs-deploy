@@ -150,9 +150,10 @@ def deploy(cluster, service, tag, image, command, env, env_file, secret, role, e
 @click.option('--diff/--no-diff', default=True, help='Print what values were changed in the task definition')
 @click.option('--deregister/--no-deregister', default=True, help='Deregister or keep the old task definition (default: --deregister)')
 @click.option('--rollback/--no-rollback', default=False, help='Rollback to previous revision, if deployment failed (default: --no-rollback)')
+@click.option('--exclusive-env', is_flag=True, default=False, help='Set the given environment variables exclusively and remove all other pre-existing env variables from all containers')
 @click.option('--slack-url', required=False, help='Webhook URL of the Slack integration. Can also be defined via environment variable SLACK_URL')
 @click.option('--slack-service-match', default=".*", required=False, help='A regular expression for defining, deployments of which crons should be notified. (default: .* =all). Can also be defined via environment variable SLACK_SERVICE_MATCH')
-def cron(cluster, task, rule, image, tag, command, env, env_file, role, region, access_key_id, secret_access_key, newrelic_apikey, newrelic_appid, newrelic_region, newrelic_revision, comment, user, profile, diff, deregister, rollback, slack_url, slack_service_match):
+def cron(cluster, task, rule, image, tag, command, env, env_file, role, region, access_key_id, secret_access_key, newrelic_apikey, newrelic_appid, newrelic_region, newrelic_revision, comment, user, profile, diff, deregister, rollback, exclusive_env, slack_url, slack_service_match):
     """
     Update a scheduled task.
 
@@ -170,7 +171,7 @@ def cron(cluster, task, rule, image, tag, command, env, env_file, role, region, 
 
         td.set_images(tag, **{key: value for (key, value) in image})
         td.set_commands(**{key: value for (key, value) in command})
-        td.set_environment(env, env_file)
+        td.set_environment(env, exclusive_env, env_file)
         td.set_role_arn(role)
 
         slack = SlackNotification(
@@ -315,8 +316,9 @@ def scale(cluster, service, desired_count, access_key_id, secret_access_key, reg
 @click.option('--access-key-id', help='AWS access key id')
 @click.option('--secret-access-key', help='AWS secret access key')
 @click.option('--profile', help='AWS configuration profile name')
+@click.option('--exclusive-env', is_flag=True, default=False, help='Set the given environment variables exclusively and remove all other pre-existing env variables from all containers')
 @click.option('--diff/--no-diff', default=True, help='Print what values were changed in the task definition')
-def run(cluster, task, count, command, env, env_file, secret, launchtype, subnet, securitygroup, public_ip, platform_version, region, access_key_id, secret_access_key, profile, diff):
+def run(cluster, task, count, command, env, env_file, secret, launchtype, subnet, securitygroup, public_ip, platform_version, region, access_key_id, secret_access_key, profile, exclusive_env, diff):
     """
     Run a one-off task.
 
@@ -331,7 +333,7 @@ def run(cluster, task, count, command, env, env_file, secret, launchtype, subnet
 
         td = action.get_task_definition(task)
         td.set_commands(**{key: value for (key, value) in command})
-        td.set_environment(env, env_file)
+        td.set_environment(env, exclusive_env, env_file)
         td.set_secrets(secret)
 
         if diff:
