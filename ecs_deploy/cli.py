@@ -330,7 +330,7 @@ def run(cluster, task, count, command, env, env_file, secret, launchtype, subnet
         client = get_client(access_key_id, secret_access_key, region, profile)
         action = RunAction(client, cluster)
 
-        td = action.get_task_definition(task)k
+        td = action.get_task_definition(task)
         td.set_commands(**{key: value for (key, value) in command})
         td.set_environment(env, exclusive_env, env_file)
         td.set_secrets(secret)
