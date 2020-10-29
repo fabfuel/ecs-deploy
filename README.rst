@@ -59,13 +59,13 @@ Instead of installing **ecs-deploy** locally, which requires a Python environmen
 
 Running **ecs-deploy** via Docker is easy as::
 
-    docker run fabfuel/ecs-deploy:1.7.1
+    docker run fabfuel/ecs-deploy:1.10.2
     
-In this example, the stable version 1.7.1 is executed. Alternatively you can use Docker tags ``master`` or ``latest`` for the latest stable version or Docker tag ``develop`` for the newest development version of **ecs-deploy**.
+In this example, the stable version 1.10.2 is executed. Alternatively you can use Docker tags ``master`` or ``latest`` for the latest stable version or Docker tag ``develop`` for the newest development version of **ecs-deploy**.
 
 Please be aware, that when running **ecs-deploy** via Docker, the configuration - as described below - does not apply. You have to provide credentials and the AWS region via the command as attributes or environment variables::
 
-    docker run fabfuel/ecs-deploy:1.7.1 ecs deploy my-cluster my-service --region eu-central-1 --access-key-id ABC --secret-access-key ABC
+    docker run fabfuel/ecs-deploy:1.10.2 ecs deploy my-cluster my-service --region eu-central-1 --access-key-id ABC --secret-access-key ABC
 
 
 Configuration
@@ -359,7 +359,13 @@ Or implicitly via environment variables ``NEW_RELIC_API_KEY`` and ``NEW_RELIC_AP
     $ export NEW_RELIC_APP_ID=1234567890
     $ ecs deploy my-cluster my-service
 
-Optionally you can provide an additional comment to the deployment via ``--comment "New feature X"`` and the name of the user who deployed with ``--user john.doe``
+Optionally you can provide additional information for the deployment:
+
+- ``--comment "New feature X"`` - comment to the deployment
+- ``--user john.doe`` - the name of the user who deployed with
+- ``--newrelic-revision 1.0.0`` - explicitly set the revison to use for the deployment
+
+Note: If neither ``--tag`` nor ``--newrelic-revision`` are provided, the deployment will not be recorded.
 
 
 Troubleshooting
