@@ -15,9 +15,22 @@ try:
 except AttributeError:
     JSONDecodeError = ValueError
 
-
 LAUNCH_TYPE_EC2 = 'EC2'
 LAUNCH_TYPE_FARGATE = 'FARGATE'
+
+
+def read_env_file(container_name,file):
+    env_vars = []
+    try:
+        with open(file) as f:
+            for line in f:
+                if line.startswith('#') or not line.strip() or '=' not in line:
+                    continue
+                key, value = line.strip().split('=', 1)
+                env_vars.append((container_name,key,value))
+    except Exception as e:
+        raise EcsTaskDefinitionCommandError(str(e))
+    return tuple(env_vars)
 
 
 class EcsClient(object):
@@ -248,16 +261,20 @@ class EcsTaskDefinition(object):
         requirements_b = sorted([r['name'] for r in task_b.requires_attributes])
 
         for container in containers_a:
-            containers_a[container]['environment'] = {e['name']: e['value'] for e in containers_a[container].get('environment', {})}
+            containers_a[container]['environment'] = {e['name']: e['value'] for e in
+                                                      containers_a[container].get('environment', {})}
 
         for container in containers_b:
-            containers_b[container]['environment'] = {e['name']: e['value'] for e in containers_b[container].get('environment', {})}
+            containers_b[container]['environment'] = {e['name']: e['value'] for e in
+                                                      containers_b[container].get('environment', {})}
 
         for container in containers_a:
-            containers_a[container]['secrets'] = {e['name']: e['valueFrom'] for e in containers_a[container].get('secrets', {})}
+            containers_a[container]['secrets'] = {e['name']: e['valueFrom'] for e in
+                                                  containers_a[container].get('secrets', {})}
 
         for container in containers_b:
-            containers_b[container]['secrets'] = {e['name']: e['valueFrom'] for e in containers_b[container].get('secrets', {})}
+            containers_b[container]['secrets'] = {e['name']: e['valueFrom'] for e in
+                                                  containers_b[container].get('secrets', {})}
 
         composite_a = {
             'containers': containers_a,
@@ -305,7 +322,7 @@ class EcsTaskDefinition(object):
                 raise EcsTaskDefinitionCommandError(
                     "command should be valid JSON list. Got following "
                     "command: {} resulting in error: {}"
-                    .format(command, str(e)))
+                        .format(command, str(e)))
 
         return command.split()
 
@@ -360,9 +377,12 @@ class EcsTaskDefinition(object):
                 self._diff.append(diff)
                 container[u'command'] = self.parse_command(new_command)
 
-    def set_environment(self, environment_list, exclusive=False):
+    def set_environment(self, environment_list, exclusive=False, env_file=((None, None),)):
         environment = {}
-
+        if None not in env_file[0]:
+            for env in env_file:
+                l = read_env_file(env[0], env[1])
+                environment_list = l + environment_list
         for env in environment_list:
             environment.setdefault(env[0], {})
             environment[env[0]][env[1]] = env[2]

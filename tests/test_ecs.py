@@ -2,7 +2,8 @@ from copy import deepcopy
 from datetime import datetime, timedelta
 
 import pytest
-
+import tempfile
+import os
 from boto3.session import Session
 from botocore.exceptions import ClientError, NoCredentialsError
 from dateutil.tz import tzlocal
@@ -11,7 +12,7 @@ from mock.mock import patch
 from ecs_deploy.ecs import EcsService, EcsTaskDefinition, \
     UnknownContainerError, EcsTaskDefinitionDiff, EcsClient, \
     EcsAction, EcsConnectionError, DeployAction, ScaleAction, RunAction, \
-    EcsTaskDefinitionCommandError, UnknownTaskDefinitionError, LAUNCH_TYPE_EC2
+    EcsTaskDefinitionCommandError, UnknownTaskDefinitionError, LAUNCH_TYPE_EC2, read_env_file
 
 CLUSTER_NAME = u'test-cluster'
 CLUSTER_ARN = u'arn:aws:ecs:eu-central-1:123456789012:cluster/%s' % CLUSTER_NAME
@@ -355,6 +356,53 @@ def test_task_set_environment(task_definition):
     assert {'name': 'lorem', 'value': 'ipsum'} in task_definition.containers[0]['environment']
     assert {'name': 'foo', 'value': 'baz'} in task_definition.containers[0]['environment']
     assert {'name': 'some-name', 'value': 'some-value'} in task_definition.containers[0]['environment']
+
+def test_read_env_file_wrong_env_format():
+    tmp = tempfile.NamedTemporaryFile(delete=False)
+    tmp.write(b'#comment\n  \nIncompleteDescription')
+    tmp.read()
+    l = read_env_file('webserver',tmp.name)
+    os.unlink(tmp.name)
+    tmp.close()
+    assert l == ()
+
+def test_env_file_wrong_file_name():
+    with pytest.raises(EcsTaskDefinitionCommandError):
+        read_env_file('webserver','WrongFileName')
+
+def test_task_set_environment_from_e_and_env_file(task_definition):
+    assert len(task_definition.containers[0]['environment']) == 3
+
+    tmp = tempfile.NamedTemporaryFile(delete=False)
+    tmp.write(b'some-name-from-env-file=some-value-from-env-file')
+    tmp.read()
+
+    task_definition.set_environment(((u'webserver', u'foo', u'baz'), (u'webserver', u'some-name', u'some-value')), env_file = ((u'webserver',tmp.name),))
+    os.unlink(tmp.name)
+    tmp.close()
+
+    assert len(task_definition.containers[0]['environment']) == 5
+
+    assert {'name': 'lorem', 'value': 'ipsum'} in task_definition.containers[0]['environment']
+    assert {'name': 'foo', 'value': 'baz'} in task_definition.containers[0]['environment']
+    assert {'name': 'some-name', 'value': 'some-value'} in task_definition.containers[0]['environment']
+    assert {'name': 'some-name-from-env-file', 'value': 'some-value-from-env-file'} in task_definition.containers[0]['environment']
+
+def test_task_set_environment_from_env_file(task_definition):
+    assert len(task_definition.containers[0]['environment']) == 3
+
+    tmp = tempfile.NamedTemporaryFile(delete=False)
+    tmp.write(b'some-name-from-env-file=some-value-from-env-file')
+    tmp.read()
+
+    task_definition.set_environment((), env_file = ((u'webserver',tmp.name),))
+    os.unlink(tmp.name)
+    tmp.close()
+
+    assert len(task_definition.containers[0]['environment']) == 4
+
+    assert {'name': 'lorem', 'value': 'ipsum'} in task_definition.containers[0]['environment']
+    assert {'name': 'some-name-from-env-file', 'value': 'some-value-from-env-file'} in task_definition.containers[0]['environment']
 
 
 def test_task_set_environment_exclusively(task_definition):
