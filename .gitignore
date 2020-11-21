@@ -10,3 +10,6 @@ env/
 .tox/
 .coverage
 .cache
+
+.venv
+.autoenv

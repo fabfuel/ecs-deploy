@@ -41,6 +41,9 @@ This fork has the following, additional features compared to the original:
 - Set the `systemControls` values for a task definition: :code:`--system-control <container_name> net.core.somaxconn 511`.
 
   - Supports :code:`--exclusive-system-controls`.
+- Set the `healthCheck` values for a task definition: :code:`--health-check <container_name> <command> <interval> <timeout> <retries> <start_period>`.
+
+  - Example :code:`--health-check webserver "curl -f http://localhost/alive/" 30 5 3 0`
 - Add placeholder containers: :code:`--add-container <container_name>`.
 
   - To comply with the minimum requirements for a task definition, a placeholder container is set like this:
