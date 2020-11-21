@@ -351,6 +351,27 @@ class EcsTaskDefinition(object):
                 self._diff.append(diff)
                 container[u'command'] = self.parse_command(new_command)
 
+    def set_health_checks(self, **health_checks):
+        self.validate_container_options(**health_checks)
+        for container in self.containers:
+            if container[u'name'] in health_checks:
+                raw_check_attrs = health_checks[container[u'name']]
+                new_check = {
+                    'command': self.parse_command(raw_check_attrs[0]),
+                    'interval': raw_check_attrs[1],
+                    'timeout': raw_check_attrs[2],
+                    'retries': raw_check_attrs[3],
+                    'startPeriod': raw_check_attrs[4]
+                }
+                diff = EcsTaskDefinitionDiff(
+                    container=container[u'name'],
+                    field=u'healthCheck',
+                    value=new_check,
+                    old_value=container.get(u'healthCheck')
+                )
+                self._diff.append(diff)
+                container[u'healthCheck'] = new_check
+
     def set_cpu(self, **cpu):
         self.validate_container_options(**cpu)
         for container in self.containers:
