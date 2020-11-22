@@ -31,6 +31,7 @@ def get_client(access_key_id, secret_access_key, region, profile):
 @click.option('-t', '--tag', help='Changes the tag for ALL container images')
 @click.option('-i', '--image', type=(str, str), multiple=True, help='Overwrites the image for a container: <container> <image>')
 @click.option('-c', '--command', type=(str, str), multiple=True, help='Overwrites the command in a container: <container> <command>')
+@click.option('-h', '--health-check', type=(str, str, int, int, int, int), multiple=True, help='Overwrites the healthcheck in a container: <container> <command> <interval> <timeout> <retries> <start_period>')
 @click.option('--cpu', type=(str, int), multiple=True, help='Overwrites the cpu value for a container: <container> <cpu>')
 @click.option('--memory', type=(str, int), multiple=True, help='Overwrites the memory value for a container: <container> <memory>')
 @click.option('--memoryreservation', type=(str, int), multiple=True, help='Overwrites the memory reservation value for a container: <container> <memoryreservation>')
@@ -72,7 +73,7 @@ def get_client(access_key_id, secret_access_key, region, profile):
 @click.option('--volume', type=(str, str), multiple=True, required=False, help='Set volume mapping from host to container in the task definition.')
 @click.option('--add-container', type=str, multiple=True, required=False, help='Add a placeholder container in the task definition.')
 @click.option('--remove-container', type=str, multiple=True, required=False, help='Remove a container from the task definition.')
-def deploy(cluster, service, tag, image, command, cpu, memory, memoryreservation, privileged, essential, env, secret, ulimit, system_control, port, mount, log, role, execution_role, task, region, access_key_id, secret_access_key, profile, timeout, newrelic_apikey, newrelic_appid, newrelic_region, comment, user, ignore_warnings, diff, deregister, rollback, exclusive_env, exclusive_secrets, sleep_time, exclusive_ulimits, exclusive_system_controls, exclusive_ports, exclusive_mounts, volume, add_container, remove_container, slack_url, slack_service_match='.*'):
+def deploy(cluster, service, tag, image, command, health_check, cpu, memory, memoryreservation, privileged, essential, env, secret, ulimit, system_control, port, mount, log, role, execution_role, task, region, access_key_id, secret_access_key, profile, timeout, newrelic_apikey, newrelic_appid, newrelic_region, comment, user, ignore_warnings, diff, deregister, rollback, exclusive_env, exclusive_secrets, sleep_time, exclusive_ulimits, exclusive_system_controls, exclusive_ports, exclusive_mounts, volume, add_container, remove_container, slack_url, slack_service_match='.*'):
     """
     Redeploy or modify a service.
 
@@ -95,6 +96,7 @@ def deploy(cluster, service, tag, image, command, cpu, memory, memoryreservation
         td.remove_containers(remove_container)
         td.set_images(tag, **{key: value for (key, value) in image})
         td.set_commands(**{key: value for (key, value) in command})
+        td.set_health_checks(**{key: vals for (key, *vals) in health_check})
         td.set_cpu(**{key: value for (key, value) in cpu})
         td.set_memory(**{key: value for (key, value) in memory})
         td.set_memoryreservation(**{key: value for (key, value) in memoryreservation})
