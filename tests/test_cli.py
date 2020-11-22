@@ -198,17 +198,30 @@ def test_deploy_one_new_command(get_client, runner):
     assert u'Successfully changed task definition to: test-task:2' in result.output
     assert u'Deployment successful' in result.output
 
+@pytest.mark.parametrize(
+    'cmd_input, cmd_expected',
+    (
+        (
+            u'curl -f http://localhost/alive/',
+            [u'curl', u'-f', u'http://localhost/alive/']
+        ),
+        (
+            u'["CMD-SHELL","curl -f http://localhost/alive/ || 1"]',
+            [u'CMD-SHELL', u'curl -f http://localhost/alive/ || 1']
+        )
+    )
+)
 @patch('ecs_deploy.cli.get_client')
-def test_deploy_one_new_health_check(get_client, runner):
+def test_deploy_one_new_health_check(get_client, cmd_input, cmd_expected, runner):
     get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '-h', 'application', 'curl -f http://localhost/alive/', 30, 5, 3, 0))
+    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '-h', 'application', cmd_input, 30, 5, 3, 0))
     assert result.exit_code == 0
     assert not result.exception
     assert u"Deploying based on task definition: test-task:1" in result.output
     assert u"Updating task definition" in result.output
 
     expected_health_check = {
-        u'command': [u'curl', u'-f', u'http://localhost/alive/'],
+        u'command': cmd_expected,
         u'interval': 30,
         u'timeout': 5,
         u'retries': 3,
