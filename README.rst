@@ -42,7 +42,7 @@ Updating a cron job::
 
 Update a task definition (without running or deploying)::
 
-    $ ecs update my-cluster my-task
+    $ ecs update my-task
 
 
 Installation
