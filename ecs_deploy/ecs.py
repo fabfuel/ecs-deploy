@@ -221,7 +221,8 @@ class EcsTaskDefinition(object):
     def __init__(self, containerDefinitions, volumes, family, revision,
                  status, taskDefinitionArn, requiresAttributes=None,
                  taskRoleArn=None, executionRoleArn=None, compatibilities=None,
-                 tags=None, **kwargs):
+                 tags=None, registeredAt=None, registeredBy=None, **kwargs):
+
         self.containers = containerDefinitions
         self.volumes = volumes
         self.family = family
@@ -235,10 +236,12 @@ class EcsTaskDefinition(object):
         self.additional_properties = kwargs
         self._diff = []
 
-        # the compatibilities parameter is returned from the ECS API, when
+        # the following parameters are returned from the ECS API, when
         # describing a task, but may not be included, when registering a new
-        # task definition. Just storing it for now.
+        # task definition. Just storing them for now.
         self.compatibilities = compatibilities
+        self.registered_at = registeredAt
+        self.registered_by = registeredBy
 
     @property
     def container_names(self):
