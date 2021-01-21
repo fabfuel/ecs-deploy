@@ -11,7 +11,7 @@ def readme():
         return f.read()
 
 
-dependencies = ['click<7.0.0', 'botocore>=1.17.47,<=1.19.27', 'boto3>=1.14.47,<=1.16.27', 'future', 'requests', 'dictdiffer==0.8.0']
+dependencies = ['click<7.0.0', 'botocore>=1.17.47', 'boto3>=1.14.47', 'future', 'requests', 'dictdiffer==0.8.0']
 
 setup(
     name='ecs-deploy',

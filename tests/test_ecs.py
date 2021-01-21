@@ -68,6 +68,8 @@ PAYLOAD_TASK_DEFINITION_1 = {
     u'requiresAttributes': {},
     u'networkMode': u'host',
     u'placementConstraints': {},
+    u'registeredBy': 'foobar',
+    u'registeredAt': '2021-01-20T14:33:44Z',
     u'unknownProperty': u'lorem-ipsum',
     u'compatibilities': [u'EC2'],
 }
