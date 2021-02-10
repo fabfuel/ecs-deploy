@@ -2,7 +2,8 @@ from copy import deepcopy
 from datetime import datetime, timedelta
 
 import pytest
-
+import tempfile
+import os
 from boto3.session import Session
 from botocore.exceptions import ClientError, NoCredentialsError
 from dateutil.tz import tzlocal
@@ -11,7 +12,7 @@ from mock.mock import patch
 from ecs_deploy.ecs import EcsService, EcsTaskDefinition, \
     UnknownContainerError, EcsTaskDefinitionDiff, EcsClient, \
     EcsAction, EcsConnectionError, DeployAction, ScaleAction, RunAction, \
-    EcsTaskDefinitionCommandError, UnknownTaskDefinitionError, LAUNCH_TYPE_EC2
+    EcsTaskDefinitionCommandError, UnknownTaskDefinitionError, LAUNCH_TYPE_EC2, read_env_file
 
 CLUSTER_NAME = u'test-cluster'
 CLUSTER_ARN = u'arn:aws:ecs:eu-central-1:123456789012:cluster/%s' % CLUSTER_NAME
@@ -88,6 +89,8 @@ PAYLOAD_TASK_DEFINITION_1 = {
     u'requiresAttributes': {},
     u'networkMode': u'host',
     u'placementConstraints': {},
+    u'registeredBy': 'foobar',
+    u'registeredAt': '2021-01-20T14:33:44Z',
     u'unknownProperty': u'lorem-ipsum',
     u'compatibilities': [u'EC2'],
 }
@@ -441,6 +444,53 @@ def test_task_set_environment(task_definition):
     assert {'name': 'foo', 'value': 'baz'} in task_definition.containers[0]['environment']
     assert {'name': 'some-name', 'value': 'some-value'} in task_definition.containers[0]['environment']
 
+def test_read_env_file_wrong_env_format():
+    tmp = tempfile.NamedTemporaryFile(delete=False)
+    tmp.write(b'#comment\n  \nIncompleteDescription')
+    tmp.read()
+    l = read_env_file('webserver',tmp.name)
+    os.unlink(tmp.name)
+    tmp.close()
+    assert l == ()
+
+def test_env_file_wrong_file_name():
+    with pytest.raises(EcsTaskDefinitionCommandError):
+        read_env_file('webserver','WrongFileName')
+
+def test_task_set_environment_from_e_and_env_file(task_definition):
+    assert len(task_definition.containers[0]['environment']) == 3
+
+    tmp = tempfile.NamedTemporaryFile(delete=False)
+    tmp.write(b'some-name-from-env-file=some-value-from-env-file')
+    tmp.read()
+
+    task_definition.set_environment(((u'webserver', u'foo', u'baz'), (u'webserver', u'some-name', u'some-value')), env_file = ((u'webserver',tmp.name),))
+    os.unlink(tmp.name)
+    tmp.close()
+
+    assert len(task_definition.containers[0]['environment']) == 5
+
+    assert {'name': 'lorem', 'value': 'ipsum'} in task_definition.containers[0]['environment']
+    assert {'name': 'foo', 'value': 'baz'} in task_definition.containers[0]['environment']
+    assert {'name': 'some-name', 'value': 'some-value'} in task_definition.containers[0]['environment']
+    assert {'name': 'some-name-from-env-file', 'value': 'some-value-from-env-file'} in task_definition.containers[0]['environment']
+
+def test_task_set_environment_from_env_file(task_definition):
+    assert len(task_definition.containers[0]['environment']) == 3
+
+    tmp = tempfile.NamedTemporaryFile(delete=False)
+    tmp.write(b'some-name-from-env-file=some-value-from-env-file')
+    tmp.read()
+
+    task_definition.set_environment((), env_file = ((u'webserver',tmp.name),))
+    os.unlink(tmp.name)
+    tmp.close()
+
+    assert len(task_definition.containers[0]['environment']) == 4
+
+    assert {'name': 'lorem', 'value': 'ipsum'} in task_definition.containers[0]['environment']
+    assert {'name': 'some-name-from-env-file', 'value': 'some-value-from-env-file'} in task_definition.containers[0]['environment']
+
 
 def test_task_set_environment_exclusively(task_definition):
     assert len(task_definition.containers[0]['environment']) == 3
@@ -603,7 +653,7 @@ def test_task_set_command_with_multiple_arguments(task_definition):
             assert container[u'command'] == [u'run-application', u'arg1', u'arg2']
 
 def test_task_set_command_with_empty_argument(task_definition):
-    empty_argument = " " 
+    empty_argument = " "
     task_definition.set_commands(webserver=empty_argument + u'run-webserver arg1 arg2')
     for container in task_definition.containers:
         if container[u'name'] == u'webserver':
@@ -783,7 +833,7 @@ def test_client_describe_services(client):
 
 def test_client_describe_task_definition(client):
     client.describe_task_definition(u'task_definition_arn')
-    client.boto.describe_task_definition.assert_called_once_with(taskDefinition=u'task_definition_arn')
+    client.boto.describe_task_definition.assert_called_once_with(include=['TAGS'], taskDefinition=u'task_definition_arn')
 
 
 def test_client_describe_unknown_task_definition(client):
@@ -815,6 +865,9 @@ def test_client_register_task_definition(client):
         revision=1,
         taskRoleArn=role_arn,
         executionRoleArn=execution_role_arn,
+        tags={
+            'Name': 'test_client_register_task_definition'
+        },
         status='active',
         taskDefinitionArn='arn:task',
         requiresAttributes={},
@@ -827,6 +880,47 @@ def test_client_register_task_definition(client):
         volumes=task_definition.volumes,
         role_arn=task_definition.role_arn,
         execution_role_arn=execution_role_arn,
+        tags=task_definition.tags,
+        additional_properties=task_definition.additional_properties
+    )
+
+    client.boto.register_task_definition.assert_called_once_with(
+        family=u'family',
+        containerDefinitions=containers,
+        volumes=volumes,
+        taskRoleArn=role_arn,
+        executionRoleArn=execution_role_arn,
+        tags=task_definition.tags,
+        unkownProperty='foobar'
+    )
+
+
+def test_client_register_task_definition_without_tags(client):
+    containers = [{u'name': u'foo'}]
+    volumes = [{u'foo': u'bar'}]
+    role_arn = 'arn:test:role'
+    execution_role_arn = 'arn:test:role'
+    task_definition = EcsTaskDefinition(
+        containerDefinitions=containers,
+        volumes=volumes,
+        family=u'family',
+        revision=1,
+        taskRoleArn=role_arn,
+        executionRoleArn=execution_role_arn,
+        tags={},
+        status='active',
+        taskDefinitionArn='arn:task',
+        requiresAttributes={},
+        unkownProperty='foobar'
+    )
+
+    client.register_task_definition(
+        family=task_definition.family,
+        containers=task_definition.containers,
+        volumes=task_definition.volumes,
+        role_arn=task_definition.role_arn,
+        execution_role_arn=execution_role_arn,
+        tags=task_definition.tags,
         additional_properties=task_definition.additional_properties
     )
 
@@ -951,6 +1045,7 @@ def test_update_task_definition(client, task_definition):
         volumes=task_definition.volumes,
         role_arn=task_definition.role_arn,
         execution_role_arn=task_definition.execution_role_arn,
+        tags=task_definition.tags,
         additional_properties={
             u'networkMode': u'host',
             u'placementConstraints': {},
@@ -1096,7 +1191,7 @@ def test_run_action(client):
 def test_run_action_run(client, task_definition):
     action = RunAction(client, CLUSTER_NAME)
     client.run_task.return_value = dict(tasks=[dict(taskArn='A'), dict(taskArn='B')])
-    action.run(task_definition, 2, 'test', LAUNCH_TYPE_EC2, (), (), False)
+    action.run(task_definition, 2, 'test', LAUNCH_TYPE_EC2, (), (), False, None)
 
     client.run_task.assert_called_once_with(
         cluster=CLUSTER_NAME,
@@ -1107,7 +1202,8 @@ def test_run_action_run(client, task_definition):
         launchtype=LAUNCH_TYPE_EC2,
         subnets=(),
         security_groups=(),
-        public_ip=False
+        public_ip=False,
+        platform_version=None,
     )
 
     assert len(action.started_tasks) == 2
@@ -1182,7 +1278,7 @@ class EcsTestClient(object):
         return deepcopy(RESPONSE_DESCRIBE_TASKS)
 
     def register_task_definition(self, family, containers, volumes, role_arn,
-                                 execution_role_arn, additional_properties):
+                                 execution_role_arn, tags, additional_properties):
         if not self.access_key_id or not self.secret_access_key:
             raise EcsConnectionError(u'Unable to locate credentials. Configure credentials by running "aws configure".')
         return deepcopy(RESPONSE_TASK_DEFINITION_2)
@@ -1200,7 +1296,7 @@ class EcsTestClient(object):
 
     def run_task(self, cluster, task_definition, count, started_by, overrides,
                  launchtype='EC2', subnets=(), security_groups=(),
-                 public_ip=False):
+                 public_ip=False, platform_version=None):
         if not self.access_key_id or not self.secret_access_key:
             raise EcsConnectionError(u'Unable to locate credentials. Configure credentials by running "aws configure".')
         if cluster == 'unknown-cluster':

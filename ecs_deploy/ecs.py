@@ -16,9 +16,22 @@ try:
 except AttributeError:
     JSONDecodeError = ValueError
 
-
 LAUNCH_TYPE_EC2 = 'EC2'
 LAUNCH_TYPE_FARGATE = 'FARGATE'
+
+
+def read_env_file(container_name,file):
+    env_vars = []
+    try:
+        with open(file) as f:
+            for line in f:
+                if line.startswith('#') or not line.strip() or '=' not in line:
+                    continue
+                key, value = line.strip().split('=', 1)
+                env_vars.append((container_name,key,value))
+    except Exception as e:
+        raise EcsTaskDefinitionCommandError(str(e))
+    return tuple(env_vars)
 
 
 class EcsClient(object):
@@ -41,7 +54,10 @@ class EcsClient(object):
     def describe_task_definition(self, task_definition_arn):
         try:
             return self.boto.describe_task_definition(
-                taskDefinition=task_definition_arn
+                taskDefinition=task_definition_arn,
+                include=[
+                    'TAGS',
+                ]
             )
         except ClientError:
             raise UnknownTaskDefinitionError(
@@ -58,7 +74,10 @@ class EcsClient(object):
         return self.boto.describe_tasks(cluster=cluster_name, tasks=task_arns)
 
     def register_task_definition(self, family, containers, volumes, role_arn,
-                                 execution_role_arn, additional_properties):
+                                 execution_role_arn, tags, additional_properties):
+        if tags:
+            additional_properties['tags'] = tags
+
         return self.boto.register_task_definition(
             family=family,
             containerDefinitions=containers,
@@ -89,7 +108,7 @@ class EcsClient(object):
 
     def run_task(self, cluster, task_definition, count, started_by, overrides,
                  launchtype='EC2', subnets=(), security_groups=(),
-                 public_ip=False):
+                 public_ip=False, platform_version=None):
 
         if launchtype == LAUNCH_TYPE_FARGATE:
             if not subnets or not security_groups:
@@ -106,6 +125,9 @@ class EcsClient(object):
                 }
             }
 
+            if platform_version is None:
+                platform_version = 'LATEST'
+
             return self.boto.run_task(
                 cluster=cluster,
                 taskDefinition=task_definition,
@@ -113,7 +135,8 @@ class EcsClient(object):
                 startedBy=started_by,
                 overrides=overrides,
                 launchType=launchtype,
-                networkConfiguration=network_configuration
+                networkConfiguration=network_configuration,
+                platformVersion=platform_version,
             )
 
         return self.boto.run_task(
@@ -199,7 +222,8 @@ class EcsTaskDefinition(object):
     def __init__(self, containerDefinitions, volumes, family, revision,
                  status, taskDefinitionArn, requiresAttributes=None,
                  taskRoleArn=None, executionRoleArn=None, compatibilities=None,
-                 **kwargs):
+                 tags=None, registeredAt=None, registeredBy=None, **kwargs):
+
         self.containers = containerDefinitions
         self.new_containers = {}
         self.volumes = volumes
@@ -210,13 +234,16 @@ class EcsTaskDefinition(object):
         self.requires_attributes = requiresAttributes or {}
         self.role_arn = taskRoleArn or u''
         self.execution_role_arn = executionRoleArn or u''
+        self.tags = tags
         self.additional_properties = kwargs
         self._diff = []
 
-        # the compatibilities parameter is returned from the ECS API, when
+        # the following parameters are returned from the ECS API, when
         # describing a task, but may not be included, when registering a new
-        # task definition. Just storing it for now.
+        # task definition. Just storing them for now.
         self.compatibilities = compatibilities
+        self.registered_at = registeredAt
+        self.registered_by = registeredBy
 
     @property
     def container_names(self):
@@ -239,16 +266,20 @@ class EcsTaskDefinition(object):
         requirements_b = sorted([r['name'] for r in task_b.requires_attributes])
 
         for container in containers_a:
-            containers_a[container]['environment'] = {e['name']: e['value'] for e in containers_a[container].get('environment', {})}
+            containers_a[container]['environment'] = {e['name']: e['value'] for e in
+                                                      containers_a[container].get('environment', {})}
 
         for container in containers_b:
-            containers_b[container]['environment'] = {e['name']: e['value'] for e in containers_b[container].get('environment', {})}
+            containers_b[container]['environment'] = {e['name']: e['value'] for e in
+                                                      containers_b[container].get('environment', {})}
 
         for container in containers_a:
-            containers_a[container]['secrets'] = {e['name']: e['valueFrom'] for e in containers_a[container].get('secrets', {})}
+            containers_a[container]['secrets'] = {e['name']: e['valueFrom'] for e in
+                                                  containers_a[container].get('secrets', {})}
 
         for container in containers_b:
-            containers_b[container]['secrets'] = {e['name']: e['valueFrom'] for e in containers_b[container].get('secrets', {})}
+            containers_b[container]['secrets'] = {e['name']: e['valueFrom'] for e in
+                                                  containers_b[container].get('secrets', {})}
 
         composite_a = {
             'containers': containers_a,
@@ -296,7 +327,7 @@ class EcsTaskDefinition(object):
                 raise EcsTaskDefinitionCommandError(
                     "command should be valid JSON list. Got following "
                     "command: {} resulting in error: {}"
-                    .format(command, str(e)))
+                        .format(command, str(e)))
 
         return command.split()
 
@@ -469,8 +500,12 @@ class EcsTaskDefinition(object):
                 self._diff.append(diff)
                 container[u'logConfiguration'] = new_log_configurations
 
-    def set_environment(self, environment_list, exclusive=False):
+    def set_environment(self, environment_list, exclusive=False, env_file=((None, None),)):
         environment = {}
+        if None not in env_file[0]:
+            for env in env_file:
+                l = read_env_file(env[0], env[1])
+                environment_list = l + environment_list
         for env in environment_list:
             environment.setdefault(env[0], {})
             environment[env[0]][env[1]] = env[2]
@@ -1046,6 +1081,7 @@ class EcsAction(object):
         )
 
         task_definition = EcsTaskDefinition(
+            tags=task_definition_payload.get('tags', None),
             **task_definition_payload[u'taskDefinition']
         )
         return task_definition
@@ -1057,6 +1093,7 @@ class EcsAction(object):
             volumes=task_definition.volumes,
             role_arn=task_definition.role_arn,
             execution_role_arn=task_definition.execution_role_arn,
+            tags=task_definition.tags,
             additional_properties=task_definition.additional_properties
         )
         new_task_definition = EcsTaskDefinition(**response[u'taskDefinition'])
@@ -1144,7 +1181,7 @@ class RunAction(EcsAction):
         self.started_tasks = []
 
     def run(self, task_definition, count, started_by, launchtype, subnets,
-            security_groups, public_ip):
+            security_groups, public_ip, platform_version):
         try:
             result = self._client.run_task(
                 cluster=self._cluster_name,
@@ -1155,7 +1192,8 @@ class RunAction(EcsAction):
                 launchtype=launchtype,
                 subnets=subnets,
                 security_groups=security_groups,
-                public_ip=public_ip
+                public_ip=public_ip,
+                platform_version=platform_version,
             )
             self.started_tasks = result['tasks']
             return True

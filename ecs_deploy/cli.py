@@ -7,7 +7,6 @@ import click
 import json
 import getpass
 from datetime import datetime, timedelta
-
 from ecs_deploy import VERSION
 from ecs_deploy.ecs import DeployAction, ScaleAction, RunAction, EcsClient, DiffAction, \
     TaskPlacementError, EcsError, UpdateAction, LAUNCH_TYPE_EC2, LAUNCH_TYPE_FARGATE
@@ -38,6 +37,7 @@ def get_client(access_key_id, secret_access_key, region, profile):
 @click.option('--privileged', type=(str, bool), multiple=True, help='Overwrites the privileged value for a container: <container> <privileged>')
 @click.option('--essential', type=(str, bool), multiple=True, help='Overwrites the essential value for a container: <container> <essential>')
 @click.option('-e', '--env', type=(str, str, str), multiple=True, help='Adds or changes an environment variable: <container> <name> <value>')
+@click.option('--env-file', type=(str, str), default=((None, None),), multiple=True, required=False, help='Load environment variables from .env-file')
 @click.option('-s', '--secret', type=(str, str, str), multiple=True, help='Adds or changes a secret environment variable from the AWS Parameter Store (Not available for Fargate): <container> <name> <parameter name>')
 @click.option('-u', '--ulimit', type=(str, str, int, int), multiple=True, help='Adds or changes a ulimit variable in the container description (Not available for Fargate): <container> <ulimit name> <softlimit value> <hardlimit value>')
 @click.option('--system-control', type=(str, str, str), multiple=True, help='Adds or changes a system control variable in the container description (Not available for Fargate): <container> <namespace> <value>')
@@ -56,6 +56,7 @@ def get_client(access_key_id, secret_access_key, region, profile):
 @click.option('--newrelic-apikey', required=False, help='New Relic API Key for recording the deployment. Can also be defined via environment variable NEW_RELIC_API_KEY')
 @click.option('--newrelic-appid', required=False, help='New Relic App ID for recording the deployment. Can also be defined via environment variable NEW_RELIC_APP_ID')
 @click.option('--newrelic-region', required=False, help='New Relic region: US or EU (default: US). Can also be defined via environment variable NEW_RELIC_REGION')
+@click.option('--newrelic-revision', required=False, help='New Relic revision for recording the deployment (default: --tag value). Can also be defined via environment variable NEW_RELIC_REVISION')
 @click.option('--comment', required=False, help='Description/comment for recording the deployment')
 @click.option('--user', required=False, help='User who executes the deployment (used for recording)')
 @click.option('--diff/--no-diff', default=True, help='Print which values were changed in the task definition (default: --diff)')
@@ -73,7 +74,8 @@ def get_client(access_key_id, secret_access_key, region, profile):
 @click.option('--volume', type=(str, str), multiple=True, required=False, help='Set volume mapping from host to container in the task definition.')
 @click.option('--add-container', type=str, multiple=True, required=False, help='Add a placeholder container in the task definition.')
 @click.option('--remove-container', type=str, multiple=True, required=False, help='Remove a container from the task definition.')
-def deploy(cluster, service, tag, image, command, health_check, cpu, memory, memoryreservation, privileged, essential, env, secret, ulimit, system_control, port, mount, log, role, execution_role, task, region, access_key_id, secret_access_key, profile, timeout, newrelic_apikey, newrelic_appid, newrelic_region, comment, user, ignore_warnings, diff, deregister, rollback, exclusive_env, exclusive_secrets, sleep_time, exclusive_ulimits, exclusive_system_controls, exclusive_ports, exclusive_mounts, volume, add_container, remove_container, slack_url, slack_service_match='.*'):
+def deploy(cluster, service, tag, image, command, health_check, cpu, memory, memoryreservation, privileged, essential, env, env_file, secret, ulimit, system_control, port, mount, log, role, execution_role, task, region, access_key_id, secret_access_key, profile, timeout, newrelic_apikey, newrelic_appid, newrelic_region, newrelic_revision, comment, user, ignore_warnings, diff, deregister, rollback, exclusive_env, exclusive_secrets, sleep_time, exclusive_ulimits, exclusive_system_controls, exclusive_ports, exclusive_mounts, volume, add_container, remove_container, slack_url, slack_service_match='.*'):
+def deploy(cluster, service, tag, image, command, env, secret, role, execution_role, task, region, access_key_id, secret_access_key, profile, timeout, newrelic_apikey, newrelic_appid, newrelic_region, newrelic_revision, comment, user, ignore_warnings, diff, deregister, rollback, exclusive_env, exclusive_secrets, sleep_time, slack_url, slack_service_match='.*'):
     """
     Redeploy or modify a service.
 
@@ -102,7 +104,7 @@ def deploy(cluster, service, tag, image, command, health_check, cpu, memory, mem
         td.set_memoryreservation(**{key: value for (key, value) in memoryreservation})
         td.set_privileged(**{key: value for (key, value) in privileged})
         td.set_essential(**{key: value for (key, value) in essential})
-        td.set_environment(env, exclusive_env)
+        td.set_environment(env, exclusive_env, env_file)
         td.set_secrets(secret, exclusive_secrets)
         td.set_ulimits(ulimit, exclusive_ulimits)
         td.set_system_controls(system_control, exclusive_system_controls)
@@ -149,7 +151,7 @@ def deploy(cluster, service, tag, image, command, health_check, cpu, memory, mem
             else:
                 raise
 
-        record_deployment(tag, newrelic_apikey, newrelic_appid, newrelic_region, comment, user)
+        record_deployment(tag, newrelic_apikey, newrelic_appid, newrelic_region, newrelic_revision, comment, user)
 
         slack.notify_success(cluster, td.revision, service=service)
 
@@ -176,6 +178,7 @@ def deploy(cluster, service, tag, image, command, health_check, cpu, memory, mem
 @click.option('-p', '--port', type=(str, int, int), multiple=True, help='Adds or changes a port mappings in the container description (Not available for Fargate): <container> <container port value> <host port value>')
 @click.option('-m', '--mount', type=(str, str, str), multiple=True, help='Adds or changes a mount points in the container description (Not available for Fargate): <container> <container port value> <host port value>')
 @click.option('-l', '--log', type=(str, str, str, str), multiple=True, help='Adds or changes a log configuration in the container description (Not available for Fargate): <container> <log driver> <option name> <option value>')
+@click.option('--env-file', type=(str, str), default=((None, None),), multiple=True, required=False, help='Load environment variables from .env-file')
 @click.option('-r', '--role', type=str, help='Sets the task\'s role ARN: <task role ARN>')
 @click.option('-x', '--execution-role', type=str, help='Sets the execution\'s role ARN: <execution role ARN>')
 @click.option('--region', help='AWS region (e.g. eu-central-1)')
@@ -184,6 +187,7 @@ def deploy(cluster, service, tag, image, command, health_check, cpu, memory, mem
 @click.option('--newrelic-apikey', required=False, help='New Relic API Key for recording the deployment. Can also be defined via environment variable NEW_RELIC_API_KEY')
 @click.option('--newrelic-appid', required=False, help='New Relic App ID for recording the deployment. Can also be defined via environment variable NEW_RELIC_APP_ID')
 @click.option('--newrelic-region', required=False, help='New Relic region: US or EU (default: US). Can also be defined via environment variable NEW_RELIC_REGION')
+@click.option('--newrelic-revision', required=False, help='New Relic revision for recording the deployment (default: --tag value). Can also be defined via environment variable NEW_RELIC_REVISION')
 @click.option('--comment', required=False, help='Description/comment for recording the deployment')
 @click.option('--user', required=False, help='User who executes the deployment (used for recording)')
 @click.option('--profile', help='AWS configuration profile name')
@@ -199,7 +203,9 @@ def deploy(cluster, service, tag, image, command, health_check, cpu, memory, mem
 @click.option('--exclusive-ports', is_flag=True, default=False, help='Set the given port mappings exclusively and remove all other pre-existing port mappings from all containers')
 @click.option('--exclusive-mounts', is_flag=True, default=False, help='Set the given mount points exclusively and remove all other pre-existing mount points from all containers')
 @click.option('--volume', type=(str, str), multiple=True, required=False, help='Set volume mapping from host to container in the task definition.')
-def cron(cluster, task, rule, image, tag, command, cpu, memory, memoryreservation, privileged, env, secret, ulimit, system_control, port, mount, log, role, execution_role, region, access_key_id, secret_access_key, newrelic_apikey, newrelic_appid, newrelic_region, comment, user, profile, diff, deregister, rollback, exclusive_env, exclusive_secrets, slack_url, slack_service_match, exclusive_ulimits, exclusive_system_controls, exclusive_ports, exclusive_mounts, volume):
+@click.option('--slack-url', required=False, help='Webhook URL of the Slack integration. Can also be defined via environment variable SLACK_URL')
+@click.option('--slack-service-match', default=".*", required=False, help='A regular expression for defining, deployments of which crons should be notified. (default: .* =all). Can also be defined via environment variable SLACK_SERVICE_MATCH')
+def cron(cluster, task, rule, image, tag, command, cpu, memory, memoryreservation, privileged, env, env_file, secret, ulimit, system_control, port, mount, log, role, execution_role, region, access_key_id, secret_access_key, newrelic_apikey, newrelic_appid, newrelic_region, newrelic_revision, comment, user, profile, diff, deregister, rollback, exclusive_env, exclusive_secrets, slack_url, slack_service_match, exclusive_ulimits, exclusive_system_controls, exclusive_ports, exclusive_mounts, volume):
     """
     Update a scheduled task.
 
@@ -221,7 +227,7 @@ def cron(cluster, task, rule, image, tag, command, cpu, memory, memoryreservatio
         td.set_memory(**{key: value for (key, value) in memory})
         td.set_memoryreservation(**{key: value for (key, value) in memoryreservation})
         td.set_privileged(**{key: value for (key, value) in privileged})
-        td.set_environment(env, exclusive_env)
+        td.set_environment(env, exclusive_env, env_file)
         td.set_secrets(secret, exclusive_secrets)
         td.set_ulimits(ulimit, exclusive_ulimits)
         td.set_system_controls(system_control, exclusive_system_controls)
@@ -253,7 +259,7 @@ def cron(cluster, task, rule, image, tag, command, cpu, memory, memoryreservatio
 
         slack.notify_success(cluster, td.revision, rule=rule)
 
-        record_deployment(tag, newrelic_apikey, newrelic_appid, newrelic_region, comment, user)
+        record_deployment(tag, newrelic_apikey, newrelic_appid, newrelic_region, newrelic_revision, comment, user)
 
         if deregister:
             deregister_task_definition(action, td)
@@ -269,6 +275,7 @@ def cron(cluster, task, rule, image, tag, command, cpu, memory, memoryreservatio
 @click.option('-t', '--tag', help='Changes the tag for ALL container images')
 @click.option('-c', '--command', type=(str, str), multiple=True, help='Overwrites the command in a container: <container> <command>')
 @click.option('-e', '--env', type=(str, str, str), multiple=True, help='Adds or changes an environment variable: <container> <name> <value>')
+@click.option('--env-file', type=(str, str), default=((None, None),), multiple=True, required=False, help='Load environment variables from .env-file')
 @click.option('-s', '--secret', type=(str, str, str), multiple=True, help='Adds or changes a secret environment variable from the AWS Parameter Store (Not available for Fargate): <container> <name> <parameter name>')
 @click.option('-r', '--role', type=str, help='Sets the task\'s role ARN: <task role ARN>')
 @click.option('--region', help='AWS region (e.g. eu-central-1)')
@@ -279,7 +286,7 @@ def cron(cluster, task, rule, image, tag, command, cpu, memory, memoryreservatio
 @click.option('--exclusive-env', is_flag=True, default=False, help='Set the given environment variables exclusively and remove all other pre-existing env variables from all containers')
 @click.option('--exclusive-secrets', is_flag=True, default=False, help='Set the given secrets exclusively and remove all other pre-existing secrets from all containers')
 @click.option('--deregister/--no-deregister', default=True, help='Deregister or keep the old task definition (default: --deregister)')
-def update(task, image, tag, command, env, secret, role, region, access_key_id, secret_access_key, profile, diff, exclusive_env, exclusive_secrets, deregister):
+def update(task, image, tag, command, env, env_file, secret, role, region, access_key_id, secret_access_key, profile, diff, exclusive_env, exclusive_secrets, deregister):
     """
     Update a task definition.
 
@@ -295,7 +302,7 @@ def update(task, image, tag, command, env, secret, role, region, access_key_id, 
 
         td.set_images(tag, **{key: value for (key, value) in image})
         td.set_commands(**{key: value for (key, value) in command})
-        td.set_environment(env, exclusive_env)
+        td.set_environment(env, exclusive_env, env_file)
         td.set_secrets(secret, exclusive_secrets)
         td.set_role_arn(role)
 
@@ -362,17 +369,20 @@ def scale(cluster, service, desired_count, access_key_id, secret_access_key, reg
 @click.argument('count', required=False, default=1)
 @click.option('-c', '--command', type=(str, str), multiple=True, help='Overwrites the command in a container: <container> <command>')
 @click.option('-e', '--env', type=(str, str, str), multiple=True, help='Adds or changes an environment variable: <container> <name> <value>')
+@click.option('--env-file', type=(str, str), default=((None, None),), multiple=True, required=False, help='Load environment variables from .env-file')
 @click.option('-s', '--secret', type=(str, str, str), multiple=True, help='Adds or changes a secret environment variable from the AWS Parameter Store (Not available for Fargate): <container> <name> <parameter name>')
 @click.option('--launchtype', type=click.Choice([LAUNCH_TYPE_EC2, LAUNCH_TYPE_FARGATE]), default=LAUNCH_TYPE_EC2, help='ECS Launch type (default: EC2)')
 @click.option('--subnet', type=str, multiple=True, help='A subnet ID to launch the task within. Required for launch type FARGATE (multiple values possible)')
 @click.option('--securitygroup', type=str, multiple=True, help='A security group ID to launch the task within. Required for launch type FARGATE (multiple values possible)')
 @click.option('--public-ip', is_flag=True, default=False, help='Should a public IP address be assigned to the task (default: False)')
+@click.option('--platform-version', help='The version of the Fargate platform on which to run the task. Optional, FARGATE launch type only.', required=False)
 @click.option('--region', help='AWS region (e.g. eu-central-1)')
 @click.option('--access-key-id', help='AWS access key id')
 @click.option('--secret-access-key', help='AWS secret access key')
 @click.option('--profile', help='AWS configuration profile name')
+@click.option('--exclusive-env', is_flag=True, default=False, help='Set the given environment variables exclusively and remove all other pre-existing env variables from all containers')
 @click.option('--diff/--no-diff', default=True, help='Print what values were changed in the task definition')
-def run(cluster, task, count, command, env, secret, launchtype, subnet, securitygroup, public_ip, region, access_key_id, secret_access_key, profile, diff):
+def run(cluster, task, count, command, env, env_file, secret, launchtype, subnet, securitygroup, public_ip, platform_version, region, access_key_id, secret_access_key, profile, exclusive_env, diff):
     """
     Run a one-off task.
 
@@ -387,13 +397,13 @@ def run(cluster, task, count, command, env, secret, launchtype, subnet, security
 
         td = action.get_task_definition(task)
         td.set_commands(**{key: value for (key, value) in command})
-        td.set_environment(env)
+        td.set_environment(env, exclusive_env, env_file)
         td.set_secrets(secret)
 
         if diff:
             print_diff(td, 'Using task definition: %s' % task)
 
-        action.run(td, count, 'ECS Deploy', launchtype, subnet, securitygroup, public_ip)
+        action.run(td, count, 'ECS Deploy', launchtype, subnet, securitygroup, public_ip, platform_version)
 
         click.secho(
             'Successfully started %d instances of task: %s' % (
@@ -575,12 +585,16 @@ def rollback_task_definition(deployment, old, new, timeout=600, sleep_time=1):
     )
 
 
-def record_deployment(revision, api_key, app_id, region, comment, user):
+def record_deployment(tag, api_key, app_id, region, revision, comment, user):
     api_key = getenv('NEW_RELIC_API_KEY', api_key)
     app_id = getenv('NEW_RELIC_APP_ID', app_id)
     region = getenv('NEW_RELIC_REGION', region)
+    revision = getenv('NEW_RELIC_REVISION', revision) or tag
 
     if not revision or not api_key or not app_id:
+        if api_key:
+            click.secho('Missing required parameters for recording New Relic deployment.' \
+                        'Please see https://github.com/fabfuel/ecs-deploy#new-relic')
         return False
 
     user = user or getpass.getuser()
