@@ -2,6 +2,7 @@ from datetime import datetime
 import json
 import re
 import copy
+from collections import defaultdict
 
 from boto3.session import Session
 from botocore.exceptions import ClientError, NoCredentialsError
@@ -479,9 +480,8 @@ class EcsTaskDefinition(object):
                     container[u'essential'] = new_essential
 
     def set_log_configurations(self, log_configurations_list):
-        log_configurations = {}
+        log_configurations = defaultdict(dict)
         for log_configuration in log_configurations_list:
-            log_configurations.setdefault(log_configuration[0], {})
             log_configurations[log_configuration[0]]["logDriver"] = log_configuration[1]
             log_configurations[log_configuration[0]].setdefault("options", {})
             log_configurations[log_configuration[0]]["options"][log_configuration[2]] = log_configuration[3]
@@ -501,13 +501,12 @@ class EcsTaskDefinition(object):
                 container[u'logConfiguration'] = new_log_configurations
 
     def set_environment(self, environment_list, exclusive=False, env_file=((None, None),)):
-        environment = {}
+        environment = defaultdict(dict)
         if None not in env_file[0]:
             for env in env_file:
                 l = read_env_file(env[0], env[1])
                 environment_list = l + environment_list
         for env in environment_list:
-            environment.setdefault(env[0], {})
             environment[env[0]][env[1]] = env[2]
         self.validate_container_options(**environment)
         for container in self.containers:
@@ -550,10 +549,9 @@ class EcsTaskDefinition(object):
         ]
 
     def set_secrets(self, secrets_list, exclusive=False):
-        secrets = {}
+        secrets = defaultdict(dict)
 
         for secret in secrets_list:
-            secrets.setdefault(secret[0], {})
             secrets[secret[0]][secret[1]] = secret[2]
 
         self.validate_container_options(**secrets)
@@ -597,9 +595,8 @@ class EcsTaskDefinition(object):
         ]
     
     def set_system_controls(self, system_controls_list, exclusive=False):
-        system_controls = {}
+        system_controls = defaultdict(list)
         for system_control in system_controls_list:
-            system_controls.setdefault(system_control[0], [])
 
             mapping = {}
             mapping["namespace"] = system_control[1]
@@ -662,9 +659,8 @@ class EcsTaskDefinition(object):
         ]
 
     def set_ulimits(self, ulimits_list, exclusive=False):
-        ulimits = {}
+        ulimits = defaultdict(list)
         for ulimit in ulimits_list:
-            ulimits.setdefault(ulimit[0], [])
 
             mapping = {}
             mapping["name"] = ulimit[1]
@@ -728,10 +724,9 @@ class EcsTaskDefinition(object):
         ]
 
     def set_port_mappings(self, port_mappings_list, exclusive=False):
-        port_mappings = {}
+        port_mappings = defaultdict(list)
 
         for port_mapping in port_mappings_list:
-            port_mappings.setdefault(port_mapping[0], [])
             mapping = {}
             mapping["containerPort"] = int(port_mapping[1])
             mapping["hostPort"] = int(port_mapping[2])
@@ -793,9 +788,8 @@ class EcsTaskDefinition(object):
         ]
 
     def set_mount_points(self, mount_points_list, exclusive=False):
-        mount_points = {}
+        mount_points = defaultdict(list)
         for mount_point in mount_points_list:
-            mount_points.setdefault(mount_point[0], [])
             mapping = {}
             mapping["sourceVolume"] = mount_point[1]
             mapping["containerPath"] = mount_point[2]
@@ -890,9 +884,8 @@ class EcsTaskDefinition(object):
         volumes = []
 
         for volume in volumes_list:
-            mapping = {}
+            mapping = defaultdict(dict)
             mapping["name"] = volume[0]
-            mapping.setdefault("host",{})
             mapping["host"]["sourcePath"] = volume[1]
             volumes.append(mapping)
 
