@@ -203,11 +203,11 @@ def test_deploy_one_new_command(get_client, runner):
     (
         (
             u'curl -f http://localhost/alive/',
-            [u'curl', u'-f', u'http://localhost/alive/']
+            u'curl -f http://localhost/alive/',
         ),
         (
-            u'["CMD-SHELL","curl -f http://localhost/alive/ || 1"]',
-            [u'CMD-SHELL', u'curl -f http://localhost/alive/ || 1']
+            u'CMD-SHELL curl -f http://localhost/alive/ || 1',
+            u'CMD-SHELL curl -f http://localhost/alive/ || 1',
         )
     )
 )

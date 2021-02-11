@@ -97,7 +97,7 @@ def deploy(cluster, service, tag, image, command, health_check, cpu, memory, mem
         td.remove_containers(remove_container)
         td.set_images(tag, **{key: value for (key, value) in image})
         td.set_commands(**{key: value for (key, value) in command})
-        td.set_health_checks(**{key: vals for (key, *vals) in health_check})
+        td.set_health_checks(health_check)
         td.set_cpu(**{key: value for (key, value) in cpu})
         td.set_memory(**{key: value for (key, value) in memory})
         td.set_memoryreservation(**{key: value for (key, value) in memoryreservation})

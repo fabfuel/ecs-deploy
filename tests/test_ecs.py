@@ -682,24 +682,24 @@ class TestSetHealthChecks:
         'webserver_health_check, application_health_check',
         (
             (
-                (u'curl -f http://webserver/alive/', 30, 5, 3, 0),
-                (u'curl -f http://application/alive/', 60, 10, 6, 5)
+                (u'webserver', u'curl -f http://webserver/alive/', 30, 5, 3, 0),
+                (u'application', u'curl -f http://application/alive/', 60, 10, 6, 5)
             ),
             (
-                (u'["curl", "-f", "http://webserver/alive/"]', 30, 5, 3, 0),
-                (u'["curl", "-f", "http://application/alive/"]', 60, 10, 6, 5)
+                (u'webserver', u'curl -f http://webserver/alive/', 30, 5, 3, 0),
+                (u'application', u'curl -f http://application/alive/', 60, 10, 6, 5)
             )
         )
     )
     def test_success(self, webserver_health_check, application_health_check, task_definition):        
-        task_definition.set_health_checks(
-            webserver=webserver_health_check,
-            application=application_health_check,
-        )
+        task_definition.set_health_checks((
+            webserver_health_check,
+            application_health_check,
+        ))
         for container in task_definition.containers:
             if container[u'name'] == u'webserver':
                 assert container[u'healthCheck'] == {
-                    u'command': [u'curl', u'-f', u'http://webserver/alive/'],
+                    u'command': u'curl -f http://webserver/alive/',
                     u'interval': 30,
                     u'timeout': 5,
                     u'retries': 3,
@@ -707,23 +707,16 @@ class TestSetHealthChecks:
                 }
             if container[u'name'] == u'application':
                 assert container[u'healthCheck'] == {
-                    u'command': [u'curl', u'-f', u'http://application/alive/'],
+                    u'command': u'curl -f http://application/alive/',
                     u'interval': 60,
                     u'timeout': 10,
                     u'retries': 6,
                     u'startPeriod': 5
                 }
 
-    def test_invalid_json_list(self, task_definition):
-        with pytest.raises(EcsTaskDefinitionCommandError):
-            task_definition.set_health_checks(
-                webserver=(u'["curl, "-f", "http://webserver/alive/]', 30, 5, 3, 0),
-                application=(u'["curl" "-f" "http://webserver/alive/"]', 30, 5, 3, 0)
-            )
-
     def test_unknown_container(self, task_definition):
         with pytest.raises(UnknownContainerError):
-            task_definition.set_health_checks(foobar=(u'curl -f http://application/alive/', 60, 10, 6, 5))
+            task_definition.set_health_checks(((u'foobar', u'curl -f http://application/alive/', 60, 10, 6,  5),))
 
 def test_task_get_overrides(task_definition):
     assert task_definition.get_overrides() == []
