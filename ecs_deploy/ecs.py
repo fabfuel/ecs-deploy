@@ -160,7 +160,7 @@ class EcsClient(object):
 
 
 class EcsDeployment(dict):
-    STATUS_ACTIVE  = u'ACTIVE'
+    STATUS_ACTIVE = u'ACTIVE'
     STATUS_PRIMARY = u'PRIMARY'
     ROLLOUT_STATE_FAILED = u'FAILED'
     ROLLOUT_STATE_COMPLETED = u'COMPLETED'
@@ -183,7 +183,7 @@ class EcsDeployment(dict):
 
     @property
     def rollout_state_reason(self):
-        return self.get(u'rolloutStateReason')
+        return self.get(u'rolloutStateReason', '')
 
     @property
     def failed_tasks(self):
