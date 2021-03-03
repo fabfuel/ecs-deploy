@@ -140,6 +140,7 @@ PAYLOAD_DEPLOYMENTS = [
         u'id': u'ecs-svc/0000000000000000002',
         u'rolloutState': u'COMPLETED',
         u'rolloutStateReason': u'ECS deployment ecs-svc/5169280574093855189 completed.',
+        u'failedTasks': 0,
     }
 ]
 
@@ -154,7 +155,8 @@ PAYLOAD_DEPLOYMENTS_IN_PROGRESS = [
         u'updatedAt': datetime(2016, 3, 11, 12, 5, 0, 000000, tzinfo=tzlocal()),
         u'id': u'ecs-svc/0000000000000000002',
         u'rolloutState': u'IN_PROGRESS',
-        u'rolloutStateReason': u'ECS deployment ecs-svc/5169280574093855189 completed.',
+        u'rolloutStateReason': u'ECS deployment ecs-svc/5169280574093855189 in progress.',
+        u'failedTasks': 0,
     },
     {
         u'status': u'ACTIVE',
@@ -167,6 +169,7 @@ PAYLOAD_DEPLOYMENTS_IN_PROGRESS = [
         u'id': u'ecs-svc/0000000000000000002',
         u'rolloutState': u'COMPLETED',
         u'rolloutStateReason': u'ECS deployment ecs-svc/5169280574093855189 completed.',
+        u'failedTasks': 0,
     }
 ]
 
@@ -182,6 +185,7 @@ PAYLOAD_DEPLOYMENTS_FAILED = [
         u'id': u'ecs-svc/0000000000000000002',
         u'rolloutState': u'FAILED',
         u'rolloutStateReason': u'ECS deployment circuit breaker: tasks failed to start.',
+        u'failedTasks': 10,
     },
     {
         u'status': u'ACTIVE',
@@ -194,6 +198,7 @@ PAYLOAD_DEPLOYMENTS_FAILED = [
         u'id': u'ecs-svc/0000000000000000002',
         u'rolloutState': u'COMPLETED',
         u'rolloutStateReason': u'ECS deployment ecs-svc/5169280574093855189 completed.',
+        u'failedTasks': 0,
     }
 ]
 
