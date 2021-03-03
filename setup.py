@@ -13,6 +13,7 @@ def readme():
 
 dependencies = [
     'click<7.0.0',
+    'click-log==0.3.2',
     'botocore>=1.17.47',
     'boto3>=1.14.47',
     'future',
