@@ -138,6 +138,90 @@ PAYLOAD_DEPLOYMENTS = [
         u'createdAt': datetime(2016, 3, 11, 12, 0, 0, 000000, tzinfo=tzlocal()),
         u'updatedAt': datetime(2016, 3, 11, 12, 5, 0, 000000, tzinfo=tzlocal()),
         u'id': u'ecs-svc/0000000000000000002',
+        u'rolloutState': u'COMPLETED',
+        u'rolloutStateReason': u'ECS deployment ecs-svc/5169280574093855189 completed.',
+    }
+]
+
+PAYLOAD_DEPLOYMENTS_IN_PROGRESS = [
+    {
+        u'status': u'PRIMARY',
+        u'pendingCount': 0,
+        u'desiredCount': DESIRED_COUNT,
+        u'runningCount': DESIRED_COUNT,
+        u'taskDefinition': TASK_DEFINITION_ARN_1,
+        u'createdAt': datetime(2016, 3, 11, 12, 0, 0, 000000, tzinfo=tzlocal()),
+        u'updatedAt': datetime(2016, 3, 11, 12, 5, 0, 000000, tzinfo=tzlocal()),
+        u'id': u'ecs-svc/0000000000000000002',
+        u'rolloutState': u'IN_PROGRESS',
+        u'rolloutStateReason': u'ECS deployment ecs-svc/5169280574093855189 completed.',
+    },
+    {
+        u'status': u'ACTIVE',
+        u'pendingCount': 0,
+        u'desiredCount': DESIRED_COUNT,
+        u'runningCount': DESIRED_COUNT,
+        u'taskDefinition': TASK_DEFINITION_ARN_1,
+        u'createdAt': datetime(2016, 3, 11, 12, 0, 0, 000000, tzinfo=tzlocal()),
+        u'updatedAt': datetime(2016, 3, 11, 12, 5, 0, 000000, tzinfo=tzlocal()),
+        u'id': u'ecs-svc/0000000000000000002',
+        u'rolloutState': u'COMPLETED',
+        u'rolloutStateReason': u'ECS deployment ecs-svc/5169280574093855189 completed.',
+    }
+]
+
+PAYLOAD_DEPLOYMENTS_FAILED = [
+    {
+        u'status': u'PRIMARY',
+        u'pendingCount': 0,
+        u'desiredCount': DESIRED_COUNT,
+        u'runningCount': DESIRED_COUNT,
+        u'taskDefinition': TASK_DEFINITION_ARN_1,
+        u'createdAt': datetime(2016, 3, 11, 12, 0, 0, 000000, tzinfo=tzlocal()),
+        u'updatedAt': datetime(2016, 3, 11, 12, 5, 0, 000000, tzinfo=tzlocal()),
+        u'id': u'ecs-svc/0000000000000000002',
+        u'rolloutState': u'FAILED',
+        u'rolloutStateReason': u'ECS deployment circuit breaker: tasks failed to start.',
+    },
+    {
+        u'status': u'ACTIVE',
+        u'pendingCount': 0,
+        u'desiredCount': DESIRED_COUNT,
+        u'runningCount': DESIRED_COUNT,
+        u'taskDefinition': TASK_DEFINITION_ARN_1,
+        u'createdAt': datetime(2016, 3, 11, 12, 0, 0, 000000, tzinfo=tzlocal()),
+        u'updatedAt': datetime(2016, 3, 11, 12, 5, 0, 000000, tzinfo=tzlocal()),
+        u'id': u'ecs-svc/0000000000000000002',
+        u'rolloutState': u'COMPLETED',
+        u'rolloutStateReason': u'ECS deployment ecs-svc/5169280574093855189 completed.',
+    }
+]
+
+
+PAYLOAD_DEPLOYMENTS_FAILED_ROLLBACK = [
+    {
+        u'status': u'PRIMARY',
+        u'pendingCount': 0,
+        u'desiredCount': DESIRED_COUNT,
+        u'runningCount': DESIRED_COUNT,
+        u'taskDefinition': TASK_DEFINITION_ARN_1,
+        u'createdAt': datetime(2016, 3, 11, 12, 0, 0, 000000, tzinfo=tzlocal()),
+        u'updatedAt': datetime(2016, 3, 11, 12, 5, 0, 000000, tzinfo=tzlocal()),
+        u'id': u'ecs-svc/0000000000000000002',
+        u'rolloutState': u'IN_PROGRESS',
+        u'rolloutStateReason': u'ECS deployment circuit breaker: rolling back to deploymentId ecs-svc/123456789012345',
+    },
+    {
+        u'status': u'ACTIVE',
+        u'pendingCount': 0,
+        u'desiredCount': DESIRED_COUNT,
+        u'runningCount': DESIRED_COUNT,
+        u'taskDefinition': TASK_DEFINITION_ARN_1,
+        u'createdAt': datetime(2016, 3, 11, 12, 0, 0, 000000, tzinfo=tzlocal()),
+        u'updatedAt': datetime(2016, 3, 11, 12, 5, 0, 000000, tzinfo=tzlocal()),
+        u'id': u'ecs-svc/0000000000000000002',
+        u'rolloutState': u'FAILED',
+        u'rolloutStateReason': u'ECS deployment circuit breaker: tasks failed to start.',
     }
 ]
 
@@ -175,6 +259,30 @@ PAYLOAD_SERVICE_WITHOUT_DEPLOYMENTS = {
     u'desiredCount': DESIRED_COUNT,
     u'taskDefinition': TASK_DEFINITION_ARN_1,
     u'deployments': [],
+    u'events': []
+}
+
+PAYLOAD_SERVICE_WITHOUT_DEPLOYMENT_IN_PROGRESS = {
+    u'serviceName': SERVICE_NAME,
+    u'desiredCount': DESIRED_COUNT,
+    u'taskDefinition': TASK_DEFINITION_ARN_1,
+    u'deployments': PAYLOAD_DEPLOYMENTS_IN_PROGRESS,
+    u'events': []
+}
+
+PAYLOAD_SERVICE_WITHOUT_DEPLOYMENT_FAILED_NO_ROLLBACK = {
+    u'serviceName': SERVICE_NAME,
+    u'desiredCount': DESIRED_COUNT,
+    u'taskDefinition': TASK_DEFINITION_ARN_1,
+    u'deployments': PAYLOAD_DEPLOYMENTS_FAILED,
+    u'events': []
+}
+
+PAYLOAD_SERVICE_WITHOUT_DEPLOYMENT_FAILED_WITH_ROLLBACK = {
+    u'serviceName': SERVICE_NAME,
+    u'desiredCount': DESIRED_COUNT,
+    u'taskDefinition': TASK_DEFINITION_ARN_1,
+    u'deployments': PAYLOAD_DEPLOYMENTS_FAILED_ROLLBACK,
     u'events': []
 }
 
@@ -989,6 +1097,42 @@ def test_ecs_server_get_warnings():
     })
 
     assert len(service.get_warnings(since, until)) == 1
+
+
+def test_init_deployment():
+    service = EcsService('foo', PAYLOAD_SERVICE)
+    assert service.primary_deployment.has_failed is False
+    assert service.primary_deployment.has_completed is True
+    assert service.active_deployment.has_failed is False
+    assert service.active_deployment.has_completed is True
+    assert service.active_deployment == service.primary_deployment
+
+
+def test_init_deployment_in_progress():
+    service = EcsService('foo', PAYLOAD_SERVICE_WITHOUT_DEPLOYMENT_IN_PROGRESS)
+    assert service.primary_deployment.has_failed is False
+    assert service.primary_deployment.has_completed is False
+    assert service.active_deployment.has_failed is False
+    assert service.active_deployment.has_completed is True
+    assert service.active_deployment != service.primary_deployment
+
+
+def test_init_deployment_failed_no_rollback():
+    service = EcsService('foo', PAYLOAD_SERVICE_WITHOUT_DEPLOYMENT_FAILED_NO_ROLLBACK)
+    assert service.primary_deployment.has_failed is True
+    assert service.primary_deployment.has_completed is False
+    assert service.active_deployment.has_failed is False
+    assert service.active_deployment.has_completed is True
+    assert service.active_deployment != service.primary_deployment
+
+
+def test_init_deployment_failed_with_rollback():
+    service = EcsService('foo', PAYLOAD_SERVICE_WITHOUT_DEPLOYMENT_FAILED_WITH_ROLLBACK)
+    assert service.primary_deployment.has_failed is False
+    assert service.primary_deployment.has_completed is False
+    assert service.active_deployment.has_failed is True
+    assert service.active_deployment.has_completed is False
+    assert service.active_deployment != service.primary_deployment
 
 
 class EcsTestClient(object):
