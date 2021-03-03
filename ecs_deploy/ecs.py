@@ -187,7 +187,7 @@ class EcsDeployment(dict):
 
     @property
     def failed_tasks(self):
-        return self.get(u'failedTasks')
+        return self.get(u'failedTasks', 0)
 
 
 class EcsService(dict):
