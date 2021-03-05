@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 import pytest
 import tempfile
 import os
+import logging
 from boto3.session import Session
 from botocore.exceptions import ClientError, NoCredentialsError
 from dateutil.tz import tzlocal
@@ -1044,6 +1045,23 @@ def test_is_not_deployed_if_no_tasks_running(client, service):
     action = EcsAction(client, CLUSTER_NAME, SERVICE_NAME)
     is_deployed = action.is_deployed(service)
     assert is_deployed is False
+
+
+@patch.object(EcsClient, '__init__')
+def test_is_not_deployed_if_deployment_failed(client, service_with_failed_deployment):
+    client.list_tasks.return_value = RESPONSE_LIST_TASKS_0
+    action = EcsAction(client, CLUSTER_NAME, SERVICE_NAME)
+    with pytest.raises(EcsDeploymentError):
+        action.is_deployed(service_with_failed_deployment)
+
+
+@patch('ecs_deploy.ecs.logger')
+@patch.object(EcsClient, '__init__')
+def test_is_not_deployed_with_failed_tasks(client, logger, service_with_failed_tasks):
+    client.list_tasks.return_value = RESPONSE_LIST_TASKS_0
+    action = EcsAction(client, CLUSTER_NAME, SERVICE_NAME)
+    action.is_deployed(service_with_failed_tasks)
+    logger.warning.assert_called_once_with('3 tasks failed to start')
 
 
 @patch.object(EcsClient, '__init__')
