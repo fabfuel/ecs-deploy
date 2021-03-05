@@ -12,7 +12,8 @@ from mock.mock import patch
 from ecs_deploy.ecs import EcsService, EcsTaskDefinition, \
     UnknownContainerError, EcsTaskDefinitionDiff, EcsClient, \
     EcsAction, EcsConnectionError, DeployAction, ScaleAction, RunAction, \
-    EcsTaskDefinitionCommandError, UnknownTaskDefinitionError, LAUNCH_TYPE_EC2, read_env_file
+    EcsTaskDefinitionCommandError, UnknownTaskDefinitionError, LAUNCH_TYPE_EC2, read_env_file, EcsDeployment, \
+    EcsDeploymentError
 
 CLUSTER_NAME = u'test-cluster'
 CLUSTER_ARN = u'arn:aws:ecs:eu-central-1:123456789012:cluster/%s' % CLUSTER_NAME
@@ -173,6 +174,35 @@ PAYLOAD_DEPLOYMENTS_IN_PROGRESS = [
     }
 ]
 
+PAYLOAD_DEPLOYMENTS_IN_PROGRESS_FAILED_TASKS = [
+    {
+        u'status': u'PRIMARY',
+        u'pendingCount': 0,
+        u'desiredCount': DESIRED_COUNT,
+        u'runningCount': DESIRED_COUNT,
+        u'taskDefinition': TASK_DEFINITION_ARN_1,
+        u'createdAt': datetime(2016, 3, 11, 12, 0, 0, 000000, tzinfo=tzlocal()),
+        u'updatedAt': datetime(2016, 3, 11, 12, 5, 0, 000000, tzinfo=tzlocal()),
+        u'id': u'ecs-svc/0000000000000000002',
+        u'rolloutState': u'IN_PROGRESS',
+        u'rolloutStateReason': u'ECS deployment ecs-svc/5169280574093855189 in progress.',
+        u'failedTasks': 3,
+    },
+    {
+        u'status': u'ACTIVE',
+        u'pendingCount': 0,
+        u'desiredCount': DESIRED_COUNT,
+        u'runningCount': DESIRED_COUNT,
+        u'taskDefinition': TASK_DEFINITION_ARN_1,
+        u'createdAt': datetime(2016, 3, 11, 12, 0, 0, 000000, tzinfo=tzlocal()),
+        u'updatedAt': datetime(2016, 3, 11, 12, 5, 0, 000000, tzinfo=tzlocal()),
+        u'id': u'ecs-svc/0000000000000000002',
+        u'rolloutState': u'COMPLETED',
+        u'rolloutStateReason': u'ECS deployment ecs-svc/5169280574093855189 completed.',
+        u'failedTasks': 0,
+    }
+]
+
 PAYLOAD_DEPLOYMENTS_FAILED = [
     {
         u'status': u'PRIMARY',
@@ -275,6 +305,14 @@ PAYLOAD_SERVICE_WITHOUT_DEPLOYMENT_IN_PROGRESS = {
     u'events': []
 }
 
+PAYLOAD_SERVICE_WITHOUT_DEPLOYMENT_IN_PROGRESS_FAILED_TASKS = {
+    u'serviceName': SERVICE_NAME,
+    u'desiredCount': DESIRED_COUNT,
+    u'taskDefinition': TASK_DEFINITION_ARN_1,
+    u'deployments': PAYLOAD_DEPLOYMENTS_IN_PROGRESS_FAILED_TASKS,
+    u'events': []
+}
+
 PAYLOAD_SERVICE_WITHOUT_DEPLOYMENT_FAILED_NO_ROLLBACK = {
     u'serviceName': SERVICE_NAME,
     u'desiredCount': DESIRED_COUNT,
@@ -365,6 +403,16 @@ def service_with_errors():
 @pytest.fixture
 def service_without_deployments():
     return EcsService(CLUSTER_NAME, deepcopy(PAYLOAD_SERVICE_WITHOUT_DEPLOYMENTS))
+
+
+@pytest.fixture
+def service_with_failed_deployment():
+    return EcsService(CLUSTER_NAME, deepcopy(PAYLOAD_SERVICE_WITHOUT_DEPLOYMENT_FAILED_NO_ROLLBACK))
+
+
+@pytest.fixture
+def service_with_failed_tasks():
+    return EcsService(CLUSTER_NAME, deepcopy(PAYLOAD_SERVICE_WITHOUT_DEPLOYMENT_IN_PROGRESS_FAILED_TASKS))
 
 
 def test_service_init(service):
@@ -1138,6 +1186,37 @@ def test_init_deployment_failed_with_rollback():
     assert service.active_deployment.has_failed is True
     assert service.active_deployment.has_completed is False
     assert service.active_deployment != service.primary_deployment
+
+
+def test_deployment_primary():
+    deployment = EcsDeployment(PAYLOAD_DEPLOYMENTS_IN_PROGRESS[0])
+    assert deployment.is_primary is True
+    assert deployment.is_active is False
+
+
+def test_deployment_active():
+    deployment = EcsDeployment(PAYLOAD_DEPLOYMENTS_IN_PROGRESS[1])
+    assert deployment.is_active is True
+    assert deployment.is_primary is False
+
+
+def test_deployment_failed():
+    deployment = EcsDeployment(PAYLOAD_DEPLOYMENTS_FAILED[0])
+    assert deployment.has_failed is True
+    assert deployment.has_completed is False
+    assert deployment.failed_tasks > 0
+
+
+def test_deployment_completed():
+    deployment = EcsDeployment(PAYLOAD_DEPLOYMENTS_FAILED[1])
+    assert deployment.has_completed is True
+    assert deployment.has_failed is False
+    assert deployment.failed_tasks == 0
+
+
+def test_deployment_rollout_state_reason():
+    deployment = EcsDeployment(PAYLOAD_DEPLOYMENTS_FAILED[0])
+    assert deployment.rollout_state_reason == "ECS deployment circuit breaker: tasks failed to start."
 
 
 class EcsTestClient(object):
