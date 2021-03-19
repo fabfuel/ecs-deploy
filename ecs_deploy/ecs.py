@@ -3,6 +3,7 @@ import json
 import re
 import copy
 from collections import defaultdict
+import warnings
 
 from boto3.session import Session
 from botocore.exceptions import ClientError, NoCredentialsError
@@ -914,7 +915,7 @@ class EcsTaskDefinition(object):
             containers_tmp = list(self.containers)
             for container in set(containers_list):
                 if container in self.container_names:
-                    print(f"\033[93mCannot add container '{container}', already in the task definition.\033[0m")
+                    warnings.warn(f"Cannot add container '{container}', already in the task definition.")
                     continue
                 mapping = {}
                 mapping["name"] = container
@@ -950,12 +951,12 @@ class EcsTaskDefinition(object):
             containers_not_found = list(containers_ - set(self.container_names))
             # Remaining containers could not be found.
             for container in containers_not_found: 
-                print(f"\033[93mCannot remove container '{container}', not in the task definition.\033[0m")
+                warnings.warn(f"Cannot remove container '{container}', not in the task definition.")
 
             if containers:
                 self.containers = containers
             else:
-                print(f"\033[93mNo container left after removal. Using original containers, not removing '{containers_}'.\033[0m")
+                warnings.warn(f"No container left after removal. Using original containers, not removing '{containers_}'.")
 
             if not self.containers == containers_tmp:
                 diff = EcsTaskDefinitionDiff(
