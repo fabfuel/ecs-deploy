@@ -4,6 +4,8 @@ import re
 import copy
 from collections import defaultdict
 import warnings
+import logging
+import click_log
 
 from boto3.session import Session
 from botocore.exceptions import ClientError, NoCredentialsError
@@ -21,8 +23,11 @@ except AttributeError:
 LAUNCH_TYPE_EC2 = 'EC2'
 LAUNCH_TYPE_FARGATE = 'FARGATE'
 
+logger = logging.getLogger(__name__)
+click_log.basic_config(logger)
 
-def read_env_file(container_name,file):
+
+def read_env_file(container_name, file):
     env_vars = []
     try:
         with open(file) as f:
@@ -157,9 +162,43 @@ class EcsClient(object):
         return target['Id']
 
 
+class EcsDeployment(dict):
+    STATUS_ACTIVE = u'ACTIVE'
+    STATUS_PRIMARY = u'PRIMARY'
+    ROLLOUT_STATE_FAILED = u'FAILED'
+    ROLLOUT_STATE_COMPLETED = u'COMPLETED'
+
+    @property
+    def is_primary(self):
+        return self.get(u'status') == self.STATUS_PRIMARY
+
+    @property
+    def is_active(self):
+        return self.get(u'status') == self.STATUS_ACTIVE
+
+    @property
+    def has_failed(self):
+        return self.get(u'rolloutState') == self.ROLLOUT_STATE_FAILED
+
+    @property
+    def has_completed(self):
+        return self.get(u'rolloutState') == self.ROLLOUT_STATE_COMPLETED
+
+    @property
+    def rollout_state_reason(self):
+        return self.get(u'rolloutStateReason', '')
+
+    @property
+    def failed_tasks(self):
+        return self.get(u'failedTasks', 0)
+
+
 class EcsService(dict):
     def __init__(self, cluster, service_definition=None, **kwargs):
         self._cluster = cluster
+        self._deployments = []
+        for deployment in service_definition.get(u'deployments', []):
+            self._deployments.append(EcsDeployment(deployment))
         super(EcsService, self).__init__(service_definition, **kwargs)
 
     def set_task_definition(self, task_definition):
@@ -180,6 +219,19 @@ class EcsService(dict):
     @property
     def desired_count(self):
         return self.get(u'desiredCount')
+
+    @property
+    def primary_deployment(self):
+        for deployment in self._deployments:
+            if deployment.is_primary:
+                return deployment
+
+    @property
+    def active_deployment(self):
+        for deployment in self._deployments:
+            if deployment.is_active:
+                return deployment
+        return self.primary_deployment
 
     @property
     def deployment_created_at(self):
@@ -1036,6 +1088,8 @@ class EcsTaskDefinitionDiff(object):
 
 
 class EcsAction(object):
+    FAILED_TASKS = 0
+
     def __init__(self, client, cluster_name, service_name):
         self._client = client
         self._cluster_name = cluster_name
@@ -1107,6 +1161,12 @@ class EcsAction(object):
         return EcsService(self._cluster_name, response[u'service'])
 
     def is_deployed(self, service):
+        if service.primary_deployment.has_failed:
+            raise EcsDeploymentError(u'Deployment Failed! ' + service.primary_deployment.rollout_state_reason)
+        if service.primary_deployment.failed_tasks > 0 and service.primary_deployment.failed_tasks != self.FAILED_TASKS:
+            logger.warning('{} tasks failed to start'.format(service.primary_deployment.failed_tasks))
+            self.FAILED_TASKS += 1
+
         if len(service[u'deployments']) != 1:
             return False
         running_tasks = self._client.list_tasks(
@@ -1227,4 +1287,8 @@ class UnknownTaskDefinitionError(EcsError):
 
 
 class EcsTaskDefinitionCommandError(EcsError):
+    pass
+
+
+class EcsDeploymentError(EcsError):
     pass
