@@ -228,8 +228,16 @@ def test_deploy_one_new_health_check(get_client, cmd_input, cmd_expected, runner
         u'startPeriod': 0,
 
     }
-    expected_changed_messages = u'Changed healthCheck of container "application" to: "%s" (was: "None")' % expected_health_check
-    assert expected_changed_messages in result.output
+
+    assert 'Changed healthCheck of container "application" to: ' in result.output
+    assert "'command': " in result.output
+    assert cmd_expected in result.output
+    assert "'interval': 30" in result.output
+    assert "'timeout': 5" in result.output
+    assert "'retries': 3" in result.output
+    assert "'startPeriod': 0" in result.output
+    assert '(was: "None")' in result.output
+
 
     assert u'Successfully created revision: 2' in result.output
     assert u'Successfully deregistered revision: 1' in result.output
