@@ -3,7 +3,6 @@ import json
 import re
 import copy
 from collections import defaultdict
-import warnings
 import logging
 import click_log
 
@@ -967,7 +966,7 @@ class EcsTaskDefinition(object):
             containers_tmp = list(self.containers)
             for container in set(containers_list):
                 if container in self.container_names:
-                    warnings.warn("Cannot add container '{container}', already in the task definition.".format(container=container))
+                    logger.warning("Cannot add container '{container}', already in the task definition.".format(container=container))
                     continue
                 mapping = {}
                 mapping["name"] = container
@@ -1003,12 +1002,12 @@ class EcsTaskDefinition(object):
             containers_not_found = list(containers_ - set(self.container_names))
             # Remaining containers could not be found.
             for container in containers_not_found: 
-                warnings.warn("Cannot remove container '{container}', not in the task definition.".format(container=container))
+                logger.warning("Cannot remove container '{container}', not in the task definition.".format(container=container))
 
             if containers:
                 self.containers = containers
             else:
-                warnings.warn("No container left after removal. Using original containers, not removing '{containers_}'.".format(container=container))
+                logger.warning("No container left after removal. Using original containers, not removing '{containers_}'.".format(container=container))
 
             if not self.containers == containers_tmp:
                 diff = EcsTaskDefinitionDiff(
