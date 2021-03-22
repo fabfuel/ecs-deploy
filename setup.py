@@ -24,7 +24,7 @@ dependencies = [
 setup(
     name='ecs-deploy',
     version=VERSION,
-    url='https://github.com/normoes/ecs-deploy',
+    url='https://github.com/fabfuel/ecs-deploy',
     download_url='https://github.com/fabfuel/ecs-deploy/archive/%s.tar.gz' % VERSION,
     license='BSD-3-Clause',
     author='Fabian Fuelling',
