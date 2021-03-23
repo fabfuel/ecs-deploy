@@ -275,7 +275,7 @@ class EcsTaskDefinition(object):
     def __init__(self, containerDefinitions, volumes, family, revision,
                  status, taskDefinitionArn, requiresAttributes=None,
                  taskRoleArn=None, executionRoleArn=None, compatibilities=None,
-                 tags=None, registeredAt=None, registeredBy=None, **kwargs):
+                 tags=None, registeredAt=None, deregisteredAt=None, registeredBy=None, **kwargs):
 
         self.containers = containerDefinitions
         self.new_containers = {}
@@ -296,6 +296,7 @@ class EcsTaskDefinition(object):
         # task definition. Just storing them for now.
         self.compatibilities = compatibilities
         self.registered_at = registeredAt
+        self.deregistered_at = deregisteredAt
         self.registered_by = registeredBy
 
     @property
