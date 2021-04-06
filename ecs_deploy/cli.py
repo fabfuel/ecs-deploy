@@ -419,6 +419,7 @@ def wait_for_finish(action, timeout, title, success_message, failure_message,
         click.secho('.', nl=False)
         service = action.get_service()
         inspected_until = inspect_errors(
+            action,
             service=service,
             failure_message=failure_message,
             ignore_warnings=ignore_warnings,
@@ -431,6 +432,7 @@ def wait_for_finish(action, timeout, title, success_message, failure_message,
             sleep(sleep_time)
 
     inspect_errors(
+        action,
         service=service,
         failure_message=failure_message,
         ignore_warnings=ignore_warnings,
@@ -552,7 +554,7 @@ def print_diff(task_definition, title='Updating task definition'):
         click.secho('')
 
 
-def inspect_errors(service, failure_message, ignore_warnings, since, timeout):
+def inspect_errors(action, service, failure_message, ignore_warnings, since, timeout):
     error = False
     last_error_timestamp = since
 
@@ -589,10 +591,12 @@ def inspect_errors(service, failure_message, ignore_warnings, since, timeout):
     if timeout:
         error = True
         failure_message += ' due to timeout. Please see: ' \
-                           'https://github.com/fabfuel/ecs-deploy#timeout'
+                           'https://github.com/fabfuel/ecs-deploy#timeout \n'
         click.secho('')
 
     if error:
+        task_stopped_reason = action.get_task_stop_reason(service)
+        failure_message += 'Stopped reason of tasks:\n %s\n' % (task_stopped_reason)
         raise TaskPlacementError(failure_message)
 
     return last_error_timestamp

@@ -74,6 +74,13 @@ class EcsClient(object):
             serviceName=service_name
         )
 
+    def list_stopped_tasks(self, cluster_name, service_name):
+        return self.boto.list_tasks(
+            cluster=cluster_name,
+            serviceName=service_name,
+            desiredStatus='STOPPED'
+        )
+
     def describe_tasks(self, cluster_name, task_arns):
         return self.boto.describe_tasks(cluster=cluster_name, tasks=task_arns)
 
@@ -720,6 +727,20 @@ class EcsAction(object):
             task_arns=running_tasks[u'taskArns']
         )
         return service.desired_count == running_count
+
+    def get_task_stop_reason(self, service):
+        stopped_tasks = self._client.list_stopped_tasks(
+            cluster_name=service.cluster,
+            service_name=service.name
+        )
+        task_arns=stopped_tasks[u'taskArns']
+        tasks_details = self._client.describe_tasks(
+            cluster_name=self._cluster_name,
+            task_arns=task_arns
+        )
+        for task in tasks_details[u'tasks']:
+            task_stopped_reason = task[u'stoppedReason']
+        return task_stopped_reason
 
     def get_running_tasks_count(self, service, task_arns):
         running_count = 0
