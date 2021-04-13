@@ -404,7 +404,7 @@ def diff(task, revision_a, revision_b, region, access_key_id, secret_access_key,
 
 
 def wait_for_finish(action, timeout, title, success_message, failure_message,
-                    ignore_warnings, sleep_time=1):
+                    ignore_warnings, sleep_time=1, rollback_now=False):
     click.secho(title, nl=False)
     waiting_timeout = datetime.now() + timedelta(seconds=timeout)
     service = action.get_service()
@@ -426,7 +426,8 @@ def wait_for_finish(action, timeout, title, success_message, failure_message,
             since=inspected_until,
             timeout=False
         )
-        waiting = not action.is_deployed(service)
+        waiting = not action.is_deployed(service, rollback_now)
+        rollback_now=False
 
         if waiting:
             sleep(sleep_time)
@@ -445,7 +446,7 @@ def wait_for_finish(action, timeout, title, success_message, failure_message,
 
 def deploy_task_definition(deployment, task_definition, title, success_message,
                            failure_message, timeout, deregister,
-                           previous_task_definition, ignore_warnings, sleep_time):
+                           previous_task_definition, ignore_warnings, sleep_time, rollback_now=False):
     click.secho('Updating service')
     deployment.deploy(task_definition)
 
@@ -463,7 +464,8 @@ def deploy_task_definition(deployment, task_definition, title, success_message,
         success_message=success_message,
         failure_message=failure_message,
         ignore_warnings=ignore_warnings,
-        sleep_time=sleep_time
+        sleep_time=sleep_time,
+        rollback_now=rollback_now
     )
 
     if deregister:
@@ -514,7 +516,8 @@ def rollback_task_definition(deployment, old, new, timeout=600, sleep_time=1):
         deregister=True,
         previous_task_definition=new,
         ignore_warnings=False,
-        sleep_time=sleep_time
+        sleep_time=sleep_time,
+        rollback_now=True
     )
     click.secho(
         'Deployment failed, but service has been rolled back to previous '

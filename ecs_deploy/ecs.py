@@ -707,7 +707,9 @@ class EcsAction(object):
         )
         return EcsService(self._cluster_name, response[u'service'])
 
-    def is_deployed(self, service):
+    def is_deployed(self, service, rollback_now):
+        if rollback_now:
+            self.FAILED_TASKS = service.primary_deployment.failed_tasks   
         if service.primary_deployment.has_failed:
             raise EcsDeploymentError(u'Deployment Failed! ' + service.primary_deployment.rollout_state_reason)
         if service.primary_deployment.failed_tasks > 0 and service.primary_deployment.failed_tasks != self.FAILED_TASKS:
