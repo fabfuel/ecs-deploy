@@ -599,7 +599,7 @@ def inspect_errors(action, service, failure_message, ignore_warnings, since, tim
 
     if error:
         task_stopped_reason = action.get_task_stop_reason(service)
-        failure_message += 'Stopped reason of tasks:\n %s\n' % (task_stopped_reason)
+        failure_message += 'Stop reason of the task:\n %s\n' % (task_stopped_reason)
         raise TaskPlacementError(failure_message)
 
     return last_error_timestamp
