@@ -1,0 +1,35 @@
+name: "Build"
+defaults:
+  run:
+    shell: bash
+env:
+  DOCKER_REGISTRY: hazelops
+  DOCKER_IMAGE_NAME: ecs-deploy
+
+on:
+  push:
+    branches:
+      - master
+      - develop
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v2
+
+      - name: Login to DockerHub
+        uses: docker/login-action@v1
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build Image
+        run: |
+          docker build -t $DOCKER_REGISTRY/$DOCKER_IMAGE_NAME:latest .
+
+      - name: Push
+        run: |
+          docker push $DOCKER_REGISTRY/$DOCKER_IMAGE_NAME:latest
