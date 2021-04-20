@@ -404,7 +404,7 @@ def diff(task, revision_a, revision_b, region, access_key_id, secret_access_key,
 
 
 def wait_for_finish(action, timeout, title, success_message, failure_message,
-                    ignore_warnings, sleep_time=1):
+                    ignore_warnings, sleep_time=1, rollback_now=False):
     click.secho(title, nl=False)
     waiting_timeout = datetime.now() + timedelta(seconds=timeout)
     service = action.get_service()
@@ -419,18 +419,21 @@ def wait_for_finish(action, timeout, title, success_message, failure_message,
         click.secho('.', nl=False)
         service = action.get_service()
         inspected_until = inspect_errors(
+            action,
             service=service,
             failure_message=failure_message,
             ignore_warnings=ignore_warnings,
             since=inspected_until,
             timeout=False
         )
-        waiting = not action.is_deployed(service)
+        waiting = not action.is_deployed(service, rollback_now)
+        rollback_now=False
 
         if waiting:
             sleep(sleep_time)
 
     inspect_errors(
+        action,
         service=service,
         failure_message=failure_message,
         ignore_warnings=ignore_warnings,
@@ -443,7 +446,7 @@ def wait_for_finish(action, timeout, title, success_message, failure_message,
 
 def deploy_task_definition(deployment, task_definition, title, success_message,
                            failure_message, timeout, deregister,
-                           previous_task_definition, ignore_warnings, sleep_time):
+                           previous_task_definition, ignore_warnings, sleep_time, rollback_now=False):
     click.secho('Updating service')
     deployment.deploy(task_definition)
 
@@ -461,7 +464,8 @@ def deploy_task_definition(deployment, task_definition, title, success_message,
         success_message=success_message,
         failure_message=failure_message,
         ignore_warnings=ignore_warnings,
-        sleep_time=sleep_time
+        sleep_time=sleep_time,
+        rollback_now=rollback_now
     )
 
     if deregister:
@@ -512,7 +516,8 @@ def rollback_task_definition(deployment, old, new, timeout=600, sleep_time=1):
         deregister=True,
         previous_task_definition=new,
         ignore_warnings=False,
-        sleep_time=sleep_time
+        sleep_time=sleep_time,
+        rollback_now=True
     )
     click.secho(
         'Deployment failed, but service has been rolled back to previous '
@@ -552,7 +557,7 @@ def print_diff(task_definition, title='Updating task definition'):
         click.secho('')
 
 
-def inspect_errors(service, failure_message, ignore_warnings, since, timeout):
+def inspect_errors(action, service, failure_message, ignore_warnings, since, timeout):
     error = False
     last_error_timestamp = since
 
@@ -589,10 +594,12 @@ def inspect_errors(service, failure_message, ignore_warnings, since, timeout):
     if timeout:
         error = True
         failure_message += ' due to timeout. Please see: ' \
-                           'https://github.com/fabfuel/ecs-deploy#timeout'
+                           'https://github.com/fabfuel/ecs-deploy#timeout \n'
         click.secho('')
 
     if error:
+        task_stopped_reason = action.get_task_stop_reason(service)
+        failure_message += 'Stopped reason of tasks:\n %s\n' % (task_stopped_reason)
         raise TaskPlacementError(failure_message)
 
     return last_error_timestamp
