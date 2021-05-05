@@ -745,7 +745,7 @@ class EcsAction(object):
                 task_stopped_reason = task[u'stoppedReason']
             return task_stopped_reason
         except ClientError:
-            return task_stopped_reason = u'[Warning] Unknown stopped reason'
+            return task_stopped_reason = '[Warning] Unknown stopped reason'
 
     def get_running_tasks_count(self, service, task_arns):
         running_count = 0
