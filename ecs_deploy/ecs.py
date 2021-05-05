@@ -731,6 +731,7 @@ class EcsAction(object):
         return service.desired_count == running_count
 
     def get_task_stop_reason(self, service):
+        tsr_message = '[Warning] Unknown stopped reason'
         try:
             stopped_tasks = self._client.list_stopped_tasks(
                 cluster_name=service.cluster,
@@ -745,7 +746,7 @@ class EcsAction(object):
                 task_stopped_reason = task[u'stoppedReason']
             return task_stopped_reason
         except ClientError:
-            return task_stopped_reason = '[Warning] Unknown stopped reason'
+            return task_stopped_reason=tsr_message
 
     def get_running_tasks_count(self, service, task_arns):
         running_count = 0
