@@ -673,7 +673,7 @@ def inspect_stopped(tasks, failure_message, ignore_warnings, since):
     if not tasks:
         return last_error_timestamp
     for task in tasks:
-        timestamp = task['stoppingAt'].replace(tzinfo=None)
+        timestamp = task['createdAt'].replace(tzinfo=None)
         if since and timestamp > since:
             last_error_timestamp = timestamp
             continue
