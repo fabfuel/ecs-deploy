@@ -76,6 +76,13 @@ class EcsClient(object):
             serviceName=service_name
         )
 
+    def list_stopped_tasks(self, cluster_name, service_name):
+        return self.boto.list_tasks(
+            cluster=cluster_name,
+            serviceName=service_name,
+            desiredStatus='STOPPED'
+        )
+
     def describe_tasks(self, cluster_name, task_arns):
         return self.boto.describe_tasks(cluster=cluster_name, tasks=task_arns)
 
@@ -269,6 +276,11 @@ class EcsService(dict):
             if since < event[u'createdAt'] < until:
                 errors[event[u'createdAt']] = event[u'message']
         return errors
+
+
+
+
+
 
 
 class EcsTaskDefinition(object):
@@ -1193,6 +1205,15 @@ class EcsAction(object):
             if arn == service.task_definition and status == u'RUNNING':
                 running_count += 1
         return running_count
+
+    def get_stopped_tasks(self, service):
+        stopped_tasks = self._client.list_stopped_tasks(
+            cluster_name=service.cluster,
+            service_name=service.name
+        )
+        if stopped_tasks["taskArns"]:
+            return self._client.describe_tasks(cluster_name=self._cluster_name, task_arns=stopped_tasks["taskArns"])["tasks"]
+
 
     @property
     def client(self):
