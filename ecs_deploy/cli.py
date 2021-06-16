@@ -379,8 +379,7 @@ def scale(cluster, service, desired_count, access_key_id, secret_access_key, reg
 @click.option('--profile', help='AWS configuration profile name')
 @click.option('--exclusive-env', is_flag=True, default=False, help='Set the given environment variables exclusively and remove all other pre-existing env variables from all containers')
 @click.option('--diff/--no-diff', default=True, help='Print what values were changed in the task definition')
-def run(cluster, task, count, command, env, env_file, secret, launchtype, subnet, securitygroup, public_ip,
-        platform_version, region, access_key_id, secret_access_key, profile, exclusive_env, diff):
+def run(cluster, task, count, command, env, env_file, secret, launchtype, subnet, securitygroup, public_ip, platform_version, region, access_key_id, secret_access_key, profile, exclusive_env, diff):
     """
     Run a one-off task.
 
