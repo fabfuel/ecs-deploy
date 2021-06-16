@@ -674,7 +674,7 @@ def inspect_stopped(tasks, failure_message, ignore_warnings, since):
         return last_error_timestamp
     for task in tasks:
         timestamp = task['stoppingAt'].replace(tzinfo=None)
-        if since and timestamp < since:
+        if since and timestamp > since:
             last_error_timestamp = timestamp
             continue
         if task['stopCode'] == 'ServiceSchedulerInitiated':
