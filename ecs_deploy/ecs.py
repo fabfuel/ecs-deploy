@@ -3,6 +3,7 @@ import json
 import re
 import copy
 from collections import defaultdict
+import itertools
 import logging
 import click_log
 
@@ -40,6 +41,11 @@ def read_env_file(container_name, file):
     return tuple(env_vars)
 
 
+def chunks(items, size=1):
+    for i in range(0, len(items), size):
+        yield items[i:i + size]
+
+
 class EcsClient(object):
     def __init__(self, access_key_id=None, secret_access_key=None,
                  region=None, profile=None, session_token=None):
@@ -71,13 +77,28 @@ class EcsClient(object):
             )
 
     def list_tasks(self, cluster_name, service_name):
-        return self.boto.list_tasks(
-            cluster=cluster_name,
-            serviceName=service_name
+        tasks_paginator = self.boto.get_paginator(u"list_tasks")
+        return list(
+            itertools.chain.from_iterable(
+                res["taskArns"]
+                for res in tasks_paginator.paginate(
+                    cluster=cluster_name, serviceName=service_name
+                )
+            )
         )
 
     def describe_tasks(self, cluster_name, task_arns):
-        return self.boto.describe_tasks(cluster=cluster_name, tasks=task_arns)
+        return list(
+            itertools.chain.from_iterable(
+                res["tasks"]
+                for res in map(
+                    lambda chunk: self.boto.describe_tasks(
+                        cluster=cluster_name, tasks=chunk
+                    ),
+                    chunks(task_arns, 100),
+                )
+            )
+        )
 
     def register_task_definition(self, family, containers, volumes, role_arn,
                                  execution_role_arn, tags, additional_properties):
@@ -1173,11 +1194,11 @@ class EcsAction(object):
             cluster_name=service.cluster,
             service_name=service.name
         )
-        if not running_tasks[u'taskArns']:
+        if not running_tasks:
             return service.desired_count == 0
         running_count = self.get_running_tasks_count(
             service=service,
-            task_arns=running_tasks[u'taskArns']
+            task_arns=running_tasks
         )
         return service.desired_count == running_count
 
@@ -1187,7 +1208,7 @@ class EcsAction(object):
             cluster_name=self._cluster_name,
             task_arns=task_arns
         )
-        for task in tasks_details[u'tasks']:
+        for task in tasks_details:
             arn = task[u'taskDefinitionArn']
             status = task[u'lastStatus']
             if arn == service.task_definition and status == u'RUNNING':
