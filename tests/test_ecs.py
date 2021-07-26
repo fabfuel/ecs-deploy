@@ -30,6 +30,7 @@ TASK_DEFINITION_VOLUMES_1 = []
 TASK_DEFINITION_CONTAINERS_1 = [
     {u'name': u'webserver', u'image': u'webserver:123', u'command': u'run',
      u'environment': ({"name": "foo", "value": "bar"}, {"name": "lorem", "value": "ipsum"}, {"name": "empty", "value": ""}),
+     u'environmentFiles': [{'value': 'arn:aws:s3:::myS3bucket/myApp/.env', 'type': 's3'}, {'value': 'arn:aws:s3:::coolBuckets/dev/.env', 'type': 's3'}],
      u'secrets': ({"name": "baz", "valueFrom": "qux"}, {"name": "dolor", "valueFrom": "sit"}),
      u'dockerLabels': {"foo": "bar", "lorem": "ipsum", "empty": ""},
      u'logConfiguration': {},
@@ -53,6 +54,7 @@ TASK_DEFINITION_VOLUMES_2 = []
 TASK_DEFINITION_CONTAINERS_2 = [
     {u'name': u'webserver', u'image': u'webserver:123', u'command': u'run',
      u'environment': ({"name": "foo", "value": "bar"}, {"name": "lorem", "value": "ipsum"}, {"name": "empty", "value": ""}),
+     u'environmentFiles': [{'value': 'arn:aws:s3:::myS3bucket/myApp/.env', 'type': 's3'}, {'value': 'arn:aws:s3:::coolBuckets/dev/.env', 'type': 's3'}],
      u'secrets': ({"name": "baz", "valueFrom": "qux"}, {"name": "dolor", "valueFrom": "sit"}),
      u'dockerLabels': {"foo": "bar", "lorem": "ipsum", "empty": ""},
      u'logConfiguration': {},
@@ -696,6 +698,26 @@ def test_task_set_docker_label_exclusively(task_definition):
     assert 'foo' in task_definition.containers[1]['dockerLabels']
     assert 'new-var' in task_definition.containers[1]['dockerLabels']
 
+def test_task_set_s3_env_file(task_definition):
+    assert len(task_definition.containers[0]['environmentFiles']) == 2
+
+    task_definition.set_s3_env_file(((u'webserver', u'arn:aws:s3:::mycompany.domain.com/app/.env'), (u'webserver', u'arn:aws:s3:::melted.cheese.com/grilled/.env'), (u'proxyserver', u'arn:ars:s3:::pizza/dev/.env')))
+
+    assert len(task_definition.containers[0]['environmentFiles']) == 4
+
+    assert {'value': 'arn:aws:s3:::mycompany.domain.com/app/.env', 'type': 's3'} in task_definition.containers[0]['environmentFiles']
+    assert {'value': 'arn:aws:s3:::myS3bucket/myApp/.env', 'type': 's3'} in task_definition.containers[0]['environmentFiles']
+    assert {'value': 'arn:aws:s3:::coolBuckets/dev/.env', 'type': 's3'} in task_definition.containers[0]['environmentFiles']
+    assert {'value': 'arn:aws:s3:::melted.cheese.com/grilled/.env', 'type': 's3'} in task_definition.containers[0]['environmentFiles']
+
+def test_task_set_s3_env_file_exclusively(task_definition):
+    assert len(task_definition.containers[0]['environmentFiles']) == 2
+
+    task_definition.set_s3_env_file((u'webserver', u'arn:aws:s3:::mycompany.domain.com/app/.env'), exclusive=True)
+
+    assert len(task_definition.containers[0]['environmentFiles']) == 1
+
+    assert {'value': 'arn:aws:s3:::mycompany.domain.com/app/.env', 'type': 's3'} in task_definition.containers[0]['environmentFiles']
 
 def test_task_set_secrets_exclusively(task_definition):
     assert len(task_definition.containers[0]['secrets']) == 2

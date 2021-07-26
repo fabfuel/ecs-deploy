@@ -334,6 +334,22 @@ def test_deploy_previously_empty_environment_variable_with_value(get_client, run
     assert u'Successfully changed task definition to: test-task:2' in result.output
     assert u'Deployment successful' in result.output
 
+@patch('ecs_deploy.cli.get_client')
+def test_deploy_s3_env_file_with_previous_value(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '--s3-env-file', 'webserver', 'arn:aws:s3:::centerfun/.env', '--s3-env-file', 'webserver', 'arn:aws:s3:::stormzone/.env'))
+
+    assert result.exit_code == 0
+    assert not result.exception
+
+    assert u"Deploying based on task definition: test-task:1" in result.output
+    assert u"Updating task definition" in result.output
+    assert u'Changed environmentFiles of container "webserver" to: "{\'arn:aws:s3:::stormzone/.env\', \'arn:aws:s3:::coolBuckets/dev/.env\', \'arn:aws:s3:::myS3bucket/myApp/.env\', \'arn:aws:s3:::centerfun/.env\'}" (was: "{\'arn:aws:s3:::coolBuckets/dev/.env\', \'arn:aws:s3:::myS3bucket/myApp/.env\'}")'
+    assert u'Successfully created revision: 2' in result.output
+    assert u'Successfully deregistered revision: 1' in result.output
+    assert u'Successfully changed task definition to: test-task:2' in result.output
+    assert u'Deployment successful' in result.output
+
 
 @patch('ecs_deploy.cli.get_client')
 def test_deploy_exclusive_environment(get_client, runner):

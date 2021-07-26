@@ -38,6 +38,7 @@ def get_client(access_key_id, secret_access_key, region, profile):
 @click.option('--essential', type=(str, bool), multiple=True, help='Overwrites the essential value for a container: <container> <essential>')
 @click.option('-e', '--env', type=(str, str, str), multiple=True, help='Adds or changes an environment variable: <container> <name> <value>')
 @click.option('--env-file', type=(str, str), default=((None, None),), multiple=True, required=False, help='Load environment variables from .env-file')
+@click.option('--s3-env-file', type=(str, str), multiple=True, required=False, help='Location of .env-file in S3')
 @click.option('-s', '--secret', type=(str, str, str), multiple=True, help='Adds or changes a secret environment variable from the AWS Parameter Store (Not available for Fargate): <container> <name> <parameter name>')
 @click.option('-d', '--docker-label', type=(str, str, str), multiple=True, help='Adds or changes a docker label: <container> <name> <value>')
 @click.option('-u', '--ulimit', type=(str, str, int, int), multiple=True, help='Adds or changes a ulimit variable in the container description (Not available for Fargate): <container> <ulimit name> <softlimit value> <hardlimit value>')
@@ -66,6 +67,7 @@ def get_client(access_key_id, secret_access_key, region, profile):
 @click.option('--exclusive-env', is_flag=True, default=False, help='Set the given environment variables exclusively and remove all other pre-existing env variables from all containers')
 @click.option('--exclusive-secrets', is_flag=True, default=False, help='Set the given secrets exclusively and remove all other pre-existing secrets from all containers')
 @click.option('--exclusive-docker-labels', is_flag=True, default=False, help='Set the given docker labels exclusively and remove all other pre-existing docker-labels from all containers')
+@click.option('--exclusive-s3-env-file', is_flag=True, default=False, help='Set the given s3 env files exclusively and remove all other pre-existing s3 env files from all containers')
 @click.option('--sleep-time', default=1, type=int, help='Amount of seconds to wait between each check of the service (default: 1)')
 @click.option('--slack-url', required=False, help='Webhook URL of the Slack integration. Can also be defined via environment variable SLACK_URL')
 @click.option('--slack-service-match', default=".*", required=False, help='A regular expression for defining, which services should be notified. (default: .* =all). Can also be defined via environment variable SLACK_SERVICE_MATCH')
@@ -76,7 +78,7 @@ def get_client(access_key_id, secret_access_key, region, profile):
 @click.option('--volume', type=(str, str), multiple=True, required=False, help='Set volume mapping from host to container in the task definition.')
 @click.option('--add-container', type=str, multiple=True, required=False, help='Add a placeholder container in the task definition.')
 @click.option('--remove-container', type=str, multiple=True, required=False, help='Remove a container from the task definition.')
-def deploy(cluster, service, tag, image, command, health_check, cpu, memory, memoryreservation, privileged, essential, env, env_file, secret, ulimit, system_control, port, mount, log, role, execution_role, task, region, access_key_id, secret_access_key, profile, timeout, newrelic_apikey, newrelic_appid, newrelic_region, newrelic_revision, comment, user, ignore_warnings, diff, deregister, rollback, exclusive_env, exclusive_secrets, sleep_time, exclusive_ulimits, exclusive_system_controls, exclusive_ports, exclusive_mounts, volume, add_container, remove_container, slack_url, docker_label, exclusive_docker_labels, slack_service_match='.*'):
+def deploy(cluster, service, tag, image, command, health_check, cpu, memory, memoryreservation, privileged, essential, env, env_file, s3_env_file, secret, ulimit, system_control, port, mount, log, role, execution_role, task, region, access_key_id, secret_access_key, profile, timeout, newrelic_apikey, newrelic_appid, newrelic_region, newrelic_revision, comment, user, ignore_warnings, diff, deregister, rollback, exclusive_env, exclusive_secrets, exclusive_s3_env_file, sleep_time, exclusive_ulimits, exclusive_system_controls, exclusive_ports, exclusive_mounts, volume, add_container, remove_container, slack_url, docker_label, exclusive_docker_labels, slack_service_match='.*'):
     """
     Redeploy or modify a service.
 
@@ -107,6 +109,7 @@ def deploy(cluster, service, tag, image, command, health_check, cpu, memory, mem
         td.set_essential(**{key: value for (key, value) in essential})
         td.set_environment(env, exclusive_env, env_file)
         td.set_docker_labels(docker_label, exclusive_docker_labels)
+        td.set_s3_env_file(s3_env_file, exclusive_s3_env_file)
         td.set_secrets(secret, exclusive_secrets)
         td.set_ulimits(ulimit, exclusive_ulimits)
         td.set_system_controls(system_control, exclusive_system_controls)
@@ -182,6 +185,7 @@ def deploy(cluster, service, tag, image, command, health_check, cpu, memory, mem
 @click.option('-m', '--mount', type=(str, str, str), multiple=True, help='Adds or changes a mount points in the container description (Not available for Fargate): <container> <container port value> <host port value>')
 @click.option('-l', '--log', type=(str, str, str, str), multiple=True, help='Adds or changes a log configuration in the container description (Not available for Fargate): <container> <log driver> <option name> <option value>')
 @click.option('--env-file', type=(str, str), default=((None, None),), multiple=True, required=False, help='Load environment variables from .env-file')
+@click.option('--s3-env-file', type=(str, str), multiple=True, required=False, help='Location of .env-file in S3')
 @click.option('-r', '--role', type=str, help='Sets the task\'s role ARN: <task role ARN>')
 @click.option('-x', '--execution-role', type=str, help='Sets the execution\'s role ARN: <execution role ARN>')
 @click.option('--region', help='AWS region (e.g. eu-central-1)')
@@ -200,6 +204,7 @@ def deploy(cluster, service, tag, image, command, health_check, cpu, memory, mem
 @click.option('--exclusive-env', is_flag=True, default=False, help='Set the given environment variables exclusively and remove all other pre-existing env variables from all containers')
 @click.option('--exclusive-secrets', is_flag=True, default=False, help='Set the given secrets exclusively and remove all other pre-existing secrets from all containers')
 @click.option('--exclusive-docker-labels', is_flag=True, default=False, help='Set the given docker labels exclusively and remove all other pre-existing docker-labels from all containers')
+@click.option('--exclusive-s3-env-file', is_flag=True, default=False, help='Set the given s3 env files exclusively and remove all other pre-existing s3 env files from all containers')
 @click.option('--slack-url', required=False, help='Webhook URL of the Slack integration. Can also be defined via environment variable SLACK_URL')
 @click.option('--slack-service-match', default=".*", required=False, help='A regular expression for defining, deployments of which crons should be notified. (default: .* =all). Can also be defined via environment variable SLACK_SERVICE_MATCH')
 @click.option('--exclusive-ulimits', is_flag=True, default=False, help='Set the given ulimits exclusively and remove all other pre-existing ulimits from all containers')
@@ -207,7 +212,7 @@ def deploy(cluster, service, tag, image, command, health_check, cpu, memory, mem
 @click.option('--exclusive-ports', is_flag=True, default=False, help='Set the given port mappings exclusively and remove all other pre-existing port mappings from all containers')
 @click.option('--exclusive-mounts', is_flag=True, default=False, help='Set the given mount points exclusively and remove all other pre-existing mount points from all containers')
 @click.option('--volume', type=(str, str), multiple=True, required=False, help='Set volume mapping from host to container in the task definition.')
-def cron(cluster, task, rule, image, tag, command, cpu, memory, memoryreservation, privileged, env, env_file, secret, ulimit, system_control, port, mount, log, role, execution_role, region, access_key_id, secret_access_key, newrelic_apikey, newrelic_appid, newrelic_region, newrelic_revision, comment, user, profile, diff, deregister, rollback, exclusive_env, exclusive_secrets, slack_url, slack_service_match, exclusive_ulimits, exclusive_system_controls, exclusive_ports, exclusive_mounts, volume, docker_label, exclusive_docker_labels):
+def cron(cluster, task, rule, image, tag, command, cpu, memory, memoryreservation, privileged, env, env_file, s3_env_file, secret, ulimit, system_control, port, mount, log, role, execution_role, region, access_key_id, secret_access_key, newrelic_apikey, newrelic_appid, newrelic_region, newrelic_revision, comment, user, profile, diff, deregister, rollback, exclusive_env, exclusive_secrets, exclusive_s3_env_file, slack_url, slack_service_match, exclusive_ulimits, exclusive_system_controls, exclusive_ports, exclusive_mounts, volume, docker_label, exclusive_docker_labels):
     """
     Update a scheduled task.
 
@@ -231,6 +236,7 @@ def cron(cluster, task, rule, image, tag, command, cpu, memory, memoryreservatio
         td.set_privileged(**{key: value for (key, value) in privileged})
         td.set_environment(env, exclusive_env, env_file)
         td.set_docker_labels(docker_label, exclusive_docker_labels)
+        td.set_s3_env_file(s3_env_file, exclusive_s3_env_file)
         td.set_secrets(secret, exclusive_secrets)
         td.set_ulimits(ulimit, exclusive_ulimits)
         td.set_system_controls(system_control, exclusive_system_controls)
@@ -279,6 +285,7 @@ def cron(cluster, task, rule, image, tag, command, cpu, memory, memoryreservatio
 @click.option('-c', '--command', type=(str, str), multiple=True, help='Overwrites the command in a container: <container> <command>')
 @click.option('-e', '--env', type=(str, str, str), multiple=True, help='Adds or changes an environment variable: <container> <name> <value>')
 @click.option('--env-file', type=(str, str), default=((None, None),), multiple=True, required=False, help='Load environment variables from .env-file')
+@click.option('--s3-env-file', type=(str, str), multiple=True, required=False, help='Location of .env-file in S3')
 @click.option('-s', '--secret', type=(str, str, str), multiple=True, help='Adds or changes a secret environment variable from the AWS Parameter Store (Not available for Fargate): <container> <name> <parameter name>')
 @click.option('-d', '--docker-label', type=(str, str, str), multiple=True, help='Adds or changes a docker label: <container> <name> <value>')
 @click.option('-r', '--role', type=str, help='Sets the task\'s role ARN: <task role ARN>')
@@ -290,8 +297,9 @@ def cron(cluster, task, rule, image, tag, command, cpu, memory, memoryreservatio
 @click.option('--exclusive-env', is_flag=True, default=False, help='Set the given environment variables exclusively and remove all other pre-existing env variables from all containers')
 @click.option('--exclusive-secrets', is_flag=True, default=False, help='Set the given secrets exclusively and remove all other pre-existing secrets from all containers')
 @click.option('--exclusive-docker-labels', is_flag=True, default=False, help='Set the given docker labels exclusively and remove all other pre-existing docker-labels from all containers')
+@click.option('--exclusive-s3-env-file', is_flag=True, default=False, help='Set the given s3 env files exclusively and remove all other pre-existing s3 env files from all containers')
 @click.option('--deregister/--no-deregister', default=True, help='Deregister or keep the old task definition (default: --deregister)')
-def update(task, image, tag, command, env, env_file, secret, role, region, access_key_id, secret_access_key, profile, diff, exclusive_env, exclusive_secrets, deregister, docker_label, exclusive_docker_labels):
+def update(task, image, tag, command, env, env_file, s3_env_file, secret, role, region, access_key_id, secret_access_key, profile, diff, exclusive_env, exclusive_s3_env_file, exclusive_secrets, deregister, docker_label, exclusive_docker_labels):
     """
     Update a task definition.
 
@@ -309,11 +317,9 @@ def update(task, image, tag, command, env, env_file, secret, role, region, acces
         td.set_commands(**{key: value for (key, value) in command})
         td.set_environment(env, exclusive_env, env_file)
         td.set_docker_labels(docker_label, exclusive_docker_labels)
-        td.set_secrets(secret, exclusive_secrets)
+        td.set_s3_env_file(s3_env_file, exclusive_s3_env_file)
         td.set_role_arn(role)
-
         if diff:
-            print_diff(td)
 
         create_task_definition(action, td)
 
@@ -376,6 +382,7 @@ def scale(cluster, service, desired_count, access_key_id, secret_access_key, reg
 @click.option('-c', '--command', type=(str, str), multiple=True, help='Overwrites the command in a container: <container> <command>')
 @click.option('-e', '--env', type=(str, str, str), multiple=True, help='Adds or changes an environment variable: <container> <name> <value>')
 @click.option('--env-file', type=(str, str), default=((None, None),), multiple=True, required=False, help='Load environment variables from .env-file')
+@click.option('--s3-env-file', type=(str, str), multiple=True, required=False, help='Location of .env-file in S3')
 @click.option('-s', '--secret', type=(str, str, str), multiple=True, help='Adds or changes a secret environment variable from the AWS Parameter Store (Not available for Fargate): <container> <name> <parameter name>')
 @click.option('-d', '--docker-label', type=(str, str, str), multiple=True, help='Adds or changes a docker label: <container> <name> <value>')
 @click.option('--launchtype', type=click.Choice([LAUNCH_TYPE_EC2, LAUNCH_TYPE_FARGATE]), default=LAUNCH_TYPE_EC2, help='ECS Launch type (default: EC2)')
@@ -389,8 +396,9 @@ def scale(cluster, service, desired_count, access_key_id, secret_access_key, reg
 @click.option('--profile', help='AWS configuration profile name')
 @click.option('--exclusive-env', is_flag=True, default=False, help='Set the given environment variables exclusively and remove all other pre-existing env variables from all containers')
 @click.option('--exclusive-docker-labels', is_flag=True, default=False, help='Set the given docker labels exclusively and remove all other pre-existing docker-labels from all containers')
+@click.option('--exclusive-s3-env-file', is_flag=True, default=False, help='Set the given s3 env files exclusively and remove all other pre-existing s3 env files from all containers')
 @click.option('--diff/--no-diff', default=True, help='Print what values were changed in the task definition')
-def run(cluster, task, count, command, env, env_file, secret, launchtype, subnet, securitygroup, public_ip, platform_version, region, access_key_id, secret_access_key, profile, exclusive_env, diff, docker_label, exclusive_docker_labels):
+def run(cluster, task, count, command, env, env_file, s3_env_file, secret, launchtype, subnet, securitygroup, public_ip, platform_version, region, access_key_id, secret_access_key, profile, exclusive_env, exclusive_s3_env_file, diff, docker_label, exclusive_docker_labels):
     """
     Run a one-off task.
 
@@ -407,6 +415,7 @@ def run(cluster, task, count, command, env, env_file, secret, launchtype, subnet
         td.set_commands(**{key: value for (key, value) in command})
         td.set_environment(env, exclusive_env, env_file)
         td.set_docker_labels(docker_label, exclusive_docker_labels)
+        td.set_s3_env_file(s3_env_file, exclusive_s3_env_file)
         td.set_secrets(secret)
 
         if diff:
