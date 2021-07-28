@@ -76,7 +76,7 @@ def get_client(access_key_id, secret_access_key, region, profile):
 @click.option('--remove-container', type=str, multiple=True, required=False, help='Remove a container from the task definition.')
 @click.option('-d', '--docker-label', type=(str, str, str), multiple=True, help='Adds or changes a docker label: <container> <name> <value>')
 @click.option('--exclusive-docker-labels', is_flag=True, default=False, help='Set the given docker labels exclusively and remove all other pre-existing docker-labels from all containers')
-def deploy(cluster, service, tag, image, command, health_check, cpu, memory, memoryreservation, privileged, essential, env, env_file, secret, ulimit, system_control, port, mount, log, role, execution_role, task, region, access_key_id, secret_access_key, profile, timeout, newrelic_apikey, newrelic_appid, newrelic_region, newrelic_revision, comment, user, ignore_warnings, diff, deregister, rollback, exclusive_env, exclusive_secrets, sleep_time, exclusive_ulimits, exclusive_system_controls, exclusive_ports, exclusive_mounts, volume, add_container, remove_container, slack_url, dockerlabels, exclusive_dockerlabels, slack_service_match='.*'):
+def deploy(cluster, service, tag, image, command, health_check, cpu, memory, memoryreservation, privileged, essential, env, env_file, secret, ulimit, system_control, port, mount, log, role, execution_role, task, region, access_key_id, secret_access_key, profile, timeout, newrelic_apikey, newrelic_appid, newrelic_region, newrelic_revision, comment, user, ignore_warnings, diff, deregister, rollback, exclusive_env, exclusive_secrets, sleep_time, exclusive_ulimits, exclusive_system_controls, exclusive_ports, exclusive_mounts, volume, add_container, remove_container, slack_url, docker_label, exclusive_docker_labels, slack_service_match='.*'):
     """
     Redeploy or modify a service.
 
@@ -106,7 +106,7 @@ def deploy(cluster, service, tag, image, command, health_check, cpu, memory, mem
         td.set_privileged(**{key: value for (key, value) in privileged})
         td.set_essential(**{key: value for (key, value) in essential})
         td.set_environment(env, exclusive_env, env_file)
-        td.set_docker_labels(dockerlabels, exclusive_dockerlabels)
+        td.set_docker_labels(docker_label, exclusive_docker_labels)
         td.set_secrets(secret, exclusive_secrets)
         td.set_ulimits(ulimit, exclusive_ulimits)
         td.set_system_controls(system_control, exclusive_system_controls)
@@ -207,7 +207,7 @@ def deploy(cluster, service, tag, image, command, health_check, cpu, memory, mem
 @click.option('--volume', type=(str, str), multiple=True, required=False, help='Set volume mapping from host to container in the task definition.')
 @click.option('-d', '--docker-label', type=(str, str, str), multiple=True, help='Adds or changes a docker label: <container> <name> <value>')
 @click.option('--exclusive-docker-labels', is_flag=True, default=False, help='Set the given docker labels exclusively and remove all other pre-existing docker-labels from all containers')
-def cron(cluster, task, rule, image, tag, command, cpu, memory, memoryreservation, privileged, env, env_file, secret, ulimit, system_control, port, mount, log, role, execution_role, region, access_key_id, secret_access_key, newrelic_apikey, newrelic_appid, newrelic_region, newrelic_revision, comment, user, profile, diff, deregister, rollback, exclusive_env, exclusive_secrets, slack_url, slack_service_match, exclusive_ulimits, exclusive_system_controls, exclusive_ports, exclusive_mounts, volume):
+def cron(cluster, task, rule, image, tag, command, cpu, memory, memoryreservation, privileged, env, env_file, secret, ulimit, system_control, port, mount, log, role, execution_role, region, access_key_id, secret_access_key, newrelic_apikey, newrelic_appid, newrelic_region, newrelic_revision, comment, user, profile, diff, deregister, rollback, exclusive_env, exclusive_secrets, slack_url, slack_service_match, exclusive_ulimits, exclusive_system_controls, exclusive_ports, exclusive_mounts, volume, docker_label, exclusive_docker_labels):
     """
     Update a scheduled task.
 
@@ -230,7 +230,7 @@ def cron(cluster, task, rule, image, tag, command, cpu, memory, memoryreservatio
         td.set_memoryreservation(**{key: value for (key, value) in memoryreservation})
         td.set_privileged(**{key: value for (key, value) in privileged})
         td.set_environment(env, exclusive_env, env_file)
-        td.set_docker_labels(dockerlabels, exclusive_dockerlabels)
+        td.set_docker_labels(docker_label, exclusive_docker_labels)
         td.set_secrets(secret, exclusive_secrets)
         td.set_ulimits(ulimit, exclusive_ulimits)
         td.set_system_controls(system_control, exclusive_system_controls)
@@ -291,7 +291,7 @@ def cron(cluster, task, rule, image, tag, command, cpu, memory, memoryreservatio
 @click.option('--deregister/--no-deregister', default=True, help='Deregister or keep the old task definition (default: --deregister)')
 @click.option('-d', '--docker-label', type=(str, str, str), multiple=True, help='Adds or changes a docker label: <container> <name> <value>')
 @click.option('--exclusive-docker-labels', is_flag=True, default=False, help='Set the given docker labels exclusively and remove all other pre-existing docker-labels from all containers')
-def update(task, image, tag, command, env, env_file, secret, role, region, access_key_id, secret_access_key, profile, diff, exclusive_env, exclusive_secrets, deregister):
+def update(task, image, tag, command, env, env_file, secret, role, region, access_key_id, secret_access_key, profile, diff, exclusive_env, exclusive_secrets, deregister, docker_label, exclusive_docker_labels):
     """
     Update a task definition.
 
@@ -308,7 +308,7 @@ def update(task, image, tag, command, env, env_file, secret, role, region, acces
         td.set_images(tag, **{key: value for (key, value) in image})
         td.set_commands(**{key: value for (key, value) in command})
         td.set_environment(env, exclusive_env, env_file)
-        td.set_docker_labels(dockerlabels, exclusive_dockerlabels)
+        td.set_docker_labels(docker_label, exclusive_docker_labels)
         td.set_secrets(secret, exclusive_secrets)
         td.set_role_arn(role)
 
@@ -390,7 +390,7 @@ def scale(cluster, service, desired_count, access_key_id, secret_access_key, reg
 @click.option('--diff/--no-diff', default=True, help='Print what values were changed in the task definition')
 @click.option('-d', '--docker-label', type=(str, str, str), multiple=True, help='Adds or changes a docker label: <container> <name> <value>')
 @click.option('--exclusive-docker-labels', is_flag=True, default=False, help='Set the given docker labels exclusively and remove all other pre-existing docker-labels from all containers')
-def run(cluster, task, count, command, env, env_file, secret, launchtype, subnet, securitygroup, public_ip, platform_version, region, access_key_id, secret_access_key, profile, exclusive_env, diff):
+def run(cluster, task, count, command, env, env_file, secret, launchtype, subnet, securitygroup, public_ip, platform_version, region, access_key_id, secret_access_key, profile, exclusive_env, diff, docker_label, exclusive_docker_labels):
     """
     Run a one-off task.
 
@@ -406,7 +406,7 @@ def run(cluster, task, count, command, env, env_file, secret, launchtype, subnet
         td = action.get_task_definition(task)
         td.set_commands(**{key: value for (key, value) in command})
         td.set_environment(env, exclusive_env, env_file)
-        td.set_docker_labels(dockerlabels, exclusive_dockerlabels)
+        td.set_docker_labels(docker_label, exclusive_docker_labels)
         td.set_secrets(secret)
 
         if diff:
