@@ -31,13 +31,14 @@ TASK_DEFINITION_CONTAINERS_1 = [
     {u'name': u'webserver', u'image': u'webserver:123', u'command': u'run',
      u'environment': ({"name": "foo", "value": "bar"}, {"name": "lorem", "value": "ipsum"}, {"name": "empty", "value": ""}),
      u'secrets': ({"name": "baz", "valueFrom": "qux"}, {"name": "dolor", "valueFrom": "sit"}),
+     u'dockerLabels': {"foo": "bar", "lorem": "ipsum", "empty": ""},
      u'logConfiguration': {},
      u'ulimits': [{'name': 'memlock', 'softLimit': 256, 'hardLimit': 256}],
      u'systemControls': [{'namespace': 'net.core.somaxconn', 'value': '511'}],
      u'portMappings': [{'containerPort': 8080, 'hostPort': 8080}],
      u'mountPoints': [{'sourceVolume': 'volume', 'containerPath': '/container/path', 'readOnly': False}]},
     {u'name': u'application', u'image': u'application:123', u'command': u'run', u'environment': (),
-     u'logConfiguration': {},
+     u'logConfiguration': {}, u'dockerLabels': {},
      u'ulimits': [{'name': 'memlock', 'softLimit': 256, 'hardLimit': 256}],
      u'systemControls': [{'namespace': 'net.core.somaxconn', 'value': '511'}],
      u'portMappings': [{'containerPort': 8080, 'hostPort': 8080}],
@@ -53,13 +54,14 @@ TASK_DEFINITION_CONTAINERS_2 = [
     {u'name': u'webserver', u'image': u'webserver:123', u'command': u'run',
      u'environment': ({"name": "foo", "value": "bar"}, {"name": "lorem", "value": "ipsum"}, {"name": "empty", "value": ""}),
      u'secrets': ({"name": "baz", "valueFrom": "qux"}, {"name": "dolor", "valueFrom": "sit"}),
+     u'dockerLabels': {"foo": "bar", "lorem": "ipsum", "empty": ""},
      u'logConfiguration': {},
      u'ulimits': [{'name': 'memlock', 'softLimit': 256, 'hardLimit': 256}],
      u'systemControls': [{'namespace': 'net.core.somaxconn', 'value': '511'}],
      u'portMappings': [{'containerPort': 8080, 'hostPort': 8080}],
      u'mountPoints': [{'sourceVolume': 'volume', 'containerPath': '/container/path', 'readOnly': False}]},
     {u'name': u'application', u'image': u'application:123', u'command': u'run', u'environment': (),
-     u'logConfiguration': {},
+     u'logConfiguration': {}, u'dockerLabels': {},
      u'ulimits': [{'name': 'memlock', 'softLimit': 256, 'hardLimit': 256}],
      u'systemControls': [{'namespace': 'net.core.somaxconn', 'value': '511'}],
      u'portMappings': [{'containerPort': 8080, 'hostPort': 8080}],
@@ -74,7 +76,8 @@ TASK_DEFINITION_VOLUMES_3 = []
 TASK_DEFINITION_CONTAINERS_3 = [
     {u'name': u'webserver', u'image': u'webserver:456', u'command': u'execute',
      u'environment': ({"name": "foo", "value": "foobar"}, {"name": "newvar", "value": "new value"}),
-     u'secrets': ({"name": "baz", "valueFrom": "foobaz"}, {"name": "dolor", "valueFrom": "loremdolor"})},
+     u'secrets': ({"name": "baz", "valueFrom": "foobaz"}, {"name": "dolor", "valueFrom": "loremdolor"}),
+     u'dockerLabels': {"foo": "foobar", "newlabel": "new value"}},
     {u'name': u'application', u'image': u'application:123', u'command': u'run', u'environment': ()}
 ]
 TASK_DEFINITION_ROLE_ARN_3 = u'arn:test:another-role:1'
@@ -669,6 +672,31 @@ def test_task_set_environment_exclusively(task_definition):
     assert {'name': 'new-var', 'value': 'new-value'} in task_definition.containers[1]['environment']
 
 
+def test_task_set_docker_labels(task_definition):
+    assert len(task_definition.containers[0]['dockerLabels']) == 3
+
+    task_definition.set_docker_labels(((u'webserver', u'foo', u'baz'), (u'webserver', u'some-name', u'some-value')))
+
+    assert len(task_definition.containers[0]['dockerLabels']) == 4
+
+    assert 'foo' in task_definition.containers[0]['dockerLabels']
+    assert 'lorem' in task_definition.containers[0]['dockerLabels']
+    assert 'some-name' in task_definition.containers[0]['dockerLabels']
+
+def test_task_set_docker_label_exclusively(task_definition):
+    assert len(task_definition.containers[0]['dockerLabels']) == 3
+    assert len(task_definition.containers[1]['dockerLabels']) == 0
+
+    task_definition.set_docker_labels(((u'application', u'foo', u'baz'), (u'application', u'new-var', u'new-value')), exclusive=True)
+
+    assert len(task_definition.containers[0]['dockerLabels']) == 0
+    assert len(task_definition.containers[1]['dockerLabels']) == 2
+
+    assert task_definition.containers[0]['dockerLabels'] == {}
+    assert 'foo' in task_definition.containers[1]['dockerLabels']
+    assert 'new-var' in task_definition.containers[1]['dockerLabels']
+
+
 def test_task_set_secrets_exclusively(task_definition):
     assert len(task_definition.containers[0]['secrets']) == 2
 
@@ -900,6 +928,15 @@ def test_task_get_overrides_with_environment(task_definition):
     assert dict(name='foo', value='baz') in overrides[0]['environment']
 
 
+def test_task_get_overrides_with_docker_labels(task_definition):
+    task_definition.set_docker_labels((('webserver', 'foo', 'baz'),))
+    overrides = task_definition.get_overrides()
+    assert len(overrides) == 1
+    assert overrides[0]['name'] == 'webserver'
+    #assert 'foo' in overrides[0]['dockerLabels']
+    assert overrides[0]['dockerLabels']['foo'] == 'baz'
+
+
 def test_task_get_overrides_with_secrets(task_definition):
     task_definition.set_secrets((('webserver', 'foo', 'baz'),))
     overrides = task_definition.get_overrides()
@@ -944,6 +981,13 @@ def test_task_get_overrides_environment(task_definition):
     assert isinstance(environment, list)
     assert len(environment) == 1
     assert environment[0] == dict(name='foo', value='bar')
+
+
+def test_task_get_overrides_docker_labels(task_definition):
+    dockerlabels = task_definition.get_overrides_docker_labels(dict(foo='bar'))
+    assert isinstance(dockerlabels, dict)
+    assert len(dockerlabels) == 1
+    assert dockerlabels['foo'] == 'bar'
 
 
 def test_task_get_overrides_secrets(task_definition):
