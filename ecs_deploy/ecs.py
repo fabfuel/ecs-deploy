@@ -335,6 +335,14 @@ class EcsTaskDefinition(object):
             containers_b[container]['secrets'] = {e['name']: e['valueFrom'] for e in
                                                   containers_b[container].get('secrets', {})}
 
+        for container in containers_a:
+            containers_a[container]['dockerLabels'] = {l['name']: l['value'] for l in
+                                                       containers_a[container].get('dockerLabels', {})}
+
+        for container in containers_b:
+            containers_b[container]['dockerLabels'] = {l['name']: l['value'] for l in
+                                                       containers_b[container].get('dockerLabels', {})}
+
         composite_a = {
             'containers': containers_a,
             'volumes': self.volumes,
@@ -370,6 +378,8 @@ class EcsTaskDefinition(object):
                 override['environment'] = self.get_overrides_env(diff.value)
             elif diff.field == 'secrets':
                 override['secrets'] = self.get_overrides_secrets(diff.value)
+            elif diff.field == 'dockerLabels':
+                override['dockerLabels'] = self.get_overrides_docker_labels(diff.value)
         return overrides
 
     @staticmethod
@@ -396,6 +406,10 @@ class EcsTaskDefinition(object):
     @staticmethod
     def get_overrides_secrets(secrets):
         return [{"name": s, "valueFrom": secrets[s]} for s in secrets]
+
+    @staticmethod
+    def get_overrides_docker_labels(dockerlabels):
+        return {l: dockerlabels[l] for l in dockerlabels}
 
     def set_images(self, tag=None, **images):
         self.validate_container_options(**images)
@@ -601,6 +615,50 @@ class EcsTaskDefinition(object):
         container[u'environment'] = [
             {"name": e, "value": merged[e]} for e in merged
         ]
+
+    def set_docker_labels(self, dockerlabel_list, exclusive=False):
+        dockerlabels = defaultdict(dict)
+        for label in dockerlabel_list:
+            dockerlabels[label[0]][label[1]] = label[2]
+        self.validate_container_options(**dockerlabels)
+        for container in self.containers:
+            if container[u'name'] in dockerlabels:
+                self.apply_docker_labels(
+                    container=container,
+                    new_dockerlabels=dockerlabels[container[u'name']],
+                    exclusive=exclusive,
+                )
+            elif exclusive is True:
+                self.apply_docker_labels(
+                    container=container,
+                    new_dockerlabels={},
+                    exclusive=exclusive,
+                )
+
+    def apply_docker_labels(self, container, new_dockerlabels, exclusive=False):
+        dockerlabels = container.get('dockerLabels', {})
+        old_dockerlabels = {label['name']: label['value'] for label in dockerlabels}
+        
+        if exclusive is True:
+            merged = new_dockerlabels
+        else:
+            merged = old_dockerlabels.copy()
+            merged.update(new_dockerlabels)
+        
+        if old_dockerlabels == merged:
+            return
+        
+        diff = EcsTaskDefinitionDiff(
+            container=container[u'name'],
+            field=u'dockerLabels',
+            value=merged,
+            old_value=old_dockerlabels
+        )
+        self._diff.append(diff)
+        
+        container[u'dockerLabels'] = {
+            l: merged[l] for l in merged
+        }
 
     def set_secrets(self, secrets_list, exclusive=False):
         secrets = defaultdict(dict)
@@ -1040,6 +1098,12 @@ class EcsTaskDefinitionDiff(object):
                 self.value,
                 self.old_value,
             ))
+        elif self.field == u'dockerLabels':
+            return '\n'.join(self._get_docker_label_diffs(
+                self.container,
+                self.value,
+                self.old_value,
+            ))
         elif self.container:
             return u'Changed %s of container "%s" to: "%s" (was: "%s")' % (
                 self.field,
@@ -1066,6 +1130,22 @@ class EcsTaskDefinitionDiff(object):
                 diffs.append(message)
         for old_name in old_env.keys():
             if old_name not in env.keys():
+                message = msg_removed % (old_name, container)
+                diffs.append(message)
+        return diffs
+
+    @staticmethod
+    def _get_docker_label_diffs(container, dockerlabels, old_dockerlabels):
+        msg = u'Changed dockerLabel "%s" of container "%s" to: "%s"'
+        msg_removed = u'Removed dockerLabel "%s" of container "%s"'
+        diffs = []
+        for name, value in dockerlabels.items():
+            old_value = old_dockerlabels.get(name)
+            if value != old_value or value and not old_value:
+                message = msg % (name, container, value)
+                diffs.append(message)
+        for old_name in old_dockerlabels.keys():
+            if old_name not in dockerlabels.keys():
                 message = msg_removed % (old_name, container)
                 diffs.append(message)
         return diffs
