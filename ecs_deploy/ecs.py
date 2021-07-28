@@ -636,8 +636,7 @@ class EcsTaskDefinition(object):
                 )
 
     def apply_docker_labels(self, container, new_dockerlabels, exclusive=False):
-        dockerlabels = container.get('dockerLabels', {})
-        old_dockerlabels = {label['name']: label['value'] for label in dockerlabels}
+        old_dockerlabels = container.get('dockerLabels', {})
         
         if exclusive is True:
             merged = new_dockerlabels
@@ -656,9 +655,7 @@ class EcsTaskDefinition(object):
         )
         self._diff.append(diff)
         
-        container[u'dockerLabels'] = {
-            l: merged[l] for l in merged
-        }
+        container[u'dockerLabels'] = {l: merged[l] for l in merged}
 
     def set_secrets(self, secrets_list, exclusive=False):
         secrets = defaultdict(dict)
