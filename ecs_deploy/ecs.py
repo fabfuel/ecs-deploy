@@ -336,12 +336,10 @@ class EcsTaskDefinition(object):
                                                   containers_b[container].get('secrets', {})}
 
         for container in containers_a:
-            containers_a[container]['dockerLabels'] = {l['name']: l['value'] for l in
-                                                       containers_a[container].get('dockerLabels', {})}
+            containers_a[container]['dockerLabels'] = containers_a[container].get('dockerLabels', {}).copy()
 
         for container in containers_b:
-            containers_b[container]['dockerLabels'] = {l['name']: l['value'] for l in
-                                                       containers_b[container].get('dockerLabels', {})}
+            containers_b[container]['dockerLabels'] = containers_b[container].get('dockerLabels', {}).copy()
 
         composite_a = {
             'containers': containers_a,
@@ -409,7 +407,7 @@ class EcsTaskDefinition(object):
 
     @staticmethod
     def get_overrides_docker_labels(dockerlabels):
-        return {l: dockerlabels[l] for l in dockerlabels}
+        return dockerlabels.copy()
 
     def set_images(self, tag=None, **images):
         self.validate_container_options(**images)
@@ -655,7 +653,7 @@ class EcsTaskDefinition(object):
         )
         self._diff.append(diff)
         
-        container[u'dockerLabels'] = {l: merged[l] for l in merged}
+        container[u'dockerLabels'] = merged.copy()
 
     def set_secrets(self, secrets_list, exclusive=False):
         secrets = defaultdict(dict)
