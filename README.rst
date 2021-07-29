@@ -231,7 +231,7 @@ To reset all existing secrets (secret environment variables) of a task definitio
 This will remove **all other** existing secret environment variables of **all containers** of the task definition, except for the new secret variable `NEW_SECRET` with the value coming from the AWS Parameter Store with the name "KEY_OF_SECRET_IN_PARAMETER_STORE" in the webserver container.
 
 
-Set an docker label
+Set a docker label
 ===================
 To add a new or adjust an existing docker labels of a specific container, run the following command::
 
