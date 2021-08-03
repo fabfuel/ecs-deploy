@@ -1,8 +1,8 @@
 ECS Deploy
 ----------
 
-.. image:: https://travis-ci.org/fabfuel/ecs-deploy.svg?branch=develop
-    :target: https://travis-ci.org/fabfuel/ecs-deploy
+.. image:: https://travis-ci.com/fabfuel/ecs-deploy.svg?branch=develop
+    :target: https://travis-ci.com/github/fabfuel/ecs-deploy
 
 .. image:: https://scrutinizer-ci.com/g/fabfuel/ecs-deploy/badges/coverage.png?b=develop
     :target: https://scrutinizer-ci.com/g/fabfuel/ecs-deploy
