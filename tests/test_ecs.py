@@ -698,7 +698,7 @@ def test_task_set_docker_label_exclusively(task_definition):
     assert 'foo' in task_definition.containers[1]['dockerLabels']
     assert 'new-var' in task_definition.containers[1]['dockerLabels']
 
-def test_task_set_s3_env_file(task_definition):
+def test_task_set_s3_env_file_multiple_files(task_definition):
     assert len(task_definition.containers[0]['environmentFiles']) == 2
 
     task_definition.set_s3_env_file(((u'webserver', u'arn:aws:s3:::mycompany.domain.com/app/.env'), (u'webserver', u'arn:aws:s3:::melted.cheese.com/grilled/.env'), (u'proxyserver', u'arn:ars:s3:::pizza/dev/.env')))
@@ -709,6 +709,14 @@ def test_task_set_s3_env_file(task_definition):
     assert {'value': 'arn:aws:s3:::myS3bucket/myApp/.env', 'type': 's3'} in task_definition.containers[0]['environmentFiles']
     assert {'value': 'arn:aws:s3:::coolBuckets/dev/.env', 'type': 's3'} in task_definition.containers[0]['environmentFiles']
     assert {'value': 'arn:aws:s3:::melted.cheese.com/grilled/.env', 'type': 's3'} in task_definition.containers[0]['environmentFiles']
+
+def test_task_set_s3_env_file_single_file(task_definition):
+    assert len(task_definition.containers[0]['environmentFiles']) == 2
+
+    task_definition.set_s3_env_file(((u'webserver', u'arn:aws:s3:::mycompany.domain.com/app/.env')))
+
+    assert len(task_definition.containers[0]['environmentFiles']) == 3
+    # assert {'value': 'arn:aws:s3:::mycompany.domain.com/app/.env', 'type': 's3'} in task_definition.containers[0]['environmentFiles']
 
 def test_task_set_s3_env_file_exclusively(task_definition):
     assert len(task_definition.containers[0]['environmentFiles']) == 2
