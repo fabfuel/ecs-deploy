@@ -317,9 +317,12 @@ def update(task, image, tag, command, env, env_file, s3_env_file, secret, role, 
         td.set_commands(**{key: value for (key, value) in command})
         td.set_environment(env, exclusive_env, env_file)
         td.set_docker_labels(docker_label, exclusive_docker_labels)
+        td.set_secrets(secret, exclusive_secrets)
         td.set_s3_env_file(s3_env_file, exclusive_s3_env_file)
         td.set_role_arn(role)
+
         if diff:
+            print_diff(td)
 
         create_task_definition(action, td)
 
