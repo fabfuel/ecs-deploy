@@ -1,13 +1,13 @@
 ECS Deploy
 ----------
 
+.. image:: https://badge.fury.io/py/ecs-deploy.svg
+    :target: https://badge.fury.io/py/ecs-deploy
+
 .. image:: https://travis-ci.com/fabfuel/ecs-deploy.svg?branch=develop
     :target: https://travis-ci.com/github/fabfuel/ecs-deploy
 
 .. image:: https://scrutinizer-ci.com/g/fabfuel/ecs-deploy/badges/coverage.png?b=develop
-    :target: https://scrutinizer-ci.com/g/fabfuel/ecs-deploy
-
-.. image:: https://scrutinizer-ci.com/g/fabfuel/ecs-deploy/badges/quality-score.png?b=develop
     :target: https://scrutinizer-ci.com/g/fabfuel/ecs-deploy
 
 `ecs-deploy` simplifies deployments on Amazon ECS by providing a convinience CLI tool for complex actions, which are executed pretty often.
@@ -229,6 +229,15 @@ To reset all existing secrets (secret environment variables) of a task definitio
     $ ecs deploy my-cluster my-service -s webserver NEW_SECRET KEY_OF_SECRET_IN_PARAMETER_STORE --exclusive-secret
 
 This will remove **all other** existing secret environment variables of **all containers** of the task definition, except for the new secret variable `NEW_SECRET` with the value coming from the AWS Parameter Store with the name "KEY_OF_SECRET_IN_PARAMETER_STORE" in the webserver container.
+
+
+Set environment via .env files
+==============================
+Instead of setting environment variables separately, you can pass a .env file per container to set the whole environment at once. You can either point to a local file or a file stored on S3, via::
+
+    $ ecs deploy my-cluster my-service --env-file my-app env/my-app.env
+
+    $ ecs deploy my-cluster my-service --s3-env-file my-app arn:aws:s3:::my-ecs-environment/my-app.env
 
 
 Set a docker label
