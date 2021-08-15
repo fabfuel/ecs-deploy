@@ -654,6 +654,57 @@ class EcsTaskDefinition(object):
         self._diff.append(diff)
         
         container[u'dockerLabels'] = merged.copy()
+    def set_s3_env_file(self, s3_env_files, exclusive=False):
+        # environmentFiles in task definition https://docs.aws.amazon.com/AmazonECS/latest/developerguide/taskdef-envfiles.html
+        s3_files_by_container = defaultdict(list)
+        if s3_env_files:
+            multiple_s3_env_files = any(isinstance(i, tuple) for i in s3_env_files)
+            if not multiple_s3_env_files:
+                s3_files_by_container[s3_env_files[0]] = {s3_env_files[1]}
+            if multiple_s3_env_files:
+                for s3_file in s3_env_files:
+                    if s3_files_by_container[s3_file[0]]:
+                        s3_files_by_container[s3_file[0]].add(s3_file[1])
+                        break
+                    s3_files_by_container[s3_file[0]] = {s3_file[1]}
+
+        for container in self.containers:
+            if container[u'name'] in s3_files_by_container:
+                self.apply_s3_env_file(
+                    container=container,
+                    new_s3_env_file=s3_files_by_container[container[u'name']],
+                    exclusive=exclusive
+                )
+            elif exclusive is True:
+                self.apply_s3_env_file(
+                    container=container,
+                    new_s3_env_file={},
+                    exclusive=exclusive
+                )
+
+    def apply_s3_env_file(self, container, new_s3_env_file, exclusive=False):
+        s3_env_file = container.get('environmentFiles', {})
+        old_s3_env_file = {env_file['value'] for env_file in s3_env_file}
+
+        if exclusive is True:
+            merged = new_s3_env_file
+        else:
+            merged = old_s3_env_file.copy()
+            merged.update(new_s3_env_file)
+
+        if old_s3_env_file == merged:
+            return
+
+        diff = EcsTaskDefinitionDiff(
+            container=container[u'name'],
+            field=u'environmentFiles',
+            value=merged,
+            old_value=old_s3_env_file
+        )
+        self._diff.append(diff)
+        container[u'environmentFiles'] = [
+            {"value": e, "type": "s3"} for e in merged
+        ]
 
     def set_secrets(self, secrets_list, exclusive=False):
         secrets = defaultdict(dict)
