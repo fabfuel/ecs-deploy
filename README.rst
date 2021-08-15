@@ -1,13 +1,13 @@
 ECS Deploy
 ----------
 
+.. image:: https://badge.fury.io/py/ecs-deploy.svg
+    :target: https://badge.fury.io/py/ecs-deploy
+
 .. image:: https://travis-ci.com/fabfuel/ecs-deploy.svg?branch=develop
     :target: https://travis-ci.com/github/fabfuel/ecs-deploy
 
 .. image:: https://scrutinizer-ci.com/g/fabfuel/ecs-deploy/badges/coverage.png?b=develop
-    :target: https://scrutinizer-ci.com/g/fabfuel/ecs-deploy
-
-.. image:: https://scrutinizer-ci.com/g/fabfuel/ecs-deploy/badges/quality-score.png?b=develop
     :target: https://scrutinizer-ci.com/g/fabfuel/ecs-deploy
 
 `ecs-deploy` simplifies deployments on Amazon ECS by providing a convinience CLI tool for complex actions, which are executed pretty often.
