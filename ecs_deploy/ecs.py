@@ -335,6 +335,12 @@ class EcsTaskDefinition(object):
             containers_b[container]['secrets'] = {e['name']: e['valueFrom'] for e in
                                                   containers_b[container].get('secrets', {})}
 
+        for container in containers_a:
+            containers_a[container]['dockerLabels'] = containers_a[container].get('dockerLabels', {}).copy()
+
+        for container in containers_b:
+            containers_b[container]['dockerLabels'] = containers_b[container].get('dockerLabels', {}).copy()
+
         composite_a = {
             'containers': containers_a,
             'volumes': self.volumes,
@@ -370,6 +376,8 @@ class EcsTaskDefinition(object):
                 override['environment'] = self.get_overrides_env(diff.value)
             elif diff.field == 'secrets':
                 override['secrets'] = self.get_overrides_secrets(diff.value)
+            elif diff.field == 'dockerLabels':
+                override['dockerLabels'] = self.get_overrides_docker_labels(diff.value)
         return overrides
 
     @staticmethod
@@ -396,6 +404,10 @@ class EcsTaskDefinition(object):
     @staticmethod
     def get_overrides_secrets(secrets):
         return [{"name": s, "valueFrom": secrets[s]} for s in secrets]
+
+    @staticmethod
+    def get_overrides_docker_labels(dockerlabels):
+        return dockerlabels.copy()
 
     def set_images(self, tag=None, **images):
         self.validate_container_options(**images)
@@ -600,6 +612,98 @@ class EcsTaskDefinition(object):
 
         container[u'environment'] = [
             {"name": e, "value": merged[e]} for e in merged
+        ]
+
+    def set_docker_labels(self, dockerlabel_list, exclusive=False):
+        dockerlabels = defaultdict(dict)
+        for label in dockerlabel_list:
+            dockerlabels[label[0]][label[1]] = label[2]
+        self.validate_container_options(**dockerlabels)
+        for container in self.containers:
+            if container[u'name'] in dockerlabels:
+                self.apply_docker_labels(
+                    container=container,
+                    new_dockerlabels=dockerlabels[container[u'name']],
+                    exclusive=exclusive,
+                )
+            elif exclusive is True:
+                self.apply_docker_labels(
+                    container=container,
+                    new_dockerlabels={},
+                    exclusive=exclusive,
+                )
+
+    def apply_docker_labels(self, container, new_dockerlabels, exclusive=False):
+        old_dockerlabels = container.get('dockerLabels', {})
+        
+        if exclusive is True:
+            merged = new_dockerlabels
+        else:
+            merged = old_dockerlabels.copy()
+            merged.update(new_dockerlabels)
+        
+        if old_dockerlabels == merged:
+            return
+        
+        diff = EcsTaskDefinitionDiff(
+            container=container[u'name'],
+            field=u'dockerLabels',
+            value=merged,
+            old_value=old_dockerlabels
+        )
+        self._diff.append(diff)
+        
+        container[u'dockerLabels'] = merged.copy()
+    def set_s3_env_file(self, s3_env_files, exclusive=False):
+        # environmentFiles in task definition https://docs.aws.amazon.com/AmazonECS/latest/developerguide/taskdef-envfiles.html
+        s3_files_by_container = defaultdict(list)
+        if s3_env_files:
+            multiple_s3_env_files = any(isinstance(i, tuple) for i in s3_env_files)
+            if not multiple_s3_env_files:
+                s3_files_by_container[s3_env_files[0]] = {s3_env_files[1]}
+            if multiple_s3_env_files:
+                for s3_file in s3_env_files:
+                    if s3_files_by_container[s3_file[0]]:
+                        s3_files_by_container[s3_file[0]].add(s3_file[1])
+                        break
+                    s3_files_by_container[s3_file[0]] = {s3_file[1]}
+
+        for container in self.containers:
+            if container[u'name'] in s3_files_by_container:
+                self.apply_s3_env_file(
+                    container=container,
+                    new_s3_env_file=s3_files_by_container[container[u'name']],
+                    exclusive=exclusive
+                )
+            elif exclusive is True:
+                self.apply_s3_env_file(
+                    container=container,
+                    new_s3_env_file={},
+                    exclusive=exclusive
+                )
+
+    def apply_s3_env_file(self, container, new_s3_env_file, exclusive=False):
+        s3_env_file = container.get('environmentFiles', {})
+        old_s3_env_file = {env_file['value'] for env_file in s3_env_file}
+
+        if exclusive is True:
+            merged = new_s3_env_file
+        else:
+            merged = old_s3_env_file.copy()
+            merged.update(new_s3_env_file)
+
+        if old_s3_env_file == merged:
+            return
+
+        diff = EcsTaskDefinitionDiff(
+            container=container[u'name'],
+            field=u'environmentFiles',
+            value=merged,
+            old_value=old_s3_env_file
+        )
+        self._diff.append(diff)
+        container[u'environmentFiles'] = [
+            {"value": e, "type": "s3"} for e in merged
         ]
 
     def set_secrets(self, secrets_list, exclusive=False):
@@ -1040,6 +1144,12 @@ class EcsTaskDefinitionDiff(object):
                 self.value,
                 self.old_value,
             ))
+        elif self.field == u'dockerLabels':
+            return '\n'.join(self._get_docker_label_diffs(
+                self.container,
+                self.value,
+                self.old_value,
+            ))
         elif self.container:
             return u'Changed %s of container "%s" to: "%s" (was: "%s")' % (
                 self.field,
@@ -1066,6 +1176,22 @@ class EcsTaskDefinitionDiff(object):
                 diffs.append(message)
         for old_name in old_env.keys():
             if old_name not in env.keys():
+                message = msg_removed % (old_name, container)
+                diffs.append(message)
+        return diffs
+
+    @staticmethod
+    def _get_docker_label_diffs(container, dockerlabels, old_dockerlabels):
+        msg = u'Changed dockerLabel "%s" of container "%s" to: "%s"'
+        msg_removed = u'Removed dockerLabel "%s" of container "%s"'
+        diffs = []
+        for name, value in dockerlabels.items():
+            old_value = old_dockerlabels.get(name)
+            if value != old_value or value and not old_value:
+                message = msg % (name, container, value)
+                diffs.append(message)
+        for old_name in old_dockerlabels.keys():
+            if old_name not in dockerlabels.keys():
                 message = msg_removed % (old_name, container)
                 diffs.append(message)
         return diffs

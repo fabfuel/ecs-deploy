@@ -1,8 +1,8 @@
 ECS Deploy
 ----------
 
-.. image:: https://travis-ci.org/fabfuel/ecs-deploy.svg?branch=develop
-    :target: https://travis-ci.org/fabfuel/ecs-deploy
+.. image:: https://travis-ci.com/fabfuel/ecs-deploy.svg?branch=develop
+    :target: https://travis-ci.com/github/fabfuel/ecs-deploy
 
 .. image:: https://scrutinizer-ci.com/g/fabfuel/ecs-deploy/badges/coverage.png?b=develop
     :target: https://scrutinizer-ci.com/g/fabfuel/ecs-deploy
@@ -85,7 +85,7 @@ Currently the following actions are supported:
 
 deploy
 ======
-Redeploy a service either without any modifications or with a new image, environment variable and/or command definition.
+Redeploy a service either without any modifications or with a new image, environment variable, docker label, and/or command definition.
 
 scale
 =====
@@ -93,12 +93,12 @@ Scale a service up or down and change the number of running tasks.
 
 run
 ===
-Run a one-off task based on an existing task-definition and optionally override command and/or environment variables.
+Run a one-off task based on an existing task-definition and optionally override command, environment variables and/or docker labels.
 
 update
 ======
 Update a task definition by creating a new revision to set a new image,
-environment variable and/or command definition, etc.
+environment variable, docker label, and/or command definition, etc.
 
 cron (scheduled task)
 =====================
@@ -229,6 +229,36 @@ To reset all existing secrets (secret environment variables) of a task definitio
     $ ecs deploy my-cluster my-service -s webserver NEW_SECRET KEY_OF_SECRET_IN_PARAMETER_STORE --exclusive-secret
 
 This will remove **all other** existing secret environment variables of **all containers** of the task definition, except for the new secret variable `NEW_SECRET` with the value coming from the AWS Parameter Store with the name "KEY_OF_SECRET_IN_PARAMETER_STORE" in the webserver container.
+
+
+Set a docker label
+===================
+To add a new or adjust an existing docker labels of a specific container, run the following command::
+
+    $ ecs deploy my-cluster my-service -d webserver somelabel somevalue
+
+This will modify the **webserver** container definition and add or overwrite the docker label "somelabel" with the value "somevalue". This way you can add new or adjust already existing docker labels.
+
+
+Adjust multiple docker labels
+=============================
+You can add or change multiple docker labels at once, by adding the `-d` (or `--docker-label`) options several times::
+
+    $ ecs deploy my-cluster my-service -d webserver somelabel somevalue -d webserver otherlabel othervalue -d app applabel appvalue
+
+This will modify the definition **of two containers**.
+The **webserver**'s docker label "somelabel" will be set to "somevalue" and the label "otherlabel" to "othervalue".
+The **app**'s docker label "applabel" will be set to "appvalue".
+
+
+Set docker labels exclusively, remove all other pre-existing docker labels
+==========================================================================
+To reset all existing docker labels of a task definition, use the flag ``--exclusive-docker-labels`` ::
+
+    $ ecs deploy my-cluster my-service -d webserver somelabel somevalue --exclusive-docker-labels
+
+This will remove **all other** existing docker labels of **all containers** of the task definition, except for the label "somelabel" with the value "somevalue" in the webserver container.
+
 
 Modify a command
 ================

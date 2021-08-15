@@ -334,6 +334,22 @@ def test_deploy_previously_empty_environment_variable_with_value(get_client, run
     assert u'Successfully changed task definition to: test-task:2' in result.output
     assert u'Deployment successful' in result.output
 
+@patch('ecs_deploy.cli.get_client')
+def test_deploy_s3_env_file_with_previous_value(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '--s3-env-file', 'webserver', 'arn:aws:s3:::centerfun/.env', '--s3-env-file', 'webserver', 'arn:aws:s3:::stormzone/.env'))
+
+    assert result.exit_code == 0
+    assert not result.exception
+
+    assert u"Deploying based on task definition: test-task:1" in result.output
+    assert u"Updating task definition" in result.output
+    assert u'Changed environmentFiles of container "webserver" to: "{\'arn:aws:s3:::stormzone/.env\', \'arn:aws:s3:::coolBuckets/dev/.env\', \'arn:aws:s3:::myS3bucket/myApp/.env\', \'arn:aws:s3:::centerfun/.env\'}" (was: "{\'arn:aws:s3:::coolBuckets/dev/.env\', \'arn:aws:s3:::myS3bucket/myApp/.env\'}")'
+    assert u'Successfully created revision: 2' in result.output
+    assert u'Successfully deregistered revision: 1' in result.output
+    assert u'Successfully changed task definition to: test-task:2' in result.output
+    assert u'Deployment successful' in result.output
+
 
 @patch('ecs_deploy.cli.get_client')
 def test_deploy_exclusive_environment(get_client, runner):
@@ -351,6 +367,115 @@ def test_deploy_exclusive_environment(get_client, runner):
     assert u'Removed environment "lorem" of container "webserver"' in result.output
 
     assert u'Removed secret' not in result.output
+
+    assert u'Successfully created revision: 2' in result.output
+    assert u'Successfully deregistered revision: 1' in result.output
+    assert u'Successfully changed task definition to: test-task:2' in result.output
+    assert u'Deployment successful' in result.output
+
+@patch('ecs_deploy.cli.get_client')
+def test_deploy_one_new_docker_laberl(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME,
+                                        '-d', 'application', 'foo', 'bar',
+                                        '-d', 'webserver', 'foo', 'baz'))
+
+    assert result.exit_code == 0
+    assert not result.exception
+
+    assert u"Deploying based on task definition: test-task:1" in result.output
+    assert u"Updating task definition" in result.output
+    assert u'Changed dockerLabel "foo" of container "application" to: "bar"' in result.output
+    assert u'Changed dockerLabel "foo" of container "webserver" to: "baz"' in result.output
+    assert u'Changed dockerLabel "lorem" of container "webserver" to: "ipsum"' not in result.output
+    assert u'Successfully created revision: 2' in result.output
+    assert u'Successfully deregistered revision: 1' in result.output
+    assert u'Successfully changed task definition to: test-task:2' in result.output
+    assert u'Deployment successful' in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_deploy_change_docker_label_empty_string(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '-d', 'application', 'foo', ''))
+
+    assert result.exit_code == 0
+    assert not result.exception
+
+    assert u"Deploying based on task definition: test-task:1" in result.output
+    assert u"Updating task definition" in result.output
+    assert u'Changed dockerLabel "foo" of container "application" to: ""' in result.output
+    assert u'Successfully created revision: 2' in result.output
+    assert u'Successfully deregistered revision: 1' in result.output
+    assert u'Successfully changed task definition to: test-task:2' in result.output
+    assert u'Deployment successful' in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_deploy_new_empty_docker_label(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '-d', 'application', 'new', ''))
+
+    assert result.exit_code == 0
+    assert not result.exception
+
+    assert u"Deploying based on task definition: test-task:1" in result.output
+    assert u"Updating task definition" in result.output
+    assert u'Changed dockerLabel "new" of container "application" to: ""' in result.output
+    assert u'Successfully created revision: 2' in result.output
+    assert u'Successfully deregistered revision: 1' in result.output
+    assert u'Successfully changed task definition to: test-task:2' in result.output
+    assert u'Deployment successful' in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_deploy_empty_docker_label_again(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '-d', 'webserver', 'empty', ''))
+
+    assert result.exit_code == 0
+    assert not result.exception
+
+    assert u"Deploying based on task definition: test-task:1" in result.output
+    assert u"Updating task definition" not in result.output
+    assert u'Changed dockerLabel' not in result.output
+    assert u'Successfully created revision: 2' in result.output
+    assert u'Successfully deregistered revision: 1' in result.output
+    assert u'Successfully changed task definition to: test-task:2' in result.output
+    assert u'Deployment successful' in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_deploy_previously_empty_docker_label_with_value(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '-d', 'webserver', 'empty', 'not-empty'))
+
+    assert result.exit_code == 0
+    assert not result.exception
+
+    assert u"Deploying based on task definition: test-task:1" in result.output
+    assert u"Updating task definition" in result.output
+    assert u'Changed dockerLabel "empty" of container "webserver" to: "not-empty"' in result.output
+    assert u'Successfully created revision: 2' in result.output
+    assert u'Successfully deregistered revision: 1' in result.output
+    assert u'Successfully changed task definition to: test-task:2' in result.output
+    assert u'Deployment successful' in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_deploy_exclusive_docker_label(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '-d', 'webserver', 'new-label', 'new-value', '--exclusive-docker-labels'))
+
+    assert result.exit_code == 0
+    assert not result.exception
+
+    assert u"Deploying based on task definition: test-task:1" in result.output
+    assert u"Updating task definition" in result.output
+    assert u'Changed dockerLabel "new-label" of container "webserver" to: "new-value"' in result.output
+
+    assert u'Removed dockerLabel "foo" of container "webserver"' in result.output
+    assert u'Removed dockerLabel "lorem" of container "webserver"' in result.output
 
     assert u'Successfully created revision: 2' in result.output
     assert u'Successfully deregistered revision: 1' in result.output
@@ -413,6 +538,23 @@ def test_deploy_without_changing_environment_value(get_client, runner):
     assert u"Deploying based on task definition: test-task:1" in result.output
     assert u"Updating task definition" not in result.output
     assert u'Changed environment' not in result.output
+    assert u'Successfully created revision: 2' in result.output
+    assert u'Successfully deregistered revision: 1' in result.output
+    assert u'Successfully changed task definition to: test-task:2' in result.output
+    assert u'Deployment successful' in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_deploy_without_changing_docker_labels(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '-d', 'webserver', 'foo', 'bar'))
+
+    assert result.exit_code == 0
+    assert not result.exception
+
+    assert u"Deploying based on task definition: test-task:1" in result.output
+    assert u"Updating task definition" not in result.output
+    assert u'Changed dockerLabel' not in result.output
     assert u'Successfully created revision: 2' in result.output
     assert u'Successfully deregistered revision: 1' in result.output
     assert u'Successfully changed task definition to: test-task:2' in result.output
@@ -757,6 +899,21 @@ def test_run_task_with_environment_var(get_client, runner):
 
 
 @patch('ecs_deploy.cli.get_client')
+def test_run_task_with_docker_label(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.run, (CLUSTER_NAME, 'test-task', '2', '-d', 'application', 'foo', 'bar'))
+
+    assert not result.exception
+    assert result.exit_code == 0
+
+    assert u"Using task definition: test-task" in result.output
+    assert u'Changed dockerLabel "foo" of container "application" to: "bar"' in result.output
+    assert u"Successfully started 2 instances of task: test-task:2" in result.output
+    assert u"- arn:foo:bar" in result.output
+    assert u"- arn:lorem:ipsum" in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
 def test_run_task_without_diff(get_client, runner):
     get_client.return_value = EcsTestClient('acces_key', 'secret_key')
     result = runner.invoke(cli.run, (CLUSTER_NAME, 'test-task', '2', '-e', 'application', 'foo', 'bar', '--no-diff'))
@@ -1017,6 +1174,98 @@ def test_update_task_exclusive_environment(get_client, runner):
 
 
 @patch('ecs_deploy.cli.get_client')
+def test_update_task_one_new_docker_label(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1,
+                                        '-d', 'application', 'foo', 'bar',
+                                        '-d', 'webserver', 'foo', 'baz'))
+
+    assert result.exit_code == 0
+    assert not result.exception
+
+    assert u"Update task definition based on: test-task:1" in result.output
+    assert u"Updating task definition" in result.output
+    assert u'Changed dockerLabel "foo" of container "application" to: "bar"' in result.output
+    assert u'Changed dockerLabel "foo" of container "webserver" to: "baz"' in result.output
+    assert u'Changed dockerLabel "lorem" of container "webserver" to: "ipsum"' not in result.output
+    assert u'Successfully created revision: 2' in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_update_task_change_docker_label_empty_string(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1, '-d', 'application', 'foo', ''))
+
+    assert result.exit_code == 0
+    assert not result.exception
+
+    assert u"Update task definition based on: test-task:1" in result.output
+    assert u"Updating task definition" in result.output
+    assert u'Changed dockerLabel "foo" of container "application" to: ""' in result.output
+    assert u'Successfully created revision: 2' in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_update_task_new_empty_docker_label(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1, '-d', 'application', 'new', ''))
+
+    assert result.exit_code == 0
+    assert not result.exception
+
+    assert u"Update task definition based on: test-task:1" in result.output
+    assert u"Updating task definition" in result.output
+    assert u'Changed dockerLabel "new" of container "application" to: ""' in result.output
+    assert u'Successfully created revision: 2' in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_update_task_empty_docker_label_again(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1, '-d', 'webserver', 'empty', ''))
+
+    assert result.exit_code == 0
+    assert not result.exception
+
+    assert u"Update task definition based on: test-task:1" in result.output
+    assert u"Updating task definition" not in result.output
+    assert u'Changed dockerLabel' not in result.output
+    assert u'Successfully created revision: 2' in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_update_task_previously_empty_docker_label_with_value(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1, '-d', 'webserver', 'empty', 'not-empty'))
+
+    assert result.exit_code == 0
+    assert not result.exception
+
+    assert u"Update task definition based on: test-task:1" in result.output
+    assert u"Updating task definition" in result.output
+    assert u'Changed dockerLabel "empty" of container "webserver" to: "not-empty"' in result.output
+    assert u'Successfully created revision: 2' in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_update_task_exclusive_docker_labels(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1, '-d', 'webserver', 'new-label', 'new-value', '--exclusive-docker-labels'))
+
+    assert result.exit_code == 0
+    assert not result.exception
+
+    assert u"Update task definition based on: test-task:1" in result.output
+    assert u"Updating task definition" in result.output
+    assert u'Changed dockerLabel "new-label" of container "webserver" to: "new-value"' in result.output
+
+    assert u'Removed dockerLabel "foo" of container "webserver"' in result.output
+    assert u'Removed dockerLabel "lorem" of container "webserver"' in result.output
+
+    assert u'Successfully created revision: 2' in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
 def test_update_task_exclusive_secret(get_client, runner):
     get_client.return_value = EcsTestClient('acces_key', 'secret_key')
     result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1, '-s', 'webserver', 'new-secret', 'new-place', '--exclusive-secrets'))
@@ -1065,6 +1314,20 @@ def test_update_task_without_changing_environment_value(get_client, runner):
     assert u"Update task definition based on: test-task:1" in result.output
     assert u"Updating task definition" not in result.output
     assert u'Changed environment' not in result.output
+    assert u'Successfully created revision: 2' in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_update_task_without_changing_docker_labels(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1, '-d', 'webserver', 'foo', 'bar'))
+
+    assert result.exit_code == 0
+    assert not result.exception
+
+    assert u"Update task definition based on: test-task:1" in result.output
+    assert u"Updating task definition" not in result.output
+    assert u'Changed dockerLabel' not in result.output
     assert u'Successfully created revision: 2' in result.output
 
 
@@ -1139,6 +1402,11 @@ def test_diff(get_client, runner):
     assert '+ "foobar"' in result.output
     assert 'remove: containers.webserver.environment' in result.output
     assert '- empty: ' in result.output
+    assert 'change: containers.webserver.dockerLabels.foo' in result.output
+    assert '- "bar"' in result.output
+    assert '+ "foobar"' in result.output
+    assert 'remove: containers.webserver.dockerLabels' in result.output
+    assert '- empty: ' in result.output
     assert 'change: containers.webserver.secrets.baz' in result.output
     assert '- "qux"' in result.output
     assert '+ "foobaz"' in result.output
@@ -1153,6 +1421,8 @@ def test_diff(get_client, runner):
     assert '+ "arn:test:another-role:1"' in result.output
     assert 'add: containers.webserver.environment' in result.output
     assert '+ newvar: "new value"' in result.output
+    assert 'add: containers.webserver.dockerLabel' in result.output
+    assert '+ newlabel: "new value"' in result.output
 
 
 @patch('ecs_deploy.cli.get_client')
