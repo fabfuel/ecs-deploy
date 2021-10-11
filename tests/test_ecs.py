@@ -920,7 +920,7 @@ class TestSetHealthChecks:
         for container in task_definition.containers:
             if container[u'name'] == u'webserver':
                 assert container[u'healthCheck'] == {
-                    u'command': u'curl -f http://webserver/alive/',
+                    u'command': [u'CMD-SHELL', u'curl -f http://webserver/alive/'],
                     u'interval': 30,
                     u'timeout': 5,
                     u'retries': 3,
@@ -928,7 +928,7 @@ class TestSetHealthChecks:
                 }
             if container[u'name'] == u'application':
                 assert container[u'healthCheck'] == {
-                    u'command': u'curl -f http://application/alive/',
+                    u'command': [u'CMD-SHELL', u'curl -f http://application/alive/'],
                     u'interval': 60,
                     u'timeout': 10,
                     u'retries': 6,

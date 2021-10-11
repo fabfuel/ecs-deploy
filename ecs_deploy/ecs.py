@@ -451,7 +451,7 @@ class EcsTaskDefinition(object):
     def set_health_checks(self, health_checks_list):
         health_checks = defaultdict(dict)
         for health_check in health_checks_list:
-            health_checks[health_check[0]]["command"] = health_check[1]
+            health_checks[health_check[0]]["command"] = ['CMD-SHELL', health_check[1]]
             health_checks[health_check[0]]["interval"] = health_check[2]
             health_checks[health_check[0]]["timeout"] = health_check[3]
             health_checks[health_check[0]]["retries"] = health_check[4]
