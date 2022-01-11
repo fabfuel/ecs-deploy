@@ -354,12 +354,15 @@ def test_deploy_s3_env_file_with_previous_value(get_client, runner):
 def test_deploy_runtime_platform_with_previous_value(get_client, runner):
     get_client.return_value = EcsTestClient('acces_key', 'secret_key')
     result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '--runtime-platform', 'ARM64', 'WINDOWS'))
-
+    expected_runtime_platform = {
+      u'cpuArchitecture': u'ARM64',
+      u'operatingSystemFamily': u'WINDOWS'
+    }
     assert result.exit_code == 0
     assert not result.exception
     assert u"Deploying based on task definition: test-task:1" in result.output
     assert u"Updating task definition" in result.output
-    assert u'Changed runtimePlatform to: "{\'cpuArchitecture\': \'ARM64\', \'operatingSystemFamily\': \'WINDOWS\'}" (was: "{\'cpuArchitecture\': \'X86_64\', \'operatingSystemFamily\': \'LINUX\'}")' in result.output
+    assert str(expected_runtime_platform) in result.output
     assert u'Successfully created revision: 2' in result.output
     assert u'Successfully deregistered revision: 1' in result.output
     assert u'Successfully changed task definition to: test-task:2' in result.output
@@ -368,12 +371,18 @@ def test_deploy_runtime_platform_with_previous_value(get_client, runner):
 @patch('ecs_deploy.cli.get_client')
 def test_update_previously_empty_runtime_platform_with_value(get_client, runner):
     get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_2, '--runtime-platform', 'X86_64', 'WINDOWS'))
+    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_2, '--runtime-platform', 'ARM64', 'WINDOWS'))
     assert result.exit_code == 0
     assert not result.exception
     assert u"Update task definition based on: test-task:2" in result.output
     assert u"Updating task definition" in result.output
-    assert u'Changed runtimePlatform to: "{\'cpuArchitecture\': \'X86_64\', \'operatingSystemFamily\': \'WINDOWS\'}" (was: "{}")' in result.output
+    expected_runtime_platform = {
+      u'cpuArchitecture': u'ARM64',
+      u'operatingSystemFamily': u'WINDOWS'
+    }
+    assert str(expected_runtime_platform) in result.output
+    assert u"Creating new task definition revision" in result.output
+    assert u"Successfully created revision: 2" in result.output
 
 @patch('ecs_deploy.cli.get_client')
 def test_deploy_exclusive_environment(get_client, runner):

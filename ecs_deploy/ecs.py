@@ -477,8 +477,8 @@ class EcsTaskDefinition(object):
         if runtime_platforms_list:
             runtime_platform = runtime_platforms_list[-1]
             new_runtime_platform = {}
-            new_runtime_platform["cpuArchitecture"] = runtime_platform[0]
-            new_runtime_platform["operatingSystemFamily"] = runtime_platform[1]
+            new_runtime_platform[u'cpuArchitecture'] = runtime_platform[0]
+            new_runtime_platform[u'operatingSystemFamily'] = runtime_platform[1]
             diff = EcsTaskDefinitionDiff(
                 container=None,
                 field=u'runtimePlatform',
