@@ -473,9 +473,8 @@ class EcsTaskDefinition(object):
                 self._diff.append(diff)
                 container[u'healthCheck'] = new_health_checks
 
-    def set_runtime_platform(self, runtime_platforms_list):
-        if runtime_platforms_list:
-            runtime_platform = runtime_platforms_list[-1]
+    def set_runtime_platform(self, runtime_platform):
+        if runtime_platform:
             new_runtime_platform = {}
             new_runtime_platform[u'cpuArchitecture'] = runtime_platform[0]
             new_runtime_platform[u'operatingSystemFamily'] = runtime_platform[1]
