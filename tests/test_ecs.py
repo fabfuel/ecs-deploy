@@ -26,18 +26,21 @@ TASK_DEFINITION_REVISION_1 = 1
 TASK_DEFINITION_ROLE_ARN_1 = u'arn:test:role:1'
 TASK_DEFINITION_ARN_1 = u'arn:aws:ecs:eu-central-1:123456789012:task-definition/%s:%s' % (TASK_DEFINITION_FAMILY_1,
                                                                                           TASK_DEFINITION_REVISION_1)
+TASK_DEFINITION_RUNTIME_PLATFORM_1 = {u'cpuArchitecture': u'X86_64', u'operatingSystemFamily': u'LINUX'}
 TASK_DEFINITION_VOLUMES_1 = []
 TASK_DEFINITION_CONTAINERS_1 = [
     {u'name': u'webserver', u'image': u'webserver:123', u'command': u'run',
      u'environment': ({"name": "foo", "value": "bar"}, {"name": "lorem", "value": "ipsum"}, {"name": "empty", "value": ""}),
+     u'environmentFiles': [{'value': 'arn:aws:s3:::myS3bucket/myApp/.env', 'type': 's3'}, {'value': 'arn:aws:s3:::coolBuckets/dev/.env', 'type': 's3'}],
      u'secrets': ({"name": "baz", "valueFrom": "qux"}, {"name": "dolor", "valueFrom": "sit"}),
+     u'dockerLabels': {"foo": "bar", "lorem": "ipsum", "empty": ""},
      u'logConfiguration': {},
      u'ulimits': [{'name': 'memlock', 'softLimit': 256, 'hardLimit': 256}],
      u'systemControls': [{'namespace': 'net.core.somaxconn', 'value': '511'}],
      u'portMappings': [{'containerPort': 8080, 'hostPort': 8080}],
      u'mountPoints': [{'sourceVolume': 'volume', 'containerPath': '/container/path', 'readOnly': False}]},
     {u'name': u'application', u'image': u'application:123', u'command': u'run', u'environment': (),
-     u'logConfiguration': {},
+     u'logConfiguration': {}, u'dockerLabels': {},
      u'ulimits': [{'name': 'memlock', 'softLimit': 256, 'hardLimit': 256}],
      u'systemControls': [{'namespace': 'net.core.somaxconn', 'value': '511'}],
      u'portMappings': [{'containerPort': 8080, 'hostPort': 8080}],
@@ -52,14 +55,16 @@ TASK_DEFINITION_VOLUMES_2 = []
 TASK_DEFINITION_CONTAINERS_2 = [
     {u'name': u'webserver', u'image': u'webserver:123', u'command': u'run',
      u'environment': ({"name": "foo", "value": "bar"}, {"name": "lorem", "value": "ipsum"}, {"name": "empty", "value": ""}),
+     u'environmentFiles': [{'value': 'arn:aws:s3:::myS3bucket/myApp/.env', 'type': 's3'}, {'value': 'arn:aws:s3:::coolBuckets/dev/.env', 'type': 's3'}],
      u'secrets': ({"name": "baz", "valueFrom": "qux"}, {"name": "dolor", "valueFrom": "sit"}),
+     u'dockerLabels': {"foo": "bar", "lorem": "ipsum", "empty": ""},
      u'logConfiguration': {},
      u'ulimits': [{'name': 'memlock', 'softLimit': 256, 'hardLimit': 256}],
      u'systemControls': [{'namespace': 'net.core.somaxconn', 'value': '511'}],
      u'portMappings': [{'containerPort': 8080, 'hostPort': 8080}],
      u'mountPoints': [{'sourceVolume': 'volume', 'containerPath': '/container/path', 'readOnly': False}]},
     {u'name': u'application', u'image': u'application:123', u'command': u'run', u'environment': (),
-     u'logConfiguration': {},
+     u'logConfiguration': {}, u'dockerLabels': {},
      u'ulimits': [{'name': 'memlock', 'softLimit': 256, 'hardLimit': 256}],
      u'systemControls': [{'namespace': 'net.core.somaxconn', 'value': '511'}],
      u'portMappings': [{'containerPort': 8080, 'hostPort': 8080}],
@@ -74,13 +79,15 @@ TASK_DEFINITION_VOLUMES_3 = []
 TASK_DEFINITION_CONTAINERS_3 = [
     {u'name': u'webserver', u'image': u'webserver:456', u'command': u'execute',
      u'environment': ({"name": "foo", "value": "foobar"}, {"name": "newvar", "value": "new value"}),
-     u'secrets': ({"name": "baz", "valueFrom": "foobaz"}, {"name": "dolor", "valueFrom": "loremdolor"})},
+     u'secrets': ({"name": "baz", "valueFrom": "foobaz"}, {"name": "dolor", "valueFrom": "loremdolor"}),
+     u'dockerLabels': {"foo": "foobar", "newlabel": "new value"}},
     {u'name': u'application', u'image': u'application:123', u'command': u'run', u'environment': ()}
 ]
 TASK_DEFINITION_ROLE_ARN_3 = u'arn:test:another-role:1'
 
 PAYLOAD_TASK_DEFINITION_1 = {
     u'taskDefinitionArn': TASK_DEFINITION_ARN_1,
+    u'runtimePlatform': deepcopy(TASK_DEFINITION_RUNTIME_PLATFORM_1),
     u'family': TASK_DEFINITION_FAMILY_1,
     u'revision': TASK_DEFINITION_REVISION_1,
     u'taskRoleArn': TASK_DEFINITION_ROLE_ARN_1,
@@ -661,6 +668,59 @@ def test_task_set_environment_exclusively(task_definition):
     assert {'name': 'new-var', 'value': 'new-value'} in task_definition.containers[1]['environment']
 
 
+def test_task_set_docker_labels(task_definition):
+    assert len(task_definition.containers[0]['dockerLabels']) == 3
+
+    task_definition.set_docker_labels(((u'webserver', u'foo', u'baz'), (u'webserver', u'some-name', u'some-value')))
+
+    assert len(task_definition.containers[0]['dockerLabels']) == 4
+
+    assert 'foo' in task_definition.containers[0]['dockerLabels']
+    assert 'lorem' in task_definition.containers[0]['dockerLabels']
+    assert 'some-name' in task_definition.containers[0]['dockerLabels']
+
+def test_task_set_docker_label_exclusively(task_definition):
+    assert len(task_definition.containers[0]['dockerLabels']) == 3
+    assert len(task_definition.containers[1]['dockerLabels']) == 0
+
+    task_definition.set_docker_labels(((u'application', u'foo', u'baz'), (u'application', u'new-var', u'new-value')), exclusive=True)
+
+    assert len(task_definition.containers[0]['dockerLabels']) == 0
+    assert len(task_definition.containers[1]['dockerLabels']) == 2
+
+    assert task_definition.containers[0]['dockerLabels'] == {}
+    assert 'foo' in task_definition.containers[1]['dockerLabels']
+    assert 'new-var' in task_definition.containers[1]['dockerLabels']
+
+def test_task_set_s3_env_file_multiple_files(task_definition):
+    assert len(task_definition.containers[0]['environmentFiles']) == 2
+
+    task_definition.set_s3_env_file(((u'webserver', u'arn:aws:s3:::mycompany.domain.com/app/.env'), (u'webserver', u'arn:aws:s3:::melted.cheese.com/grilled/.env'), (u'proxyserver', u'arn:ars:s3:::pizza/dev/.env')))
+
+    assert len(task_definition.containers[0]['environmentFiles']) == 4
+
+    assert {'value': 'arn:aws:s3:::mycompany.domain.com/app/.env', 'type': 's3'} in task_definition.containers[0]['environmentFiles']
+    assert {'value': 'arn:aws:s3:::myS3bucket/myApp/.env', 'type': 's3'} in task_definition.containers[0]['environmentFiles']
+    assert {'value': 'arn:aws:s3:::coolBuckets/dev/.env', 'type': 's3'} in task_definition.containers[0]['environmentFiles']
+    assert {'value': 'arn:aws:s3:::melted.cheese.com/grilled/.env', 'type': 's3'} in task_definition.containers[0]['environmentFiles']
+
+def test_task_set_s3_env_file_single_file(task_definition):
+    assert len(task_definition.containers[0]['environmentFiles']) == 2
+
+    task_definition.set_s3_env_file(((u'webserver', u'arn:aws:s3:::mycompany.domain.com/app/.env')))
+
+    assert len(task_definition.containers[0]['environmentFiles']) == 3
+    # assert {'value': 'arn:aws:s3:::mycompany.domain.com/app/.env', 'type': 's3'} in task_definition.containers[0]['environmentFiles']
+
+def test_task_set_s3_env_file_exclusively(task_definition):
+    assert len(task_definition.containers[0]['environmentFiles']) == 2
+
+    task_definition.set_s3_env_file((u'webserver', u'arn:aws:s3:::mycompany.domain.com/app/.env'), exclusive=True)
+
+    assert len(task_definition.containers[0]['environmentFiles']) == 1
+
+    assert {'value': 'arn:aws:s3:::mycompany.domain.com/app/.env', 'type': 's3'} in task_definition.containers[0]['environmentFiles']
+
 def test_task_set_secrets_exclusively(task_definition):
     assert len(task_definition.containers[0]['secrets']) == 2
 
@@ -854,7 +914,7 @@ class TestSetHealthChecks:
         for container in task_definition.containers:
             if container[u'name'] == u'webserver':
                 assert container[u'healthCheck'] == {
-                    u'command': u'curl -f http://webserver/alive/',
+                    u'command': [u'CMD-SHELL', u'curl -f http://webserver/alive/'],
                     u'interval': 30,
                     u'timeout': 5,
                     u'retries': 3,
@@ -862,7 +922,7 @@ class TestSetHealthChecks:
                 }
             if container[u'name'] == u'application':
                 assert container[u'healthCheck'] == {
-                    u'command': u'curl -f http://application/alive/',
+                    u'command': [u'CMD-SHELL', u'curl -f http://application/alive/'],
                     u'interval': 60,
                     u'timeout': 10,
                     u'retries': 6,
@@ -890,6 +950,15 @@ def test_task_get_overrides_with_environment(task_definition):
     assert len(overrides) == 1
     assert overrides[0]['name'] == 'webserver'
     assert dict(name='foo', value='baz') in overrides[0]['environment']
+
+
+def test_task_get_overrides_with_docker_labels(task_definition):
+    task_definition.set_docker_labels((('webserver', 'foo', 'baz'),))
+    overrides = task_definition.get_overrides()
+    assert len(overrides) == 1
+    assert overrides[0]['name'] == 'webserver'
+    #assert 'foo' in overrides[0]['dockerLabels']
+    assert overrides[0]['dockerLabels']['foo'] == 'baz'
 
 
 def test_task_get_overrides_with_secrets(task_definition):
@@ -936,6 +1005,13 @@ def test_task_get_overrides_environment(task_definition):
     assert isinstance(environment, list)
     assert len(environment) == 1
     assert environment[0] == dict(name='foo', value='bar')
+
+
+def test_task_get_overrides_docker_labels(task_definition):
+    dockerlabels = task_definition.get_overrides_docker_labels(dict(foo='bar'))
+    assert isinstance(dockerlabels, dict)
+    assert len(dockerlabels) == 1
+    assert dockerlabels['foo'] == 'bar'
 
 
 def test_task_get_overrides_secrets(task_definition):
@@ -1006,6 +1082,7 @@ def test_client_register_task_definition(client):
     volumes = [{u'foo': u'bar'}]
     role_arn = 'arn:test:role'
     execution_role_arn = 'arn:test:role'
+    runtime_platform = {u'cpuArchitecture': u'X86_64', u'operatingSystemFamily': u'LINUX'}
     task_definition = EcsTaskDefinition(
         containerDefinitions=containers,
         volumes=volumes,
@@ -1013,6 +1090,7 @@ def test_client_register_task_definition(client):
         revision=1,
         taskRoleArn=role_arn,
         executionRoleArn=execution_role_arn,
+        runtimePlatform=runtime_platform,
         tags={
             'Name': 'test_client_register_task_definition'
         },
@@ -1028,6 +1106,7 @@ def test_client_register_task_definition(client):
         volumes=task_definition.volumes,
         role_arn=task_definition.role_arn,
         execution_role_arn=execution_role_arn,
+        runtime_platform=task_definition.runtime_platform,
         tags=task_definition.tags,
         additional_properties=task_definition.additional_properties
     )
@@ -1038,6 +1117,7 @@ def test_client_register_task_definition(client):
         volumes=volumes,
         taskRoleArn=role_arn,
         executionRoleArn=execution_role_arn,
+        runtimePlatform=runtime_platform,
         tags=task_definition.tags,
         unkownProperty='foobar'
     )
@@ -1048,6 +1128,7 @@ def test_client_register_task_definition_without_tags(client):
     volumes = [{u'foo': u'bar'}]
     role_arn = 'arn:test:role'
     execution_role_arn = 'arn:test:role'
+    runtime_platform = {u'cpuArchitecture': u'X86_64', u'operatingSystemFamily': u'LINUX'}
     task_definition = EcsTaskDefinition(
         containerDefinitions=containers,
         volumes=volumes,
@@ -1055,6 +1136,7 @@ def test_client_register_task_definition_without_tags(client):
         revision=1,
         taskRoleArn=role_arn,
         executionRoleArn=execution_role_arn,
+        runtimePlatform=runtime_platform,
         tags={},
         status='active',
         taskDefinitionArn='arn:task',
@@ -1068,6 +1150,7 @@ def test_client_register_task_definition_without_tags(client):
         volumes=task_definition.volumes,
         role_arn=task_definition.role_arn,
         execution_role_arn=execution_role_arn,
+        runtime_platform=task_definition.runtime_platform,
         tags=task_definition.tags,
         additional_properties=task_definition.additional_properties
     )
@@ -1078,6 +1161,7 @@ def test_client_register_task_definition_without_tags(client):
         volumes=volumes,
         taskRoleArn=role_arn,
         executionRoleArn=execution_role_arn,
+        runtimePlatform=runtime_platform,
         unkownProperty='foobar'
     )
 
@@ -1193,6 +1277,7 @@ def test_update_task_definition(client, task_definition):
         volumes=task_definition.volumes,
         role_arn=task_definition.role_arn,
         execution_role_arn=task_definition.execution_role_arn,
+        runtime_platform=task_definition.runtime_platform,
         tags=task_definition.tags,
         additional_properties={
             u'networkMode': u'host',
@@ -1510,7 +1595,7 @@ class EcsTestClient(object):
         return deepcopy(RESPONSE_DESCRIBE_TASKS)
 
     def register_task_definition(self, family, containers, volumes, role_arn,
-                                 execution_role_arn, tags, additional_properties):
+                                 execution_role_arn, runtime_platform, tags, additional_properties):
         if not self.access_key_id or not self.secret_access_key:
             raise EcsConnectionError(u'Unable to locate credentials. Configure credentials by running "aws configure".')
         return deepcopy(RESPONSE_TASK_DEFINITION_2)

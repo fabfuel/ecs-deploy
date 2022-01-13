@@ -101,7 +101,8 @@ class EcsClient(object):
         )
 
     def register_task_definition(self, family, containers, volumes, role_arn,
-                                 execution_role_arn, tags, additional_properties):
+                                 execution_role_arn, runtime_platform, tags,
+                                 additional_properties):
         if tags:
             additional_properties['tags'] = tags
 
@@ -111,6 +112,7 @@ class EcsClient(object):
             volumes=volumes,
             taskRoleArn=role_arn,
             executionRoleArn=execution_role_arn,
+            runtimePlatform=runtime_platform,
             **additional_properties
         )
 
@@ -294,7 +296,7 @@ class EcsService(dict):
 
 class EcsTaskDefinition(object):
     def __init__(self, containerDefinitions, volumes, family, revision,
-                 status, taskDefinitionArn, requiresAttributes=None,
+                 status, taskDefinitionArn, runtimePlatform=None, requiresAttributes=None,
                  taskRoleArn=None, executionRoleArn=None, compatibilities=None,
                  tags=None, registeredAt=None, deregisteredAt=None, registeredBy=None, **kwargs):
 
@@ -308,6 +310,7 @@ class EcsTaskDefinition(object):
         self.requires_attributes = requiresAttributes or {}
         self.role_arn = taskRoleArn or u''
         self.execution_role_arn = executionRoleArn or u''
+        self.runtime_platform = runtimePlatform or {}
         self.tags = tags
         self.additional_properties = kwargs
         self._diff = []
@@ -356,6 +359,12 @@ class EcsTaskDefinition(object):
             containers_b[container]['secrets'] = {e['name']: e['valueFrom'] for e in
                                                   containers_b[container].get('secrets', {})}
 
+        for container in containers_a:
+            containers_a[container]['dockerLabels'] = containers_a[container].get('dockerLabels', {}).copy()
+
+        for container in containers_b:
+            containers_b[container]['dockerLabels'] = containers_b[container].get('dockerLabels', {}).copy()
+
         composite_a = {
             'containers': containers_a,
             'volumes': self.volumes,
@@ -391,6 +400,8 @@ class EcsTaskDefinition(object):
                 override['environment'] = self.get_overrides_env(diff.value)
             elif diff.field == 'secrets':
                 override['secrets'] = self.get_overrides_secrets(diff.value)
+            elif diff.field == 'dockerLabels':
+                override['dockerLabels'] = self.get_overrides_docker_labels(diff.value)
         return overrides
 
     @staticmethod
@@ -417,6 +428,10 @@ class EcsTaskDefinition(object):
     @staticmethod
     def get_overrides_secrets(secrets):
         return [{"name": s, "valueFrom": secrets[s]} for s in secrets]
+
+    @staticmethod
+    def get_overrides_docker_labels(dockerlabels):
+        return dockerlabels.copy()
 
     def set_images(self, tag=None, **images):
         self.validate_container_options(**images)
@@ -460,7 +475,7 @@ class EcsTaskDefinition(object):
     def set_health_checks(self, health_checks_list):
         health_checks = defaultdict(dict)
         for health_check in health_checks_list:
-            health_checks[health_check[0]]["command"] = health_check[1]
+            health_checks[health_check[0]]["command"] = ['CMD-SHELL', health_check[1]]
             health_checks[health_check[0]]["interval"] = health_check[2]
             health_checks[health_check[0]]["timeout"] = health_check[3]
             health_checks[health_check[0]]["retries"] = health_check[4]
@@ -479,6 +494,20 @@ class EcsTaskDefinition(object):
                 self._diff.append(diff)
                 container[u'healthCheck'] = new_health_checks
 
+    def set_runtime_platform(self, runtime_platform):
+        if runtime_platform:
+            new_runtime_platform = {}
+            new_runtime_platform[u'cpuArchitecture'] = runtime_platform[0]
+            new_runtime_platform[u'operatingSystemFamily'] = runtime_platform[1]
+            diff = EcsTaskDefinitionDiff(
+                container=None,
+                field=u'runtimePlatform',
+                value=new_runtime_platform,
+                old_value=self.runtime_platform
+            )
+            self.runtime_platform = new_runtime_platform
+            self._diff.append(diff)
+
     def set_cpu(self, **cpu):
         self.validate_container_options(**cpu)
         for container in self.containers:
@@ -493,7 +522,7 @@ class EcsTaskDefinition(object):
 
                 self._diff.append(diff)
                 container[u'cpu'] = new_cpu
-    
+
     def set_memory(self, **memory):
         self.validate_container_options(**memory)
         for container in self.containers:
@@ -507,7 +536,7 @@ class EcsTaskDefinition(object):
                 )
                 self._diff.append(diff)
                 container[u'memory'] = new_memory
-    
+
     def set_memoryreservation(self, **memoryreservation):
         self.validate_container_options(**memoryreservation)
         for container in self.containers:
@@ -528,7 +557,7 @@ class EcsTaskDefinition(object):
             if container[u'name'] in privileged:
                 new_privileged = bool(privileged[container[u'name']])
                 old_privileged = container.get(u'privileged')
-                if not new_privileged == old_privileged: 
+                if not new_privileged == old_privileged:
                     diff = EcsTaskDefinitionDiff(
                         container=container[u'name'],
                         field=u'privileged',
@@ -544,7 +573,7 @@ class EcsTaskDefinition(object):
             if container[u'name'] in essential:
                 new_essential = bool(essential[container[u'name']])
                 old_essential = container.get(u'essential')
-                if not new_essential == old_essential: 
+                if not new_essential == old_essential:
                     diff = EcsTaskDefinitionDiff(
                         container=container[u'name'],
                         field=u'essential',
@@ -623,6 +652,98 @@ class EcsTaskDefinition(object):
             {"name": e, "value": merged[e]} for e in merged
         ]
 
+    def set_docker_labels(self, dockerlabel_list, exclusive=False):
+        dockerlabels = defaultdict(dict)
+        for label in dockerlabel_list:
+            dockerlabels[label[0]][label[1]] = label[2]
+        self.validate_container_options(**dockerlabels)
+        for container in self.containers:
+            if container[u'name'] in dockerlabels:
+                self.apply_docker_labels(
+                    container=container,
+                    new_dockerlabels=dockerlabels[container[u'name']],
+                    exclusive=exclusive,
+                )
+            elif exclusive is True:
+                self.apply_docker_labels(
+                    container=container,
+                    new_dockerlabels={},
+                    exclusive=exclusive,
+                )
+
+    def apply_docker_labels(self, container, new_dockerlabels, exclusive=False):
+        old_dockerlabels = container.get('dockerLabels', {})
+
+        if exclusive is True:
+            merged = new_dockerlabels
+        else:
+            merged = old_dockerlabels.copy()
+            merged.update(new_dockerlabels)
+
+        if old_dockerlabels == merged:
+            return
+
+        diff = EcsTaskDefinitionDiff(
+            container=container[u'name'],
+            field=u'dockerLabels',
+            value=merged,
+            old_value=old_dockerlabels
+        )
+        self._diff.append(diff)
+
+        container[u'dockerLabels'] = merged.copy()
+    def set_s3_env_file(self, s3_env_files, exclusive=False):
+        # environmentFiles in task definition https://docs.aws.amazon.com/AmazonECS/latest/developerguide/taskdef-envfiles.html
+        s3_files_by_container = defaultdict(list)
+        if s3_env_files:
+            multiple_s3_env_files = any(isinstance(i, tuple) for i in s3_env_files)
+            if not multiple_s3_env_files:
+                s3_files_by_container[s3_env_files[0]] = {s3_env_files[1]}
+            if multiple_s3_env_files:
+                for s3_file in s3_env_files:
+                    if s3_files_by_container[s3_file[0]]:
+                        s3_files_by_container[s3_file[0]].add(s3_file[1])
+                        break
+                    s3_files_by_container[s3_file[0]] = {s3_file[1]}
+
+        for container in self.containers:
+            if container[u'name'] in s3_files_by_container:
+                self.apply_s3_env_file(
+                    container=container,
+                    new_s3_env_file=s3_files_by_container[container[u'name']],
+                    exclusive=exclusive
+                )
+            elif exclusive is True:
+                self.apply_s3_env_file(
+                    container=container,
+                    new_s3_env_file={},
+                    exclusive=exclusive
+                )
+
+    def apply_s3_env_file(self, container, new_s3_env_file, exclusive=False):
+        s3_env_file = container.get('environmentFiles', {})
+        old_s3_env_file = {env_file['value'] for env_file in s3_env_file}
+
+        if exclusive is True:
+            merged = new_s3_env_file
+        else:
+            merged = old_s3_env_file.copy()
+            merged.update(new_s3_env_file)
+
+        if old_s3_env_file == merged:
+            return
+
+        diff = EcsTaskDefinitionDiff(
+            container=container[u'name'],
+            field=u'environmentFiles',
+            value=merged,
+            old_value=old_s3_env_file
+        )
+        self._diff.append(diff)
+        container[u'environmentFiles'] = [
+            {"value": e, "type": "s3"} for e in merged
+        ]
+
     def set_secrets(self, secrets_list, exclusive=False):
         secrets = defaultdict(dict)
 
@@ -668,7 +789,7 @@ class EcsTaskDefinition(object):
         container[u'secrets'] = [
             {"name": s, "valueFrom": merged[s]} for s in merged
         ]
-    
+
     def set_system_controls(self, system_controls_list, exclusive=False):
         system_controls = defaultdict(list)
         for system_control in system_controls_list:
@@ -677,7 +798,7 @@ class EcsTaskDefinition(object):
             mapping["namespace"] = system_control[1]
             mapping["value"] = system_control[2]
             system_controls[system_control[0]].append(mapping)
-            
+
         self.validate_container_options(**system_controls)
         for container in self.containers:
             if container[u'name'] in system_controls:
@@ -742,7 +863,7 @@ class EcsTaskDefinition(object):
             mapping["softLimit"] = int(ulimit[2])
             mapping["hardLimit"] = int(ulimit[3])
             ulimits[ulimit[0]].append(mapping)
-            
+
         self.validate_container_options(**ulimits)
         for container in self.containers:
             if container[u'name'] in ulimits:
@@ -1023,7 +1144,7 @@ class EcsTaskDefinition(object):
 
             containers_not_found = list(containers_ - set(self.container_names))
             # Remaining containers could not be found.
-            for container in containers_not_found: 
+            for container in containers_not_found:
                 logger.warning("Cannot remove container '{container}', not in the task definition.".format(container=container))
 
             if containers:
@@ -1061,6 +1182,12 @@ class EcsTaskDefinitionDiff(object):
                 self.value,
                 self.old_value,
             ))
+        elif self.field == u'dockerLabels':
+            return '\n'.join(self._get_docker_label_diffs(
+                self.container,
+                self.value,
+                self.old_value,
+            ))
         elif self.container:
             return u'Changed %s of container "%s" to: "%s" (was: "%s")' % (
                 self.field,
@@ -1087,6 +1214,22 @@ class EcsTaskDefinitionDiff(object):
                 diffs.append(message)
         for old_name in old_env.keys():
             if old_name not in env.keys():
+                message = msg_removed % (old_name, container)
+                diffs.append(message)
+        return diffs
+
+    @staticmethod
+    def _get_docker_label_diffs(container, dockerlabels, old_dockerlabels):
+        msg = u'Changed dockerLabel "%s" of container "%s" to: "%s"'
+        msg_removed = u'Removed dockerLabel "%s" of container "%s"'
+        diffs = []
+        for name, value in dockerlabels.items():
+            old_value = old_dockerlabels.get(name)
+            if value != old_value or value and not old_value:
+                message = msg % (name, container, value)
+                diffs.append(message)
+        for old_name in old_dockerlabels.keys():
+            if old_name not in dockerlabels.keys():
                 message = msg_removed % (old_name, container)
                 diffs.append(message)
         return diffs
@@ -1163,6 +1306,7 @@ class EcsAction(object):
             volumes=task_definition.volumes,
             role_arn=task_definition.role_arn,
             execution_role_arn=task_definition.execution_role_arn,
+            runtime_platform=task_definition.runtime_platform,
             tags=task_definition.tags,
             additional_properties=task_definition.additional_properties
         )
