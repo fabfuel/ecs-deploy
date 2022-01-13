@@ -79,6 +79,28 @@ authentication credentials. Please read the boto3 documentation for more details
 Alternatively you can pass the AWS credentials (via `--access-key-id` and `--secret-access-key`) or the AWS
 configuration profile (via `--profile`) as options when you run `ecs`.
 
+AWS IAM
+-------
+
+If you are using **ecs-deploy** with a role or user account that does not have full AWS access, such as in a deploy script, you will
+need to use or create an IAM policy with the correct set of permissions in order for your deploys to succeed. One option is to use the 
+pre-specified ``AmazonECS_FullAccess`` (https://docs.aws.amazon.com/AmazonECS/latest/userguide/security-iam-awsmanpol.html#security-iam-awsmanpol-AmazonECS_FullAccess) policy. If you would prefer to create a role with a more minimal set of permissions,
+the following are required:
+
+* ``ecs:ListServices``
+* ``ecs:UpdateService``
+* ``ecs:ListTasks``
+* ``ecs:RegisterTaskDefinition``
+* ``ecs:DescribeServices``
+* ``ecs:DescribeTasks``
+* ``ecs:ListTaskDefinitions``
+* ``ecs:DescribeTaskDefinition``
+* ``ecs:DeregisterTaskDefinition``
+ 
+If using custom IAM permissions, you will also need to set the ``iam:PassRole`` policy for each IAM role. See here https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_passrole.html for more information.
+
+Note that not every permission is required for every action you can take in **ecs-deploy**. You may be able to adjust permissions based on your specific needs.
+
 Actions
 -------
 Currently the following actions are supported:

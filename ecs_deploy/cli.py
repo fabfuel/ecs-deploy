@@ -48,6 +48,7 @@ def get_client(access_key_id, secret_access_key, region, profile):
 @click.option('-l', '--log', type=(str, str, str, str), multiple=True, help='Adds or changes a log configuration in the container description (Not available for Fargate): <container> <log driver> <option name> <option value>')
 @click.option('-r', '--role', type=str, help='Sets the task\'s role ARN: <task role ARN>')
 @click.option('-x', '--execution-role', type=str, help='Sets the execution\'s role ARN: <execution role ARN>')
+@click.option('--runtime-platform', type=str, nargs=2, help='Overwrites runtimePlatform: <cpuArchitecture> <operatingSystemFamily>')
 @click.option('--task', type=str, help='Task definition to be deployed. Can be a task ARN or a task family with optional revision')
 @click.option('--region', required=False, help='AWS region (e.g. eu-central-1)')
 @click.option('--access-key-id', required=False, help='AWS access key id')
@@ -78,7 +79,7 @@ def get_client(access_key_id, secret_access_key, region, profile):
 @click.option('--volume', type=(str, str), multiple=True, required=False, help='Set volume mapping from host to container in the task definition.')
 @click.option('--add-container', type=str, multiple=True, required=False, help='Add a placeholder container in the task definition.')
 @click.option('--remove-container', type=str, multiple=True, required=False, help='Remove a container from the task definition.')
-def deploy(cluster, service, tag, image, command, health_check, cpu, memory, memoryreservation, privileged, essential, env, env_file, s3_env_file, secret, ulimit, system_control, port, mount, log, role, execution_role, task, region, access_key_id, secret_access_key, profile, timeout, newrelic_apikey, newrelic_appid, newrelic_region, newrelic_revision, comment, user, ignore_warnings, diff, deregister, rollback, exclusive_env, exclusive_secrets, exclusive_s3_env_file, sleep_time, exclusive_ulimits, exclusive_system_controls, exclusive_ports, exclusive_mounts, volume, add_container, remove_container, slack_url, docker_label, exclusive_docker_labels, slack_service_match='.*'):
+def deploy(cluster, service, tag, image, command, health_check, cpu, memory, memoryreservation, privileged, essential, env, env_file, s3_env_file, secret, ulimit, system_control, port, mount, log, role, execution_role, runtime_platform, task, region, access_key_id, secret_access_key, profile, timeout, newrelic_apikey, newrelic_appid, newrelic_region, newrelic_revision, comment, user, ignore_warnings, diff, deregister, rollback, exclusive_env, exclusive_secrets, exclusive_s3_env_file, sleep_time, exclusive_ulimits, exclusive_system_controls, exclusive_ports, exclusive_mounts, volume, add_container, remove_container, slack_url, docker_label, exclusive_docker_labels, slack_service_match='.*'):
     """
     Redeploy or modify a service.
 
@@ -90,7 +91,6 @@ def deploy(cluster, service, tag, image, command, health_check, cpu, memory, mem
     It will just be duplicated, so that all container images will be pulled
     and redeployed.
     """
-
     try:
         client = get_client(access_key_id, secret_access_key, region, profile)
         deployment = DeployAction(client, cluster, service)
@@ -118,6 +118,7 @@ def deploy(cluster, service, tag, image, command, health_check, cpu, memory, mem
         td.set_log_configurations(log)
         td.set_role_arn(role)
         td.set_execution_role_arn(execution_role)
+        td.set_runtime_platform(runtime_platform)
         td.set_volumes(volume)
 
         slack = SlackNotification(
@@ -289,6 +290,7 @@ def cron(cluster, task, rule, image, tag, command, cpu, memory, memoryreservatio
 @click.option('-s', '--secret', type=(str, str, str), multiple=True, help='Adds or changes a secret environment variable from the AWS Parameter Store (Not available for Fargate): <container> <name> <parameter name>')
 @click.option('-d', '--docker-label', type=(str, str, str), multiple=True, help='Adds or changes a docker label: <container> <name> <value>')
 @click.option('-r', '--role', type=str, help='Sets the task\'s role ARN: <task role ARN>')
+@click.option('--runtime-platform', type=str, nargs=2, help='Overwrites runtimePlatform: <cpuArchitecture> <operatingSystemFamily>')
 @click.option('--region', help='AWS region (e.g. eu-central-1)')
 @click.option('--access-key-id', help='AWS access key id')
 @click.option('--secret-access-key', help='AWS secret access key')
@@ -299,7 +301,7 @@ def cron(cluster, task, rule, image, tag, command, cpu, memory, memoryreservatio
 @click.option('--exclusive-docker-labels', is_flag=True, default=False, help='Set the given docker labels exclusively and remove all other pre-existing docker-labels from all containers')
 @click.option('--exclusive-s3-env-file', is_flag=True, default=False, help='Set the given s3 env files exclusively and remove all other pre-existing s3 env files from all containers')
 @click.option('--deregister/--no-deregister', default=True, help='Deregister or keep the old task definition (default: --deregister)')
-def update(task, image, tag, command, env, env_file, s3_env_file, secret, role, region, access_key_id, secret_access_key, profile, diff, exclusive_env, exclusive_s3_env_file, exclusive_secrets, deregister, docker_label, exclusive_docker_labels):
+def update(task, image, tag, command, env, env_file, s3_env_file, secret, role, region, access_key_id, secret_access_key, profile, diff, exclusive_env, exclusive_s3_env_file, exclusive_secrets, runtime_platform, deregister, docker_label, exclusive_docker_labels):
     """
     Update a task definition.
 
@@ -320,6 +322,7 @@ def update(task, image, tag, command, env, env_file, s3_env_file, secret, role, 
         td.set_secrets(secret, exclusive_secrets)
         td.set_s3_env_file(s3_env_file, exclusive_s3_env_file)
         td.set_role_arn(role)
+        td.set_runtime_platform(runtime_platform)
 
         if diff:
             print_diff(td)
