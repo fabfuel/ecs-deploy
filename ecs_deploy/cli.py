@@ -84,7 +84,7 @@ def deploy(cluster, service, tag, image, command, health_check, cpu, memory, mem
     Redeploy or modify a service.
 
     \b
-    CLUSTER is the name of your cluster (e.g. 'my-custer') within ECS.
+    CLUSTER is the name of your cluster (e.g. 'my-cluster') within ECS.
     SERVICE is the name of your service (e.g. 'my-app') within ECS.
 
     When not giving any other options, the task definition will not be changed.
@@ -218,7 +218,7 @@ def cron(cluster, task, rule, image, tag, command, cpu, memory, memoryreservatio
     Update a scheduled task.
 
     \b
-    CLUSTER is the name of your cluster (e.g. 'my-custer') within ECS.
+    CLUSTER is the name of your cluster (e.g. 'my-cluster') within ECS.
     TASK is the name of your task definition (e.g. 'my-task') within ECS.
     RULE is the name of the rule to use the new task definition.
     """
@@ -353,7 +353,7 @@ def scale(cluster, service, desired_count, access_key_id, secret_access_key, reg
     Scale a service up or down.
 
     \b
-    CLUSTER is the name of your cluster (e.g. 'my-custer') within ECS.
+    CLUSTER is the name of your cluster (e.g. 'my-cluster') within ECS.
     SERVICE is the name of your service (e.g. 'my-app') within ECS.
     DESIRED_COUNT is the number of tasks your service should run.
     """
@@ -409,7 +409,7 @@ def run(cluster, task, count, command, env, env_file, s3_env_file, secret, launc
     Run a one-off task.
 
     \b
-    CLUSTER is the name of your cluster (e.g. 'my-custer') within ECS.
+    CLUSTER is the name of your cluster (e.g. 'my-cluster') within ECS.
     TASK is the name of your task definition (e.g. 'my-task') within ECS.
     COUNT is the number of tasks your service should run.
     """
