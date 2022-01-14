@@ -495,6 +495,7 @@ def diff(task, revision_a, revision_b, region, access_key_id, secret_access_key,
 def wait_for_finish(action, timeout, title, success_message, failure_message,
                     ignore_warnings, sleep_time=1):
     click.secho(title)
+    start_timestamp = datetime.now()
     waiting_timeout = datetime.now() + timedelta(seconds=timeout)
     service = action.get_service()
     inspected_until = None
@@ -527,7 +528,8 @@ def wait_for_finish(action, timeout, title, success_message, failure_message,
         timeout=waiting
     )
 
-    click.secho('\n%s\n' % success_message, fg='green')
+    click.secho('\n%s' % success_message, fg='green')
+    click.secho('Duration: %s sec\n' % (datetime.now() - start_timestamp).seconds)
 
 
 def deploy_task_definition(deployment, task_definition, title, success_message,
