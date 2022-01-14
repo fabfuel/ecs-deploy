@@ -494,7 +494,7 @@ def diff(task, revision_a, revision_b, region, access_key_id, secret_access_key,
 
 def wait_for_finish(action, timeout, title, success_message, failure_message,
                     ignore_warnings, sleep_time=1):
-    click.secho(title, nl=False)
+    click.secho(title)
     waiting_timeout = datetime.now() + timedelta(seconds=timeout)
     service = action.get_service()
     inspected_until = None
