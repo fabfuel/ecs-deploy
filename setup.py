@@ -42,14 +42,6 @@ setup(
             'ecs = ecs_deploy.cli:ecs',
         ],
     },
-    tests_require=[
-        'mock',
-        'pytest',
-        'pytest-flake8',
-        'pytest-mock',
-        'freezegun',
-        'coverage'
-    ],
     classifiers=[
         'Environment :: Console',
         'Intended Audience :: Developers',
