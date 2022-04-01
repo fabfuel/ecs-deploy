@@ -81,6 +81,7 @@ class EcsClient(object):
 
     def register_task_definition(self, family, containers, volumes, role_arn,
                                  execution_role_arn, runtime_platform, tags,
+                                 cpu, memory,
                                  additional_properties):
         if tags:
             additional_properties['tags'] = tags
@@ -92,6 +93,8 @@ class EcsClient(object):
             taskRoleArn=role_arn,
             executionRoleArn=execution_role_arn,
             runtimePlatform=runtime_platform,
+            cpu=cpu,
+            memory=memory,
             **additional_properties
         )
 
@@ -275,7 +278,7 @@ class EcsService(dict):
 
 class EcsTaskDefinition(object):
     def __init__(self, containerDefinitions, volumes, family, revision,
-                 status, taskDefinitionArn, runtimePlatform=None, requiresAttributes=None,
+                 status, taskDefinitionArn, runtimePlatform=None, cpu=None, memory=None, requiresAttributes=None,
                  taskRoleArn=None, executionRoleArn=None, compatibilities=None,
                  tags=None, registeredAt=None, deregisteredAt=None, registeredBy=None, **kwargs):
 
@@ -290,6 +293,8 @@ class EcsTaskDefinition(object):
         self.role_arn = taskRoleArn or u''
         self.execution_role_arn = executionRoleArn or u''
         self.runtime_platform = runtimePlatform or {}
+        self.cpu = cpu
+        self.memory = memory
         self.tags = tags
         self.additional_properties = kwargs
         self._diff = []
@@ -501,6 +506,30 @@ class EcsTaskDefinition(object):
 
                 self._diff.append(diff)
                 container[u'cpu'] = new_cpu
+
+    def set_task_cpu(self, task_cpu):
+        if task_cpu:
+            new_cpu = str(task_cpu)
+            diff = EcsTaskDefinitionDiff(
+                container=None,
+                field=u'cpu',
+                value=new_cpu,
+                old_value=self.cpu
+            )
+            self._diff.append(diff)
+            self.cpu = new_cpu
+
+    def set_task_memory(self, task_memory):
+        if task_memory:
+            new_memory = str(task_memory)
+            diff = EcsTaskDefinitionDiff(
+                container=None,
+                field=u'memory',
+                value=new_memory,
+                old_value=self.memory
+            )
+            self._diff.append(diff)
+            self.memory = new_memory
 
     def set_memory(self, **memory):
         self.validate_container_options(**memory)
@@ -1287,7 +1316,9 @@ class EcsAction(object):
             execution_role_arn=task_definition.execution_role_arn,
             runtime_platform=task_definition.runtime_platform,
             tags=task_definition.tags,
-            additional_properties=task_definition.additional_properties
+            additional_properties=task_definition.additional_properties,
+            cpu=task_definition.cpu,
+            memory=task_definition.memory
         )
         new_task_definition = EcsTaskDefinition(**response[u'taskDefinition'])
         return new_task_definition
