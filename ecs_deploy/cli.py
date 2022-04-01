@@ -34,6 +34,8 @@ def get_client(access_key_id, secret_access_key, region, profile):
 @click.option('--cpu', type=(str, int), multiple=True, help='Overwrites the cpu value for a container: <container> <cpu>')
 @click.option('--memory', type=(str, int), multiple=True, help='Overwrites the memory value for a container: <container> <memory>')
 @click.option('--memoryreservation', type=(str, int), multiple=True, help='Overwrites the memory reservation value for a container: <container> <memoryreservation>')
+@click.option('--task-cpu', type=int, help='Overwrites the cpu value for a task: <cpu>')
+@click.option('--task-memory', type=int, help='Overwrites the memory value for a task: <memory>')
 @click.option('--privileged', type=(str, bool), multiple=True, help='Overwrites the privileged value for a container: <container> <privileged>')
 @click.option('--essential', type=(str, bool), multiple=True, help='Overwrites the essential value for a container: <container> <essential>')
 @click.option('-e', '--env', type=(str, str, str), multiple=True, help='Adds or changes an environment variable: <container> <name> <value>')
@@ -79,7 +81,7 @@ def get_client(access_key_id, secret_access_key, region, profile):
 @click.option('--volume', type=(str, str), multiple=True, required=False, help='Set volume mapping from host to container in the task definition.')
 @click.option('--add-container', type=str, multiple=True, required=False, help='Add a placeholder container in the task definition.')
 @click.option('--remove-container', type=str, multiple=True, required=False, help='Remove a container from the task definition.')
-def deploy(cluster, service, tag, image, command, health_check, cpu, memory, memoryreservation, privileged, essential, env, env_file, s3_env_file, secret, ulimit, system_control, port, mount, log, role, execution_role, runtime_platform, task, region, access_key_id, secret_access_key, profile, timeout, newrelic_apikey, newrelic_appid, newrelic_region, newrelic_revision, comment, user, ignore_warnings, diff, deregister, rollback, exclusive_env, exclusive_secrets, exclusive_s3_env_file, sleep_time, exclusive_ulimits, exclusive_system_controls, exclusive_ports, exclusive_mounts, volume, add_container, remove_container, slack_url, docker_label, exclusive_docker_labels, slack_service_match='.*'):
+def deploy(cluster, service, tag, image, command, health_check, cpu, memory, memoryreservation, task_cpu, task_memory, privileged, essential, env, env_file, s3_env_file, secret, ulimit, system_control, port, mount, log, role, execution_role, runtime_platform, task, region, access_key_id, secret_access_key, profile, timeout, newrelic_apikey, newrelic_appid, newrelic_region, newrelic_revision, comment, user, ignore_warnings, diff, deregister, rollback, exclusive_env, exclusive_secrets, exclusive_s3_env_file, sleep_time, exclusive_ulimits, exclusive_system_controls, exclusive_ports, exclusive_mounts, volume, add_container, remove_container, slack_url, docker_label, exclusive_docker_labels, slack_service_match='.*'):
     """
     Redeploy or modify a service.
 
@@ -105,6 +107,8 @@ def deploy(cluster, service, tag, image, command, health_check, cpu, memory, mem
         td.set_cpu(**{key: value for (key, value) in cpu})
         td.set_memory(**{key: value for (key, value) in memory})
         td.set_memoryreservation(**{key: value for (key, value) in memoryreservation})
+        td.set_task_cpu(task_cpu)
+        td.set_task_memory(task_memory)
         td.set_privileged(**{key: value for (key, value) in privileged})
         td.set_essential(**{key: value for (key, value) in essential})
         td.set_environment(env, exclusive_env, env_file)
@@ -176,6 +180,8 @@ def deploy(cluster, service, tag, image, command, health_check, cpu, memory, mem
 @click.option('--cpu', type=(str, int), multiple=True, help='Overwrites the cpu value for a container: <container> <cpu>')
 @click.option('--memory', type=(str, int), multiple=True, help='Overwrites the memory value for a container: <container> <memory>')
 @click.option('--memoryreservation', type=(str, int), multiple=True, help='Overwrites the memory reservation value for a container: <container> <memoryreservation>')
+@click.option('--task-cpu', type=int, help='Overwrites the cpu value for a task: <cpu>')
+@click.option('--task-memory', type=int, help='Overwrites the memory value for a task: <memory>')
 @click.option('--privileged', type=(str, bool), multiple=True, help='Overwrites the memory reservation value for a container: <container> <memoryreservation>')
 @click.option('-e', '--env', type=(str, str, str), multiple=True, help='Adds or changes an environment variable: <container> <name> <value>')
 @click.option('-s', '--secret', type=(str, str, str), multiple=True, help='Adds or changes a secret environment variable from the AWS Parameter Store (Not available for Fargate): <container> <name> <parameter name>')
@@ -213,7 +219,7 @@ def deploy(cluster, service, tag, image, command, health_check, cpu, memory, mem
 @click.option('--exclusive-ports', is_flag=True, default=False, help='Set the given port mappings exclusively and remove all other pre-existing port mappings from all containers')
 @click.option('--exclusive-mounts', is_flag=True, default=False, help='Set the given mount points exclusively and remove all other pre-existing mount points from all containers')
 @click.option('--volume', type=(str, str), multiple=True, required=False, help='Set volume mapping from host to container in the task definition.')
-def cron(cluster, task, rule, image, tag, command, cpu, memory, memoryreservation, privileged, env, env_file, s3_env_file, secret, ulimit, system_control, port, mount, log, role, execution_role, region, access_key_id, secret_access_key, newrelic_apikey, newrelic_appid, newrelic_region, newrelic_revision, comment, user, profile, diff, deregister, rollback, exclusive_env, exclusive_secrets, exclusive_s3_env_file, slack_url, slack_service_match, exclusive_ulimits, exclusive_system_controls, exclusive_ports, exclusive_mounts, volume, docker_label, exclusive_docker_labels):
+def cron(cluster, task, rule, image, tag, command, cpu, memory, memoryreservation, task_cpu, task_memory, privileged, env, env_file, s3_env_file, secret, ulimit, system_control, port, mount, log, role, execution_role, region, access_key_id, secret_access_key, newrelic_apikey, newrelic_appid, newrelic_region, newrelic_revision, comment, user, profile, diff, deregister, rollback, exclusive_env, exclusive_secrets, exclusive_s3_env_file, slack_url, slack_service_match, exclusive_ulimits, exclusive_system_controls, exclusive_ports, exclusive_mounts, volume, docker_label, exclusive_docker_labels):
     """
     Update a scheduled task.
 
@@ -234,6 +240,8 @@ def cron(cluster, task, rule, image, tag, command, cpu, memory, memoryreservatio
         td.set_cpu(**{key: value for (key, value) in cpu})
         td.set_memory(**{key: value for (key, value) in memory})
         td.set_memoryreservation(**{key: value for (key, value) in memoryreservation})
+        td.set_task_cpu(task_cpu)
+        td.set_task_memory(task_memory)
         td.set_privileged(**{key: value for (key, value) in privileged})
         td.set_environment(env, exclusive_env, env_file)
         td.set_docker_labels(docker_label, exclusive_docker_labels)
