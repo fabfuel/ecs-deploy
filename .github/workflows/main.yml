@@ -33,4 +33,4 @@ jobs:
           context: .
           file: ./Dockerfile
           push: true
-          tags: fabfuel/ecs-deplos:${{ github.ref_name }}
+          tags: fabfuel/ecs-deploy:${{ github.ref_name }}
