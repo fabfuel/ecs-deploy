@@ -33,4 +33,4 @@ jobs:
           context: .
           file: ./Dockerfile
           push: true
-          tags: ${{ secrets.DOCKER_HUB_USERNAME }}/ecs-deploy:$GITHUB_REF_NAME
+          tags: ${{ secrets.DOCKER_HUB_USERNAME }}/ecs-deploy:${{ env.GITHUB_REF_NAME }}
