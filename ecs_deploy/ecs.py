@@ -86,6 +86,12 @@ class EcsClient(object):
         if tags:
             additional_properties['tags'] = tags
 
+        if cpu:
+            additional_properties['cpu'] = cpu
+
+        if memory:
+            additional_properties['memory'] = memory
+
         return self.boto.register_task_definition(
             family=family,
             containerDefinitions=containers,
@@ -93,8 +99,6 @@ class EcsClient(object):
             taskRoleArn=role_arn,
             executionRoleArn=execution_role_arn,
             runtimePlatform=runtime_platform,
-            cpu=cpu,
-            memory=memory,
             **additional_properties
         )
 
