@@ -92,8 +92,8 @@ class EcsClient(object):
         if memory:
             additional_properties['memory'] = memory
 
-        if runtimePlatform:
-            additional_properties['runtimePlatform'] = runtimePlatform
+        if runtime_platform:
+            additional_properties['runtimePlatform'] = runtime_platform
 
         return self.boto.register_task_definition(
             family=family,
