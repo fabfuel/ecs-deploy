@@ -92,13 +92,15 @@ class EcsClient(object):
         if memory:
             additional_properties['memory'] = memory
 
+        if runtimePlatform:
+            additional_properties['runtimePlatform'] = runtimePlatform
+
         return self.boto.register_task_definition(
             family=family,
             containerDefinitions=containers,
             volumes=volumes,
             taskRoleArn=role_arn,
             executionRoleArn=execution_role_arn,
-            runtimePlatform=runtime_platform,
             **additional_properties
         )
 
