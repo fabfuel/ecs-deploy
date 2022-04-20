@@ -4,13 +4,10 @@ ECS Deploy
 .. image:: https://badge.fury.io/py/ecs-deploy.svg
     :target: https://badge.fury.io/py/ecs-deploy
 
-.. image:: https://travis-ci.com/fabfuel/ecs-deploy.svg?branch=develop
-    :target: https://travis-ci.com/github/fabfuel/ecs-deploy
+.. image:: https://github.com/fabfuel/ecs-deploy/actions/workflows/build.yml/badge.svg
+    :target: https://github.com/fabfuel/ecs-deploy/actions/workflows/build.yml
 
-.. image:: https://scrutinizer-ci.com/g/fabfuel/ecs-deploy/badges/coverage.png?b=develop
-    :target: https://scrutinizer-ci.com/g/fabfuel/ecs-deploy
-
-`ecs-deploy` simplifies deployments on Amazon ECS by providing a convinience CLI tool for complex actions, which are executed pretty often.
+`ecs-deploy` simplifies deployments on Amazon ECS by providing a convenience CLI tool for complex actions, which are executed pretty often.
 
 Key Features
 ------------
@@ -48,7 +45,7 @@ Update a task definition (without running or deploying)::
 Installation
 ------------
 
-The project is availably on PyPI. Simply run::
+The project is available on PyPI. Simply run::
 
     $ pip install ecs-deploy
 
@@ -78,6 +75,28 @@ authentication credentials. Please read the boto3 documentation for more details
 
 Alternatively you can pass the AWS credentials (via `--access-key-id` and `--secret-access-key`) or the AWS
 configuration profile (via `--profile`) as options when you run `ecs`.
+
+AWS IAM
+-------
+
+If you are using **ecs-deploy** with a role or user account that does not have full AWS access, such as in a deploy script, you will
+need to use or create an IAM policy with the correct set of permissions in order for your deploys to succeed. One option is to use the 
+pre-specified ``AmazonECS_FullAccess`` (https://docs.aws.amazon.com/AmazonECS/latest/userguide/security-iam-awsmanpol.html#security-iam-awsmanpol-AmazonECS_FullAccess) policy. If you would prefer to create a role with a more minimal set of permissions,
+the following are required:
+
+* ``ecs:ListServices``
+* ``ecs:UpdateService``
+* ``ecs:ListTasks``
+* ``ecs:RegisterTaskDefinition``
+* ``ecs:DescribeServices``
+* ``ecs:DescribeTasks``
+* ``ecs:ListTaskDefinitions``
+* ``ecs:DescribeTaskDefinition``
+* ``ecs:DeregisterTaskDefinition``
+ 
+If using custom IAM permissions, you will also need to set the ``iam:PassRole`` policy for each IAM role. See here https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_passrole.html for more information.
+
+Note that not every permission is required for every action you can take in **ecs-deploy**. You may be able to adjust permissions based on your specific needs.
 
 Actions
 -------
@@ -124,7 +143,7 @@ Deployment
 
 Simple Redeploy
 ===============
-To redeploy a service without any modifications, but pulling the most recent image versions, run the follwing command.
+To redeploy a service without any modifications, but pulling the most recent image versions, run the following command.
 This will duplicate the current task definition and cause the service to redeploy all running tasks.::
 
     $ ecs deploy my-cluster my-service
@@ -276,7 +295,7 @@ To change the command of a specific container, run the following command::
     $ ecs deploy my-cluster my-service --command webserver "nginx"
 
 This will modify the **webserver** container and change its command to "nginx". If you have 
-a command that requries arugments as well, then you can simply specify it like this as you would normally do:
+a command that requires arguments as well, then you can simply specify it like this as you would normally do:
 
     $ ecs deploy my-cluster my-service --command webserver "ngnix -c /etc/ngnix/ngnix.conf"
 
@@ -302,13 +321,15 @@ This will set the task role to "MySpecialEcsTaskRole".
 
 Set CPU and memory reservation
 ==============================
-- Set the `cpu` value for a task definition: :code:`--cpu <container_name> 0`.
-- Set the `memory` value (`hard limit`) for a task definition: :code:`--memory <container_name> 256`.
+- Set the `cpu` value for a task: :code:`--task-cpu 0`.
+- Set the `cpu` value for a task container: :code:`--cpu <container_name> 0`.
+- Set the `memory` value (`hard limit`) for a task: :code:`--task-memory 256`.
+- Set the `memory` value (`hard limit`) for a task container: :code:`--memory <container_name> 256`.
 - Set the `memoryreservation` value (`soft limit`) for a task definition: :code:`--memoryreservation <container_name> 256`.
 
 Set privileged or essential flags
 =================================
-- Set the `privliged` value for a task definition: :code:`--privileged <container_name> True|False`.
+- Set the `privileged` value for a task definition: :code:`--privileged <container_name> True|False`.
 - Set the `essential` value for a task definition: :code:`--essential <container_name> True|False`.
 
 Set logging configuration
@@ -355,7 +376,7 @@ Placeholder Container
 =====================
 - Add placeholder containers: :code:`--add-container <container_name>`.
 - To comply with the minimum requirements for a task definition, a placeholder container is set like this:
-    + The contaienr name is :code:`<container_name>`.
+    + The container name is :code:`<container_name>`.
     + The container image is :code:`PLACEHOLDER`.
     + The container soft limit is :code:`128`.
 - The idea is to set sensible values with the deployment.
@@ -478,7 +499,7 @@ Optionally you can provide additional information for the deployment:
 
 - ``--comment "New feature X"`` - comment to the deployment
 - ``--user john.doe`` - the name of the user who deployed with
-- ``--newrelic-revision 1.0.0`` - explicitly set the revison to use for the deployment
+- ``--newrelic-revision 1.0.0`` - explicitly set the revision to use for the deployment
 
 Note: If neither ``--tag`` nor ``--newrelic-revision`` are provided, the deployment will not be recorded.
 

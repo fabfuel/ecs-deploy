@@ -80,7 +80,9 @@ class EcsClient(object):
         return self.boto.describe_tasks(cluster=cluster_name, tasks=task_arns)
 
     def register_task_definition(self, family, containers, volumes, role_arn,
-                                 execution_role_arn, tags, additional_properties):
+                                 execution_role_arn, runtime_platform, tags,
+                                 cpu, memory,
+                                 additional_properties):
         if tags:
             additional_properties['tags'] = tags
 
@@ -90,6 +92,9 @@ class EcsClient(object):
             volumes=volumes,
             taskRoleArn=role_arn,
             executionRoleArn=execution_role_arn,
+            runtimePlatform=runtime_platform,
+            cpu=cpu,
+            memory=memory,
             **additional_properties
         )
 
@@ -273,7 +278,7 @@ class EcsService(dict):
 
 class EcsTaskDefinition(object):
     def __init__(self, containerDefinitions, volumes, family, revision,
-                 status, taskDefinitionArn, requiresAttributes=None,
+                 status, taskDefinitionArn, runtimePlatform=None, cpu=None, memory=None, requiresAttributes=None,
                  taskRoleArn=None, executionRoleArn=None, compatibilities=None,
                  tags=None, registeredAt=None, deregisteredAt=None, registeredBy=None, **kwargs):
 
@@ -287,6 +292,9 @@ class EcsTaskDefinition(object):
         self.requires_attributes = requiresAttributes or {}
         self.role_arn = taskRoleArn or u''
         self.execution_role_arn = executionRoleArn or u''
+        self.runtime_platform = runtimePlatform or {}
+        self.cpu = cpu
+        self.memory = memory
         self.tags = tags
         self.additional_properties = kwargs
         self._diff = []
@@ -470,6 +478,20 @@ class EcsTaskDefinition(object):
                 self._diff.append(diff)
                 container[u'healthCheck'] = new_health_checks
 
+    def set_runtime_platform(self, runtime_platform):
+        if runtime_platform:
+            new_runtime_platform = {}
+            new_runtime_platform[u'cpuArchitecture'] = runtime_platform[0]
+            new_runtime_platform[u'operatingSystemFamily'] = runtime_platform[1]
+            diff = EcsTaskDefinitionDiff(
+                container=None,
+                field=u'runtimePlatform',
+                value=new_runtime_platform,
+                old_value=self.runtime_platform
+            )
+            self.runtime_platform = new_runtime_platform
+            self._diff.append(diff)
+
     def set_cpu(self, **cpu):
         self.validate_container_options(**cpu)
         for container in self.containers:
@@ -484,7 +506,31 @@ class EcsTaskDefinition(object):
 
                 self._diff.append(diff)
                 container[u'cpu'] = new_cpu
-    
+
+    def set_task_cpu(self, task_cpu):
+        if task_cpu:
+            new_cpu = str(task_cpu)
+            diff = EcsTaskDefinitionDiff(
+                container=None,
+                field=u'cpu',
+                value=new_cpu,
+                old_value=self.cpu
+            )
+            self._diff.append(diff)
+            self.cpu = new_cpu
+
+    def set_task_memory(self, task_memory):
+        if task_memory:
+            new_memory = str(task_memory)
+            diff = EcsTaskDefinitionDiff(
+                container=None,
+                field=u'memory',
+                value=new_memory,
+                old_value=self.memory
+            )
+            self._diff.append(diff)
+            self.memory = new_memory
+
     def set_memory(self, **memory):
         self.validate_container_options(**memory)
         for container in self.containers:
@@ -498,7 +544,7 @@ class EcsTaskDefinition(object):
                 )
                 self._diff.append(diff)
                 container[u'memory'] = new_memory
-    
+
     def set_memoryreservation(self, **memoryreservation):
         self.validate_container_options(**memoryreservation)
         for container in self.containers:
@@ -519,7 +565,7 @@ class EcsTaskDefinition(object):
             if container[u'name'] in privileged:
                 new_privileged = bool(privileged[container[u'name']])
                 old_privileged = container.get(u'privileged')
-                if not new_privileged == old_privileged: 
+                if not new_privileged == old_privileged:
                     diff = EcsTaskDefinitionDiff(
                         container=container[u'name'],
                         field=u'privileged',
@@ -535,7 +581,7 @@ class EcsTaskDefinition(object):
             if container[u'name'] in essential:
                 new_essential = bool(essential[container[u'name']])
                 old_essential = container.get(u'essential')
-                if not new_essential == old_essential: 
+                if not new_essential == old_essential:
                     diff = EcsTaskDefinitionDiff(
                         container=container[u'name'],
                         field=u'essential',
@@ -635,16 +681,16 @@ class EcsTaskDefinition(object):
 
     def apply_docker_labels(self, container, new_dockerlabels, exclusive=False):
         old_dockerlabels = container.get('dockerLabels', {})
-        
+
         if exclusive is True:
             merged = new_dockerlabels
         else:
             merged = old_dockerlabels.copy()
             merged.update(new_dockerlabels)
-        
+
         if old_dockerlabels == merged:
             return
-        
+
         diff = EcsTaskDefinitionDiff(
             container=container[u'name'],
             field=u'dockerLabels',
@@ -652,7 +698,7 @@ class EcsTaskDefinition(object):
             old_value=old_dockerlabels
         )
         self._diff.append(diff)
-        
+
         container[u'dockerLabels'] = merged.copy()
     def set_s3_env_file(self, s3_env_files, exclusive=False):
         # environmentFiles in task definition https://docs.aws.amazon.com/AmazonECS/latest/developerguide/taskdef-envfiles.html
@@ -751,7 +797,7 @@ class EcsTaskDefinition(object):
         container[u'secrets'] = [
             {"name": s, "valueFrom": merged[s]} for s in merged
         ]
-    
+
     def set_system_controls(self, system_controls_list, exclusive=False):
         system_controls = defaultdict(list)
         for system_control in system_controls_list:
@@ -760,7 +806,7 @@ class EcsTaskDefinition(object):
             mapping["namespace"] = system_control[1]
             mapping["value"] = system_control[2]
             system_controls[system_control[0]].append(mapping)
-            
+
         self.validate_container_options(**system_controls)
         for container in self.containers:
             if container[u'name'] in system_controls:
@@ -825,7 +871,7 @@ class EcsTaskDefinition(object):
             mapping["softLimit"] = int(ulimit[2])
             mapping["hardLimit"] = int(ulimit[3])
             ulimits[ulimit[0]].append(mapping)
-            
+
         self.validate_container_options(**ulimits)
         for container in self.containers:
             if container[u'name'] in ulimits:
@@ -1106,7 +1152,7 @@ class EcsTaskDefinition(object):
 
             containers_not_found = list(containers_ - set(self.container_names))
             # Remaining containers could not be found.
-            for container in containers_not_found: 
+            for container in containers_not_found:
                 logger.warning("Cannot remove container '{container}', not in the task definition.".format(container=container))
 
             if containers:
@@ -1268,8 +1314,11 @@ class EcsAction(object):
             volumes=task_definition.volumes,
             role_arn=task_definition.role_arn,
             execution_role_arn=task_definition.execution_role_arn,
+            runtime_platform=task_definition.runtime_platform,
             tags=task_definition.tags,
-            additional_properties=task_definition.additional_properties
+            additional_properties=task_definition.additional_properties,
+            cpu=task_definition.cpu,
+            memory=task_definition.memory
         )
         new_task_definition = EcsTaskDefinition(**response[u'taskDefinition'])
         return new_task_definition

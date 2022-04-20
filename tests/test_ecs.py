@@ -26,6 +26,7 @@ TASK_DEFINITION_REVISION_1 = 1
 TASK_DEFINITION_ROLE_ARN_1 = u'arn:test:role:1'
 TASK_DEFINITION_ARN_1 = u'arn:aws:ecs:eu-central-1:123456789012:task-definition/%s:%s' % (TASK_DEFINITION_FAMILY_1,
                                                                                           TASK_DEFINITION_REVISION_1)
+TASK_DEFINITION_RUNTIME_PLATFORM_1 = {u'cpuArchitecture': u'X86_64', u'operatingSystemFamily': u'LINUX'}
 TASK_DEFINITION_VOLUMES_1 = []
 TASK_DEFINITION_CONTAINERS_1 = [
     {u'name': u'webserver', u'image': u'webserver:123', u'command': u'run',
@@ -86,6 +87,7 @@ TASK_DEFINITION_ROLE_ARN_3 = u'arn:test:another-role:1'
 
 PAYLOAD_TASK_DEFINITION_1 = {
     u'taskDefinitionArn': TASK_DEFINITION_ARN_1,
+    u'runtimePlatform': deepcopy(TASK_DEFINITION_RUNTIME_PLATFORM_1),
     u'family': TASK_DEFINITION_FAMILY_1,
     u'revision': TASK_DEFINITION_REVISION_1,
     u'taskRoleArn': TASK_DEFINITION_ROLE_ARN_1,
@@ -838,6 +840,16 @@ def test_task_set_mount_points(task_definition):
     assert {'sourceVolume': 'volume', 'containerPath': '/data/path', 'readOnly': False} in task_definition.containers[0]['mountPoints']
     assert {'sourceVolume': 'another_volume', 'containerPath': '/logs/path', 'readOnly': False} in task_definition.containers[0]['mountPoints']
 
+def test_task_set_task_cpu(task_definition):
+    assert task_definition.cpu is None
+    task_definition.set_task_cpu(256)
+    assert task_definition.cpu == '256'
+
+def test_task_set_task_memory(task_definition):
+    assert task_definition.memory is None
+    task_definition.set_task_memory(1024)
+    assert task_definition.memory == '1024'
+
 def test_task_set_mount_points_exclusively(task_definition):
     assert len(task_definition.containers[0]['mountPoints']) == 1
     assert '/container/path' == task_definition.containers[0]['mountPoints'][0]['containerPath']
@@ -1088,6 +1100,7 @@ def test_client_register_task_definition(client):
     volumes = [{u'foo': u'bar'}]
     role_arn = 'arn:test:role'
     execution_role_arn = 'arn:test:role'
+    runtime_platform = {u'cpuArchitecture': u'X86_64', u'operatingSystemFamily': u'LINUX'}
     task_definition = EcsTaskDefinition(
         containerDefinitions=containers,
         volumes=volumes,
@@ -1095,13 +1108,16 @@ def test_client_register_task_definition(client):
         revision=1,
         taskRoleArn=role_arn,
         executionRoleArn=execution_role_arn,
+        runtimePlatform=runtime_platform,
         tags={
             'Name': 'test_client_register_task_definition'
         },
         status='active',
         taskDefinitionArn='arn:task',
         requiresAttributes={},
-        unkownProperty='foobar'
+        unkownProperty='foobar',
+        cpu=256,
+        memory=1024
     )
 
     client.register_task_definition(
@@ -1110,8 +1126,11 @@ def test_client_register_task_definition(client):
         volumes=task_definition.volumes,
         role_arn=task_definition.role_arn,
         execution_role_arn=execution_role_arn,
+        runtime_platform=task_definition.runtime_platform,
         tags=task_definition.tags,
-        additional_properties=task_definition.additional_properties
+        additional_properties=task_definition.additional_properties,
+        cpu=256,
+        memory=1024
     )
 
     client.boto.register_task_definition.assert_called_once_with(
@@ -1120,8 +1139,11 @@ def test_client_register_task_definition(client):
         volumes=volumes,
         taskRoleArn=role_arn,
         executionRoleArn=execution_role_arn,
+        runtimePlatform=runtime_platform,
         tags=task_definition.tags,
-        unkownProperty='foobar'
+        unkownProperty='foobar',
+        cpu=256,
+        memory=1024
     )
 
 
@@ -1130,6 +1152,7 @@ def test_client_register_task_definition_without_tags(client):
     volumes = [{u'foo': u'bar'}]
     role_arn = 'arn:test:role'
     execution_role_arn = 'arn:test:role'
+    runtime_platform = {u'cpuArchitecture': u'X86_64', u'operatingSystemFamily': u'LINUX'}
     task_definition = EcsTaskDefinition(
         containerDefinitions=containers,
         volumes=volumes,
@@ -1137,6 +1160,7 @@ def test_client_register_task_definition_without_tags(client):
         revision=1,
         taskRoleArn=role_arn,
         executionRoleArn=execution_role_arn,
+        runtimePlatform=runtime_platform,
         tags={},
         status='active',
         taskDefinitionArn='arn:task',
@@ -1150,8 +1174,11 @@ def test_client_register_task_definition_without_tags(client):
         volumes=task_definition.volumes,
         role_arn=task_definition.role_arn,
         execution_role_arn=execution_role_arn,
+        runtime_platform=task_definition.runtime_platform,
         tags=task_definition.tags,
-        additional_properties=task_definition.additional_properties
+        additional_properties=task_definition.additional_properties,
+        cpu=256,
+        memory=1024
     )
 
     client.boto.register_task_definition.assert_called_once_with(
@@ -1160,7 +1187,10 @@ def test_client_register_task_definition_without_tags(client):
         volumes=volumes,
         taskRoleArn=role_arn,
         executionRoleArn=execution_role_arn,
-        unkownProperty='foobar'
+        runtimePlatform=runtime_platform,
+        unkownProperty='foobar',
+        cpu=256,
+        memory=1024
     )
 
 
@@ -1275,12 +1305,15 @@ def test_update_task_definition(client, task_definition):
         volumes=task_definition.volumes,
         role_arn=task_definition.role_arn,
         execution_role_arn=task_definition.execution_role_arn,
+        runtime_platform=task_definition.runtime_platform,
         tags=task_definition.tags,
         additional_properties={
             u'networkMode': u'host',
             u'placementConstraints': {},
             u'unknownProperty': u'lorem-ipsum'
-        }
+        },
+        cpu=None,
+        memory=None
     )
 
 
@@ -1592,7 +1625,7 @@ class EcsTestClient(object):
         return deepcopy(RESPONSE_DESCRIBE_TASKS)
 
     def register_task_definition(self, family, containers, volumes, role_arn,
-                                 execution_role_arn, tags, additional_properties):
+                                 execution_role_arn, runtime_platform, tags, cpu, memory, additional_properties):
         if not self.access_key_id or not self.secret_access_key:
             raise EcsConnectionError(u'Unable to locate credentials. Configure credentials by running "aws configure".')
         return deepcopy(RESPONSE_TASK_DEFINITION_2)

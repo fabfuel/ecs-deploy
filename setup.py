@@ -12,7 +12,7 @@ def readme():
 
 
 dependencies = [
-    'click==7.1.2',
+    'click>=7.1.2, <9',
     'click-log==0.3.2',
     'botocore>=1.17.47',
     'boto3>=1.14.47',
@@ -42,14 +42,6 @@ setup(
             'ecs = ecs_deploy.cli:ecs',
         ],
     },
-    tests_require=[
-        'mock',
-        'pytest',
-        'pytest-flake8',
-        'pytest-mock',
-        'freezegun',
-        'coverage'
-    ],
     classifiers=[
         'Environment :: Console',
         'Intended Audience :: Developers',
