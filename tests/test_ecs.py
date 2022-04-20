@@ -1147,6 +1147,50 @@ def test_client_register_task_definition(client):
     )
 
 
+def test_client_register_task_definition_without_optional_values(client):
+    containers = [{u'name': u'foo'}]
+    volumes = [{u'foo': u'bar'}]
+    role_arn = 'arn:test:role'
+    execution_role_arn = 'arn:test:role'
+    runtime_platform = {u'cpuArchitecture': u'X86_64', u'operatingSystemFamily': u'LINUX'}
+    task_definition = EcsTaskDefinition(
+        containerDefinitions=containers,
+        volumes=volumes,
+        family=u'family',
+        revision=1,
+        taskRoleArn=role_arn,
+        executionRoleArn=execution_role_arn,
+        tags={
+            'Name': 'test_client_register_task_definition'
+        },
+        status='active',
+        taskDefinitionArn='arn:task',
+        requiresAttributes={},
+    )
+
+    client.register_task_definition(
+        family=task_definition.family,
+        containers=task_definition.containers,
+        volumes=task_definition.volumes,
+        role_arn=task_definition.role_arn,
+        execution_role_arn=execution_role_arn,
+        tags=task_definition.tags,
+        additional_properties=task_definition.additional_properties,
+        runtime_platform=None,
+        cpu=None,
+        memory=None
+    )
+
+    client.boto.register_task_definition.assert_called_once_with(
+        family=u'family',
+        containerDefinitions=containers,
+        volumes=volumes,
+        taskRoleArn=role_arn,
+        executionRoleArn=execution_role_arn,
+        tags=task_definition.tags,
+    )
+
+
 def test_client_register_task_definition_without_tags(client):
     containers = [{u'name': u'foo'}]
     volumes = [{u'foo': u'bar'}]
