@@ -745,6 +745,41 @@ def test_task_set_secrets(task_definition):
     assert {'name': 'foo', 'valueFrom': 'baz'} in task_definition.containers[0]['secrets']
     assert {'name': 'some-name', 'valueFrom': 'some-value'} in task_definition.containers[0]['secrets']
 
+def test_task_set_secrets_from_env_file(task_definition):
+    assert len(task_definition.containers[0]['secrets']) == 2
+
+    tmp = tempfile.NamedTemporaryFile(delete=False)
+    tmp.write(b'some-secret-name-from-env-file=some-secret-value-from-env-file')
+    tmp.read()
+
+    task_definition.set_secrets((), env_file=((u'webserver',tmp.name),))
+    os.unlink(tmp.name)
+    tmp.close()
+
+    assert len(task_definition.containers[0]['secrets']) == 3
+
+    assert {"name": "baz", "valueFrom": "qux"} in task_definition.containers[0]['secrets']
+    assert {'name': 'some-secret-name-from-env-file', 'valueFrom': 'some-secret-value-from-env-file'} in task_definition.containers[0]['secrets']
+
+def test_task_set_secrets_from_s_and_env_file(task_definition):
+    assert len(task_definition.containers[0]['secrets']) == 2
+
+    tmp = tempfile.NamedTemporaryFile(delete=False)
+    tmp.write(b'some-secret-name-from-env-file=some-secret-value-from-env-file')
+    tmp.read()
+
+    task_definition.set_secrets(((u'webserver', u'foo', u'baz'), (u'webserver', u'some-name', u'some-value')), env_file=((u'webserver',tmp.name),))
+    os.unlink(tmp.name)
+    tmp.close()
+
+    assert len(task_definition.containers[0]['secrets']) == 5
+
+    assert {"name": "baz", "valueFrom": "qux"} in task_definition.containers[0]['secrets']
+    assert {'name': 'dolor', 'valueFrom': 'sit'} in task_definition.containers[0]['secrets']
+    assert {'name': 'foo', 'valueFrom': 'baz'} in task_definition.containers[0]['secrets']
+    assert {"name": "baz", "valueFrom": "qux"} in task_definition.containers[0]['secrets']
+    assert {'name': 'some-secret-name-from-env-file', 'valueFrom': 'some-secret-value-from-env-file'} in task_definition.containers[0]['secrets']
+
 def test_task_set_system_controls(task_definition):
     assert len(task_definition.containers[0]['systemControls']) == 1
     

@@ -42,6 +42,7 @@ def get_client(access_key_id, secret_access_key, region, profile):
 @click.option('--env-file', type=(str, str), default=((None, None),), multiple=True, required=False, help='Load environment variables from .env-file: <container> <env file path>')
 @click.option('--s3-env-file', type=(str, str), multiple=True, required=False, help='Location of .env-file in S3 in ARN format (eg arn:aws:s3:::/bucket_name/object_name): <container> <S3 ARN>')
 @click.option('-s', '--secret', type=(str, str, str), multiple=True, help='Adds or changes a secret environment variable from the AWS Parameter Store (Not available for Fargate): <container> <name> <parameter name>')
+@click.option('--secrets-env-file', type=(str, str), default=((None, None),), multiple=True, required=False, help='Load secrets from .env-file: <container> <env file path>')
 @click.option('-d', '--docker-label', type=(str, str, str), multiple=True, help='Adds or changes a docker label: <container> <name> <value>')
 @click.option('-u', '--ulimit', type=(str, str, int, int), multiple=True, help='Adds or changes a ulimit variable in the container description (Not available for Fargate): <container> <ulimit name> <softlimit value> <hardlimit value>')
 @click.option('--system-control', type=(str, str, str), multiple=True, help='Adds or changes a system control variable in the container description (Not available for Fargate): <container> <namespace> <value>')
