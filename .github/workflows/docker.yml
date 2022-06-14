@@ -10,6 +10,7 @@ on:
     
 jobs:
   build:
+    if: github.repository_owner == 'fabfuel'
     runs-on: ubuntu-latest
 
 
