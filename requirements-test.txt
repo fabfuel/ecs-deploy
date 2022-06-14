@@ -1,7 +1,6 @@
 pytest
 pytest-cov
 pytest-mock
-mock
 requests
 boto3
 freezegun
