@@ -9,7 +9,7 @@ class NewRelicDeploymentException(NewRelicException):
     pass
 
 
-class Deployment(object):
+class Deployment:
     API_HOST_US = 'api.newrelic.com'
     API_HOST_EU = 'api.eu.newrelic.com'
     ENDPOINT = 'https://%(host)s/v2/applications/%(app_id)s/deployments.json'

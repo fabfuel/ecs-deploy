@@ -7,7 +7,7 @@ class SlackException(Exception):
     pass
 
 
-class SlackNotification(object):
+class SlackNotification:
     def __init__(self, url, service_match):
         self.__url = url
         self.__service_match_re = re.compile(service_match or '')

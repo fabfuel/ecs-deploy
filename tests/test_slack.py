@@ -2,18 +2,18 @@ from copy import deepcopy
 
 from freezegun import freeze_time
 from pytest import fixture, raises
-from mock import patch
+from unittest.mock import patch
 
 from ecs_deploy.ecs import EcsTaskDefinition
 from ecs_deploy.slack import SlackNotification, SlackException
 from tests.test_ecs import PAYLOAD_TASK_DEFINITION_1
 
 
-class NotifyResponseSuccessfulMock(object):
+class NotifyResponseSuccessfulMock:
     status_code = 200
 
 
-class NotifyResponseUnsuccessfulMock(object):
+class NotifyResponseUnsuccessfulMock:
     status_code = 400
     content = {"message": "Something went wrong"}
 
@@ -91,7 +91,7 @@ def test_notify_start_without_url(post_mock, url, service_match, task_definition
 def test_notify_start(post_mock, url, service_match, task_definition):
     post_mock.return_value = NotifyResponseSuccessfulMock()
 
-    task_definition.set_images(webserver=u'new-image:my-tag', application=u'app-image:another-tag')
+    task_definition.set_images(webserver='new-image:my-tag', application='app-image:another-tag')
     task_definition.set_environment((('webserver', 'foo', 'baz'),))
 
     slack = SlackNotification(url, service_match)
@@ -124,7 +124,7 @@ def test_notify_start(post_mock, url, service_match, task_definition):
 def test_notify_start_without_tag(post_mock, url, service_match, task_definition):
     post_mock.return_value = NotifyResponseSuccessfulMock()
 
-    task_definition.set_images(webserver=u'new-image:my-tag', application=u'app-image:another-tag')
+    task_definition.set_images(webserver='new-image:my-tag', application='app-image:another-tag')
     task_definition.set_environment((('webserver', 'foo', 'baz'),))
 
     slack = SlackNotification(url, service_match)

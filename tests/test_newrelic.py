@@ -1,10 +1,10 @@
 from pytest import fixture, raises
-from mock import patch
+from unittest.mock import patch
 
 from ecs_deploy.newrelic import Deployment, NewRelicDeploymentException
 
 
-class DeploymentResponseSuccessfulMock(object):
+class DeploymentResponseSuccessfulMock:
     status_code = 201
     content = {
         "deployment": {
@@ -19,7 +19,7 @@ class DeploymentResponseSuccessfulMock(object):
     }
 
 
-class DeploymentResponseUnsuccessfulMock(object):
+class DeploymentResponseUnsuccessfulMock:
     status_code = 400
     content = {"message": "Something went wrong"}
 

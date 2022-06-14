@@ -1,5 +1,3 @@
-from __future__ import print_function, absolute_import
-
 from os import getenv
 from time import sleep
 
@@ -475,23 +473,23 @@ def diff(task, revision_a, revision_b, region, access_key_id, secret_access_key,
         client = get_client(access_key_id, secret_access_key, region, profile)
         action = DiffAction(client)
 
-        td_a = action.get_task_definition('%s:%s' % (task, revision_a))
-        td_b = action.get_task_definition('%s:%s' % (task, revision_b))
+        td_a = action.get_task_definition('{}:{}'.format(task, revision_a))
+        td_b = action.get_task_definition('{}:{}'.format(task, revision_b))
 
         result = td_a.diff_raw(td_b)
         for difference in result:
             if difference[0] == 'add':
-                click.secho('%s: %s' % (difference[0], difference[1]), fg='green')
+                click.secho('{}: {}'.format(difference[0], difference[1]), fg='green')
                 for added in difference[2]:
-                    click.secho('    + %s: %s' % (added[0], json.dumps(added[1])), fg='green')
+                    click.secho('    + {}: {}'.format(added[0], json.dumps(added[1])), fg='green')
 
             if difference[0] == 'change':
-                click.secho('%s: %s' % (difference[0], difference[1]), fg='yellow')
+                click.secho('{}: {}'.format(difference[0], difference[1]), fg='yellow')
                 click.secho('    - %s' % json.dumps(difference[2][0]), fg='red')
                 click.secho('    + %s' % json.dumps(difference[2][1]), fg='green')
 
             if difference[0] == 'remove':
-                click.secho('%s: %s' % (difference[0], difference[1]), fg='red')
+                click.secho('{}: {}'.format(difference[0], difference[1]), fg='red')
                 for removed in difference[2]:
                     click.secho('    - %s: %s' % removed, fg='red')
 
@@ -546,7 +544,7 @@ def deploy_task_definition(deployment, task_definition, title, success_message,
     click.secho('Updating service')
     deployment.deploy(task_definition)
 
-    message = 'Successfully changed task definition to: %s:%s\n' % (
+    message = 'Successfully changed task definition to: {}:{}\n'.format(
         task_definition.family,
         task_definition.revision
     )
@@ -661,14 +659,14 @@ def inspect_errors(service, failure_message, ignore_warnings, since, timeout):
         if ignore_warnings:
             last_error_timestamp = timestamp
             click.secho(
-                '%s\nWARNING: %s' % (timestamp, message),
+                '{}\nWARNING: {}'.format(timestamp, message),
                 fg='yellow',
                 err=False
             )
             click.secho('Continuing.', nl=False)
         else:
             click.secho(
-                '%s\nERROR: %s\n' % (timestamp, message),
+                '{}\nERROR: {}\n'.format(timestamp, message),
                 fg='red',
                 err=True
             )
@@ -679,7 +677,7 @@ def inspect_errors(service, failure_message, ignore_warnings, since, timeout):
         click.secho('Older errors', fg='yellow', err=True)
         for timestamp in service.older_errors:
             click.secho(
-                text='%s\n%s\n' % (timestamp, service.older_errors[timestamp]),
+                text='{}\n{}\n'.format(timestamp, service.older_errors[timestamp]),
                 fg='yellow',
                 err=True
             )
