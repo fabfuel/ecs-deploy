@@ -13,12 +13,6 @@ from dictdiffer import diff
 
 JSON_LIST_REGEX = re.compile(r'^\[.*\]$')
 
-# Python2 raises ValueError
-try:
-    JSONDecodeError = json.JSONDecodeError
-except AttributeError:
-    JSONDecodeError = ValueError
-
 LAUNCH_TYPE_EC2 = 'EC2'
 LAUNCH_TYPE_FARGATE = 'FARGATE'
 
@@ -399,7 +393,7 @@ class EcsTaskDefinition(object):
         if re.match(JSON_LIST_REGEX, command):
             try:
                 return json.loads(command)
-            except JSONDecodeError as e:
+            except json.JSONDecodeError as e:
                 raise EcsTaskDefinitionCommandError(
                     "command should be valid JSON list. Got following "
                     "command: {} resulting in error: {}"
