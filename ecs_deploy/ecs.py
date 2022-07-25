@@ -758,8 +758,13 @@ class EcsTaskDefinition(object):
             {"value": e, "type": "s3"} for e in merged
         ]
 
-    def set_secrets(self, secrets_list, exclusive=False):
+    def set_secrets(self, secrets_list, exclusive=False, env_file=((None, None),)):
         secrets = defaultdict(dict)
+
+        if None not in env_file[0]:
+            for secret in env_file:
+                l = read_env_file(secret[0], secret[1])
+                secrets_list = l + secrets_list
 
         for secret in secrets_list:
             secrets[secret[0]][secret[1]] = secret[2]

@@ -258,6 +258,22 @@ Instead of setting environment variables separately, you can pass a .env file pe
 
     $ ecs deploy my-cluster my-service --s3-env-file my-app arn:aws:s3:::my-ecs-environment/my-app.env
 
+Set secrets via .env files
+==============================
+Instead of setting secrets separately, you can pass a .env file per container to set all secrets at once.
+
+This will expect an env file format, but any values will be set as the `valueFrom` parameter in the secrets config.
+This value can be either the path or the full ARN of a secret in the AWS Parameter Store. For example, with a secrets.env
+file like the following:
+
+```
+SOME_SECRET=arn:aws:ssm:<aws region>:<aws account id>:parameter/KEY_OF_SECRET_IN_PARAMETER_STORE
+```
+
+$ ecs deploy my-cluster my-service --secret-env-file webserver env/secrets.env
+
+This will modify the **webserver** container definition and add or overwrite the environment variable `SOME_SECRET` with the value of the `KEY_OF_SECRET_IN_PARAMETER_STORE` in the AWS Parameter Store of the AWS Systems Manager.
+
 
 Set a docker label
 ===================
