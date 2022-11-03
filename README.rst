@@ -438,6 +438,21 @@ This instructs ecs-deploy to wait for ECS to finish the deployment for the given
 
 To run a deployment without waiting for the successful or failed result at all, set ``--timeout`` to the value of ``-1``.
 
+
+Multi-Account Setup
+===================
+If you manage different environments of your system in multiple differnt AWS accounts, you can now easily assume a
+deployment role in the target account in which your ECS cluster is running. You only need to provide ``--account``
+with the AWS account id and ``--assume-role`` with the name of the role you want to assume in the target account.
+ecs-deploy automatically assumes this role and deploys inside your target account:
+
+Example::
+
+    $ ecs deploy my-cluster my-service --account 1234567890 --assume-role ecsDeployRole
+
+
+
+
 Scaling
 -------
 
