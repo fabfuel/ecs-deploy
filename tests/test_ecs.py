@@ -1160,7 +1160,7 @@ def test_client_init(mocked_init, mocked_client):
 @patch.object(Session, 'client')
 @patch.object(Session, '__init__')
 @patch.object(EcsClient, 'assume_role')
-def test_client_init_assuming_role(assume_role_mock: Mock, mocked_init: Mock, mocked_client: Mock):
+def test_client_init_assuming_role(assume_role_mock, mocked_init, mocked_client):
     mocked_init.return_value = None
     assume_role_mock.return_value = 'sts-key', 'sts-secret', 'sts-token'
 
@@ -1178,7 +1178,7 @@ def test_client_init_assuming_role(assume_role_mock: Mock, mocked_init: Mock, mo
 
 @patch.object(Session, 'client')
 @patch.object(Session, '__init__')
-def test_client_assume_role(session_mock: Mock, mocked_client: Mock):
+def test_client_assume_role(session_mock, mocked_client):
     sts = Mock()
     mocked_client.return_value = sts
     session_mock.return_value = None
