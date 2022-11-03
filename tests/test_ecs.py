@@ -31,7 +31,7 @@ TASK_DEFINITION_VOLUMES_1 = []
 TASK_DEFINITION_CONTAINERS_1 = [
     {u'name': u'webserver', u'image': u'webserver:123', u'command': u'run',
      u'environment': (
-     {"name": "foo", "value": "bar"}, {"name": "lorem", "value": "ipsum"}, {"name": "empty", "value": ""}),
+         {"name": "foo", "value": "bar"}, {"name": "lorem", "value": "ipsum"}, {"name": "empty", "value": ""}),
      u'environmentFiles': [{'value': 'arn:aws:s3:::myS3bucket/myApp/.env', 'type': 's3'},
                            {'value': 'arn:aws:s3:::coolBuckets/dev/.env', 'type': 's3'}],
      u'secrets': ({"name": "baz", "valueFrom": "qux"}, {"name": "dolor", "valueFrom": "sit"}),
@@ -57,7 +57,7 @@ TASK_DEFINITION_VOLUMES_2 = []
 TASK_DEFINITION_CONTAINERS_2 = [
     {u'name': u'webserver', u'image': u'webserver:123', u'command': u'run',
      u'environment': (
-     {"name": "foo", "value": "bar"}, {"name": "lorem", "value": "ipsum"}, {"name": "empty", "value": ""}),
+         {"name": "foo", "value": "bar"}, {"name": "lorem", "value": "ipsum"}, {"name": "empty", "value": ""}),
      u'environmentFiles': [{'value': 'arn:aws:s3:::myS3bucket/myApp/.env', 'type': 's3'},
                            {'value': 'arn:aws:s3:::coolBuckets/dev/.env', 'type': 's3'}],
      u'secrets': ({"name": "baz", "valueFrom": "qux"}, {"name": "dolor", "valueFrom": "sit"}),
@@ -1159,19 +1159,51 @@ def test_client_init(mocked_init, mocked_client):
 
 @patch.object(Session, 'client')
 @patch.object(Session, '__init__')
-def test_client_init_assuming_role(session_mock: Mock, mocked_client: Mock):
-    session_mock.return_value = None
+@patch.object(EcsClient, 'assume_role')
+def test_client_init_assuming_role(assume_role_mock: Mock, mocked_init: Mock, mocked_client: Mock):
+    mocked_init.return_value = None
+    assume_role_mock.return_value = 'sts-key', 'sts-secret', 'sts-token'
 
     EcsClient(u'access_key_id', u'secret_access_key', u'region', u'profile',
               assume_account='1234567890', assume_role='DeployRole')
 
-    sts_session = call(aws_access_key_id=u'access_key_id',
-                    aws_secret_access_key=u'secret_access_key',
-                    profile_name=u'profile',
-                    region_name=u'region',
-                    aws_session_token=u'session_token')
+    mocked_init.assert_called_once_with(aws_access_key_id=u'sts-key',
+                                        aws_secret_access_key=u'sts-secret',
+                                        profile_name=None,
+                                        region_name=u'region',
+                                        aws_session_token=u'sts-token')
+    mocked_client.assert_any_call(u'ecs')
+    mocked_client.assert_any_call(u'events')
 
-    session_mock.assert_has_calls([sts_session])
+
+@patch.object(Session, 'client')
+@patch.object(Session, '__init__')
+def test_client_assume_role(session_mock: Mock, mocked_client: Mock):
+    sts = Mock()
+    mocked_client.return_value = sts
+    session_mock.return_value = None
+
+    sts.assume_role.return_value = {
+        'Credentials': {
+            'AccessKeyId': 'sts-key',
+            'SecretAccessKey': 'sts-secret',
+            'SessionToken': 'sts-token',
+        }
+    }
+
+    key, secret, token = EcsClient.assume_role('key', 'secret', 'region', 'profile', 'token', '1234567890', 'MyRole')
+
+    session_mock.assert_called_once_with(aws_access_key_id=u'key',
+                                         aws_secret_access_key=u'secret',
+                                         profile_name=u'profile',
+                                         region_name=u'region',
+                                         aws_session_token=u'token')
+
+    sts.assume_role.assert_called_with(RoleArn='arn:aws:iam::1234567890:role/MyRole', RoleSessionName='ecsDeploy')
+
+    assert key == 'sts-key'
+    assert secret == 'sts-secret'
+    assert token == 'sts-token'
 
 
 @pytest.fixture

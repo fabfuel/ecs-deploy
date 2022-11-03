@@ -58,8 +58,9 @@ class EcsClient(object):
         self.boto = session.client(u'ecs')
         self.events = session.client(u'events')
 
-    def assume_role(self, access_key_id=None, secret_access_key=None, region=None, profile=None, session_token=None,
-                       assume_account=None, assume_role=None):
+    @staticmethod
+    def assume_role(access_key_id=None, secret_access_key=None, region=None, profile=None, session_token=None,
+                    assume_account=None, assume_role=None):
         role_arn = f'arn:aws:iam::{assume_account}:role/{assume_role}'
         sts_session = Session(aws_access_key_id=access_key_id,
                               aws_secret_access_key=secret_access_key,
