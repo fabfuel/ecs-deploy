@@ -42,7 +42,14 @@ def read_env_file(container_name, file):
 
 class EcsClient(object):
     def __init__(self, access_key_id=None, secret_access_key=None,
-                 region=None, profile=None, session_token=None):
+                 region=None, profile=None, session_token=None, assume_account=None, assume_role=None):
+
+        if assume_account and assume_role:
+            access_key_id, secret_access_key, session_token = self.assume_role(access_key_id, secret_access_key, region,
+                                                                               profile, session_token, assume_account,
+                                                                               assume_role)
+            profile = None
+
         session = Session(aws_access_key_id=access_key_id,
                           aws_secret_access_key=secret_access_key,
                           aws_session_token=session_token,
@@ -50,6 +57,26 @@ class EcsClient(object):
                           profile_name=profile)
         self.boto = session.client(u'ecs')
         self.events = session.client(u'events')
+
+    @staticmethod
+    def assume_role(access_key_id=None, secret_access_key=None, region=None, profile=None, session_token=None,
+                    assume_account=None, assume_role=None):
+        role_arn = 'arn:aws:iam::%s:role/%s' % (assume_account, assume_role)
+        sts_session = Session(aws_access_key_id=access_key_id,
+                              aws_secret_access_key=secret_access_key,
+                              aws_session_token=session_token,
+                              region_name=region,
+                              profile_name=profile)
+        sts = sts_session.client('sts')
+        response = sts.assume_role(
+            RoleArn=role_arn,
+            RoleSessionName='ecsDeploy',
+        )
+        access_key_id = response['Credentials']['AccessKeyId']
+        secret_access_key = response['Credentials']['SecretAccessKey']
+        session_token = response['Credentials']['SessionToken']
+        return access_key_id, secret_access_key, session_token
+
 
     def describe_services(self, cluster_name, service_name):
         return self.boto.describe_services(
@@ -758,8 +785,13 @@ class EcsTaskDefinition(object):
             {"value": e, "type": "s3"} for e in merged
         ]
 
-    def set_secrets(self, secrets_list, exclusive=False):
+    def set_secrets(self, secrets_list, exclusive=False, env_file=((None, None),)):
         secrets = defaultdict(dict)
+
+        if None not in env_file[0]:
+            for secret in env_file:
+                l = read_env_file(secret[0], secret[1])
+                secrets_list = l + secrets_list
 
         for secret in secrets_list:
             secrets[secret[0]][secret[1]] = secret[2]

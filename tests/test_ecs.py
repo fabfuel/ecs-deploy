@@ -8,7 +8,7 @@ import logging
 from boto3.session import Session
 from botocore.exceptions import ClientError, NoCredentialsError
 from dateutil.tz import tzlocal
-from mock.mock import patch
+from mock.mock import patch, call, Mock
 
 from ecs_deploy.ecs import EcsService, EcsTaskDefinition, \
     UnknownContainerError, EcsTaskDefinitionDiff, EcsClient, \
@@ -30,8 +30,10 @@ TASK_DEFINITION_RUNTIME_PLATFORM_1 = {u'cpuArchitecture': u'X86_64', u'operating
 TASK_DEFINITION_VOLUMES_1 = []
 TASK_DEFINITION_CONTAINERS_1 = [
     {u'name': u'webserver', u'image': u'webserver:123', u'command': u'run',
-     u'environment': ({"name": "foo", "value": "bar"}, {"name": "lorem", "value": "ipsum"}, {"name": "empty", "value": ""}),
-     u'environmentFiles': [{'value': 'arn:aws:s3:::myS3bucket/myApp/.env', 'type': 's3'}, {'value': 'arn:aws:s3:::coolBuckets/dev/.env', 'type': 's3'}],
+     u'environment': (
+         {"name": "foo", "value": "bar"}, {"name": "lorem", "value": "ipsum"}, {"name": "empty", "value": ""}),
+     u'environmentFiles': [{'value': 'arn:aws:s3:::myS3bucket/myApp/.env', 'type': 's3'},
+                           {'value': 'arn:aws:s3:::coolBuckets/dev/.env', 'type': 's3'}],
      u'secrets': ({"name": "baz", "valueFrom": "qux"}, {"name": "dolor", "valueFrom": "sit"}),
      u'dockerLabels': {"foo": "bar", "lorem": "ipsum", "empty": ""},
      u'logConfiguration': {},
@@ -54,8 +56,10 @@ TASK_DEFINITION_ARN_2 = u'arn:aws:ecs:eu-central-1:123456789012:task-definition/
 TASK_DEFINITION_VOLUMES_2 = []
 TASK_DEFINITION_CONTAINERS_2 = [
     {u'name': u'webserver', u'image': u'webserver:123', u'command': u'run',
-     u'environment': ({"name": "foo", "value": "bar"}, {"name": "lorem", "value": "ipsum"}, {"name": "empty", "value": ""}),
-     u'environmentFiles': [{'value': 'arn:aws:s3:::myS3bucket/myApp/.env', 'type': 's3'}, {'value': 'arn:aws:s3:::coolBuckets/dev/.env', 'type': 's3'}],
+     u'environment': (
+         {"name": "foo", "value": "bar"}, {"name": "lorem", "value": "ipsum"}, {"name": "empty", "value": ""}),
+     u'environmentFiles': [{'value': 'arn:aws:s3:::myS3bucket/myApp/.env', 'type': 's3'},
+                           {'value': 'arn:aws:s3:::coolBuckets/dev/.env', 'type': 's3'}],
      u'secrets': ({"name": "baz", "valueFrom": "qux"}, {"name": "dolor", "valueFrom": "sit"}),
      u'dockerLabels': {"foo": "bar", "lorem": "ipsum", "empty": ""},
      u'logConfiguration': {},
@@ -69,7 +73,7 @@ TASK_DEFINITION_CONTAINERS_2 = [
      u'systemControls': [{'namespace': 'net.core.somaxconn', 'value': '511'}],
      u'portMappings': [{'containerPort': 8080, 'hostPort': 8080}],
      u'mountPoints': [{'sourceVolume': 'volume', 'containerPath': '/container/path', 'readOnly': False}]},
-    
+
 ]
 
 TASK_DEFINITION_REVISION_3 = 3
@@ -261,7 +265,6 @@ PAYLOAD_DEPLOYMENTS_FAILED = [
         u'failedTasks': 0,
     }
 ]
-
 
 PAYLOAD_DEPLOYMENTS_FAILED_ROLLBACK = [
     {
@@ -538,6 +541,7 @@ def test_task_set_image(task_definition):
         if container[u'name'] == u'application':
             assert container[u'image'] == u'app-image:latest'
 
+
 def test_task_set_cpu(task_definition):
     task_definition.set_cpu(webserver=10, application=0)
     for container in task_definition.containers:
@@ -545,6 +549,7 @@ def test_task_set_cpu(task_definition):
             assert container[u'cpu'] == 10
         if container[u'name'] == u'application':
             assert container[u'cpu'] == 0
+
 
 def test_task_set_memory(task_definition):
     task_definition.set_memory(webserver=256, application=128)
@@ -554,6 +559,7 @@ def test_task_set_memory(task_definition):
         if container[u'name'] == u'application':
             assert container[u'memory'] == 128
 
+
 def test_task_set_memoryreservation(task_definition):
     task_definition.set_memoryreservation(webserver=128, application=64)
     for container in task_definition.containers:
@@ -561,6 +567,7 @@ def test_task_set_memoryreservation(task_definition):
             assert container[u'memoryReservation'] == 128
         if container[u'name'] == u'application':
             assert container[u'memoryReservation'] == 64
+
 
 def test_task_set_privileged(task_definition):
     task_definition.set_privileged(webserver=False, application=True)
@@ -570,14 +577,16 @@ def test_task_set_privileged(task_definition):
         if container[u'name'] == u'application':
             assert container[u'privileged'] == True
 
+
 def test_task_set_log_configurations(task_definition):
     assert len(task_definition.containers[0]['logConfiguration']) == 0
 
-    task_definition.set_log_configurations(((u'webserver', u'awslogs', u'awslogs-group', u'service_logs'), (u'webserver', u'awslogs', u'awslogs-region', u'eu-central-1')))
+    task_definition.set_log_configurations(((u'webserver', u'awslogs', u'awslogs-group', u'service_logs'),
+                                            (u'webserver', u'awslogs', u'awslogs-region', u'eu-central-1')))
 
     assert len(task_definition.containers[0]['logConfiguration']) > 0
 
-    assert('logDriver' in task_definition.containers[0]['logConfiguration'])
+    assert ('logDriver' in task_definition.containers[0]['logConfiguration'])
     assert 'awslogs' == task_definition.containers[0]['logConfiguration']['logDriver']
     assert 'options' in task_definition.containers[0]['logConfiguration']
     assert 'awslogs-group' in task_definition.containers[0]['logConfiguration']['options']
@@ -585,23 +594,26 @@ def test_task_set_log_configurations(task_definition):
     assert 'awslogs-region' in task_definition.containers[0]['logConfiguration']['options']
     assert 'eu-central-1' == task_definition.containers[0]['logConfiguration']['options']['awslogs-region']
 
+
 def test_task_set_log_configurations_no_changes(task_definition):
     assert len(task_definition.containers[0]['logConfiguration']) == 0
 
-    task_definition.set_log_configurations(((u'webserver', u'awslogs', u'awslogs-group', u'service_logs'), (u'webserver', u'awslogs', u'awslogs-region', u'eu-central-1')))
+    task_definition.set_log_configurations(((u'webserver', u'awslogs', u'awslogs-group', u'service_logs'),
+                                            (u'webserver', u'awslogs', u'awslogs-region', u'eu-central-1')))
     # deploy without log configurations does not change the previous configuration
     # needs to be actively changed
     task_definition.set_log_configurations(())
 
     assert len(task_definition.containers[0]['logConfiguration']) > 0
 
-    assert('logDriver' in task_definition.containers[0]['logConfiguration'])
+    assert ('logDriver' in task_definition.containers[0]['logConfiguration'])
     assert 'awslogs' == task_definition.containers[0]['logConfiguration']['logDriver']
     assert 'options' in task_definition.containers[0]['logConfiguration']
     assert 'awslogs-group' in task_definition.containers[0]['logConfiguration']['options']
     assert 'service_logs' == task_definition.containers[0]['logConfiguration']['options']['awslogs-group']
     assert 'awslogs-region' in task_definition.containers[0]['logConfiguration']['options']
     assert 'eu-central-1' == task_definition.containers[0]['logConfiguration']['options']['awslogs-region']
+
 
 def test_task_set_environment(task_definition):
     assert len(task_definition.containers[0]['environment']) == 3
@@ -614,18 +626,21 @@ def test_task_set_environment(task_definition):
     assert {'name': 'foo', 'value': 'baz'} in task_definition.containers[0]['environment']
     assert {'name': 'some-name', 'value': 'some-value'} in task_definition.containers[0]['environment']
 
+
 def test_read_env_file_wrong_env_format():
     tmp = tempfile.NamedTemporaryFile(delete=False)
     tmp.write(b'#comment\n  \nIncompleteDescription')
     tmp.read()
-    l = read_env_file('webserver',tmp.name)
+    l = read_env_file('webserver', tmp.name)
     os.unlink(tmp.name)
     tmp.close()
     assert l == ()
 
+
 def test_env_file_wrong_file_name():
     with pytest.raises(EcsTaskDefinitionCommandError):
-        read_env_file('webserver','WrongFileName')
+        read_env_file('webserver', 'WrongFileName')
+
 
 def test_task_set_environment_from_e_and_env_file(task_definition):
     assert len(task_definition.containers[0]['environment']) == 3
@@ -634,7 +649,8 @@ def test_task_set_environment_from_e_and_env_file(task_definition):
     tmp.write(b'some-name-from-env-file=some-value-from-env-file')
     tmp.read()
 
-    task_definition.set_environment(((u'webserver', u'foo', u'baz'), (u'webserver', u'some-name', u'some-value')), env_file = ((u'webserver',tmp.name),))
+    task_definition.set_environment(((u'webserver', u'foo', u'baz'), (u'webserver', u'some-name', u'some-value')),
+                                    env_file=((u'webserver', tmp.name),))
     os.unlink(tmp.name)
     tmp.close()
 
@@ -643,7 +659,9 @@ def test_task_set_environment_from_e_and_env_file(task_definition):
     assert {'name': 'lorem', 'value': 'ipsum'} in task_definition.containers[0]['environment']
     assert {'name': 'foo', 'value': 'baz'} in task_definition.containers[0]['environment']
     assert {'name': 'some-name', 'value': 'some-value'} in task_definition.containers[0]['environment']
-    assert {'name': 'some-name-from-env-file', 'value': 'some-value-from-env-file'} in task_definition.containers[0]['environment']
+    assert {'name': 'some-name-from-env-file', 'value': 'some-value-from-env-file'} in task_definition.containers[0][
+        'environment']
+
 
 def test_task_set_environment_from_env_file(task_definition):
     assert len(task_definition.containers[0]['environment']) == 3
@@ -652,21 +670,23 @@ def test_task_set_environment_from_env_file(task_definition):
     tmp.write(b'some-name-from-env-file=some-value-from-env-file')
     tmp.read()
 
-    task_definition.set_environment((), env_file = ((u'webserver',tmp.name),))
+    task_definition.set_environment((), env_file=((u'webserver', tmp.name),))
     os.unlink(tmp.name)
     tmp.close()
 
     assert len(task_definition.containers[0]['environment']) == 4
 
     assert {'name': 'lorem', 'value': 'ipsum'} in task_definition.containers[0]['environment']
-    assert {'name': 'some-name-from-env-file', 'value': 'some-value-from-env-file'} in task_definition.containers[0]['environment']
+    assert {'name': 'some-name-from-env-file', 'value': 'some-value-from-env-file'} in task_definition.containers[0][
+        'environment']
 
 
 def test_task_set_environment_exclusively(task_definition):
     assert len(task_definition.containers[0]['environment']) == 3
     assert len(task_definition.containers[1]['environment']) == 0
 
-    task_definition.set_environment(((u'application', u'foo', u'baz'), (u'application', u'new-var', u'new-value')), exclusive=True)
+    task_definition.set_environment(((u'application', u'foo', u'baz'), (u'application', u'new-var', u'new-value')),
+                                    exclusive=True)
 
     assert len(task_definition.containers[0]['environment']) == 0
     assert len(task_definition.containers[1]['environment']) == 2
@@ -687,11 +707,13 @@ def test_task_set_docker_labels(task_definition):
     assert 'lorem' in task_definition.containers[0]['dockerLabels']
     assert 'some-name' in task_definition.containers[0]['dockerLabels']
 
+
 def test_task_set_docker_label_exclusively(task_definition):
     assert len(task_definition.containers[0]['dockerLabels']) == 3
     assert len(task_definition.containers[1]['dockerLabels']) == 0
 
-    task_definition.set_docker_labels(((u'application', u'foo', u'baz'), (u'application', u'new-var', u'new-value')), exclusive=True)
+    task_definition.set_docker_labels(((u'application', u'foo', u'baz'), (u'application', u'new-var', u'new-value')),
+                                      exclusive=True)
 
     assert len(task_definition.containers[0]['dockerLabels']) == 0
     assert len(task_definition.containers[1]['dockerLabels']) == 2
@@ -700,17 +722,25 @@ def test_task_set_docker_label_exclusively(task_definition):
     assert 'foo' in task_definition.containers[1]['dockerLabels']
     assert 'new-var' in task_definition.containers[1]['dockerLabels']
 
+
 def test_task_set_s3_env_file_multiple_files(task_definition):
     assert len(task_definition.containers[0]['environmentFiles']) == 2
 
-    task_definition.set_s3_env_file(((u'webserver', u'arn:aws:s3:::mycompany.domain.com/app/.env'), (u'webserver', u'arn:aws:s3:::melted.cheese.com/grilled/.env'), (u'proxyserver', u'arn:ars:s3:::pizza/dev/.env')))
+    task_definition.set_s3_env_file(((u'webserver', u'arn:aws:s3:::mycompany.domain.com/app/.env'),
+                                     (u'webserver', u'arn:aws:s3:::melted.cheese.com/grilled/.env'),
+                                     (u'proxyserver', u'arn:ars:s3:::pizza/dev/.env')))
 
     assert len(task_definition.containers[0]['environmentFiles']) == 4
 
-    assert {'value': 'arn:aws:s3:::mycompany.domain.com/app/.env', 'type': 's3'} in task_definition.containers[0]['environmentFiles']
-    assert {'value': 'arn:aws:s3:::myS3bucket/myApp/.env', 'type': 's3'} in task_definition.containers[0]['environmentFiles']
-    assert {'value': 'arn:aws:s3:::coolBuckets/dev/.env', 'type': 's3'} in task_definition.containers[0]['environmentFiles']
-    assert {'value': 'arn:aws:s3:::melted.cheese.com/grilled/.env', 'type': 's3'} in task_definition.containers[0]['environmentFiles']
+    assert {'value': 'arn:aws:s3:::mycompany.domain.com/app/.env', 'type': 's3'} in task_definition.containers[0][
+        'environmentFiles']
+    assert {'value': 'arn:aws:s3:::myS3bucket/myApp/.env', 'type': 's3'} in task_definition.containers[0][
+        'environmentFiles']
+    assert {'value': 'arn:aws:s3:::coolBuckets/dev/.env', 'type': 's3'} in task_definition.containers[0][
+        'environmentFiles']
+    assert {'value': 'arn:aws:s3:::melted.cheese.com/grilled/.env', 'type': 's3'} in task_definition.containers[0][
+        'environmentFiles']
+
 
 def test_task_set_s3_env_file_single_file(task_definition):
     assert len(task_definition.containers[0]['environmentFiles']) == 2
@@ -720,6 +750,7 @@ def test_task_set_s3_env_file_single_file(task_definition):
     assert len(task_definition.containers[0]['environmentFiles']) == 3
     # assert {'value': 'arn:aws:s3:::mycompany.domain.com/app/.env', 'type': 's3'} in task_definition.containers[0]['environmentFiles']
 
+
 def test_task_set_s3_env_file_exclusively(task_definition):
     assert len(task_definition.containers[0]['environmentFiles']) == 2
 
@@ -727,12 +758,14 @@ def test_task_set_s3_env_file_exclusively(task_definition):
 
     assert len(task_definition.containers[0]['environmentFiles']) == 1
 
-    assert {'value': 'arn:aws:s3:::mycompany.domain.com/app/.env', 'type': 's3'} in task_definition.containers[0]['environmentFiles']
+    assert {'value': 'arn:aws:s3:::mycompany.domain.com/app/.env', 'type': 's3'} in task_definition.containers[0][
+        'environmentFiles']
+
 
 def test_task_set_secrets_exclusively(task_definition):
     assert len(task_definition.containers[0]['secrets']) == 2
 
-    task_definition.set_secrets(((u'webserver', u'new-secret', u'another-place'), ), exclusive=True)
+    task_definition.set_secrets(((u'webserver', u'new-secret', u'another-place'),), exclusive=True)
 
     assert len(task_definition.containers[0]['secrets']) == 1
     assert {'name': 'new-secret', 'valueFrom': 'another-place'} in task_definition.containers[0]['secrets']
@@ -745,30 +778,74 @@ def test_task_set_secrets(task_definition):
     assert {'name': 'foo', 'valueFrom': 'baz'} in task_definition.containers[0]['secrets']
     assert {'name': 'some-name', 'valueFrom': 'some-value'} in task_definition.containers[0]['secrets']
 
+
+def test_task_set_secrets_from_env_file(task_definition):
+    assert len(task_definition.containers[0]['secrets']) == 2
+
+    tmp = tempfile.NamedTemporaryFile(delete=False)
+    tmp.write(b'some-secret-name-from-env-file=some-secret-value-from-env-file')
+    tmp.read()
+
+    task_definition.set_secrets((), env_file=((u'webserver', tmp.name),))
+    os.unlink(tmp.name)
+    tmp.close()
+
+    assert len(task_definition.containers[0]['secrets']) == 3
+
+    assert {"name": "baz", "valueFrom": "qux"} in task_definition.containers[0]['secrets']
+    assert {'name': 'some-secret-name-from-env-file', 'valueFrom': 'some-secret-value-from-env-file'} in \
+           task_definition.containers[0]['secrets']
+
+
+def test_task_set_secrets_from_s_and_env_file(task_definition):
+    assert len(task_definition.containers[0]['secrets']) == 2
+
+    tmp = tempfile.NamedTemporaryFile(delete=False)
+    tmp.write(b'some-secret-name-from-env-file=some-secret-value-from-env-file')
+    tmp.read()
+
+    task_definition.set_secrets(((u'webserver', u'foo', u'baz'), (u'webserver', u'some-name', u'some-value')),
+                                env_file=((u'webserver', tmp.name),))
+    os.unlink(tmp.name)
+    tmp.close()
+
+    assert len(task_definition.containers[0]['secrets']) == 5
+
+    assert {"name": "baz", "valueFrom": "qux"} in task_definition.containers[0]['secrets']
+    assert {'name': 'dolor', 'valueFrom': 'sit'} in task_definition.containers[0]['secrets']
+    assert {'name': 'foo', 'valueFrom': 'baz'} in task_definition.containers[0]['secrets']
+    assert {"name": "baz", "valueFrom": "qux"} in task_definition.containers[0]['secrets']
+    assert {'name': 'some-secret-name-from-env-file', 'valueFrom': 'some-secret-value-from-env-file'} in \
+           task_definition.containers[0]['secrets']
+
+
 def test_task_set_system_controls(task_definition):
     assert len(task_definition.containers[0]['systemControls']) == 1
-    
-    task_definition.set_system_controls(((u'webserver', u'net.core.somaxconn', u'511'), (u'webserver',u'net.ipv4.ip_forward', u'1')))
+
+    task_definition.set_system_controls(
+        ((u'webserver', u'net.core.somaxconn', u'511'), (u'webserver', u'net.ipv4.ip_forward', u'1')))
 
     assert len(task_definition.containers[0]['systemControls']) == 2
 
     assert {'namespace': 'net.core.somaxconn', 'value': '511'} in task_definition.containers[0]['systemControls']
     assert {'namespace': 'net.ipv4.ip_forward', 'value': '1'} in task_definition.containers[0]['systemControls']
+
 
 def test_task_set_system_controls_existing_not_set_again(task_definition):
     assert len(task_definition.containers[0]['systemControls']) == 1
-    
-    task_definition.set_system_controls(((u'webserver', u'net.ipv4.ip_forward', u'1'), ))
+
+    task_definition.set_system_controls(((u'webserver', u'net.ipv4.ip_forward', u'1'),))
 
     assert len(task_definition.containers[0]['systemControls']) == 2
 
     assert {'namespace': 'net.core.somaxconn', 'value': '511'} in task_definition.containers[0]['systemControls']
     assert {'namespace': 'net.ipv4.ip_forward', 'value': '1'} in task_definition.containers[0]['systemControls']
+
 
 def test_task_set_system_controlsts_exclusively(task_definition):
     assert len(task_definition.containers[0]['systemControls']) == 1
     assert 'net.core.somaxconn' == task_definition.containers[0]['systemControls'][0]['namespace']
-    
+
     task_definition.set_system_controls(((u'webserver', u'net.ipv4.ip_forward', u'1'),), exclusive=True)
 
     assert len(task_definition.containers[0]['systemControls']) == 1
@@ -776,9 +853,10 @@ def test_task_set_system_controlsts_exclusively(task_definition):
     assert 'net.ipv4.ip_forward' == task_definition.containers[0]['systemControls'][0]['namespace']
     assert {'namespace': 'net.ipv4.ip_forward', 'value': '1'} in task_definition.containers[0]['systemControls']
 
+
 def test_task_set_ulimits(task_definition):
     assert len(task_definition.containers[0]['ulimits']) == 1
-    
+
     task_definition.set_ulimits(((u'webserver', u'memlock', 256, 257), (u'webserver', u'cpu', 80, 85)))
 
     assert len(task_definition.containers[0]['ulimits']) == 2
@@ -786,20 +864,22 @@ def test_task_set_ulimits(task_definition):
     assert {'name': 'memlock', 'softLimit': 256, 'hardLimit': 257} in task_definition.containers[0]['ulimits']
     assert {'name': 'cpu', 'softLimit': 80, 'hardLimit': 85} in task_definition.containers[0]['ulimits']
 
+
 def test_task_set_ulimits_existing_not_set_again(task_definition):
     assert len(task_definition.containers[0]['ulimits']) == 1
-    
-    task_definition.set_ulimits(((u'webserver', u'cpu', 80, 85), ))
+
+    task_definition.set_ulimits(((u'webserver', u'cpu', 80, 85),))
 
     assert len(task_definition.containers[0]['ulimits']) == 2
 
     assert {'name': 'memlock', 'softLimit': 256, 'hardLimit': 256} in task_definition.containers[0]['ulimits']
     assert {'name': 'cpu', 'softLimit': 80, 'hardLimit': 85} in task_definition.containers[0]['ulimits']
 
+
 def test_task_set_ulimits_exclusively(task_definition):
     assert len(task_definition.containers[0]['ulimits']) == 1
     assert 'memlock' == task_definition.containers[0]['ulimits'][0]['name']
-    
+
     task_definition.set_ulimits(((u'webserver', u'cpu', 80, 85),), exclusive=True)
 
     assert len(task_definition.containers[0]['ulimits']) == 1
@@ -807,10 +887,11 @@ def test_task_set_ulimits_exclusively(task_definition):
     assert 'cpu' == task_definition.containers[0]['ulimits'][0]['name']
     assert {'name': 'cpu', 'softLimit': 80, 'hardLimit': 85} in task_definition.containers[0]['ulimits']
 
+
 def test_task_set_port_mappings(task_definition):
     assert len(task_definition.containers[0]['portMappings']) == 1
     assert 8080 == task_definition.containers[0]['portMappings'][0]['containerPort']
-    
+
     task_definition.set_port_mappings(((u'webserver', 8080, 8080), (u'webserver', 81, 80)))
 
     assert len(task_definition.containers[0]['portMappings']) == 2
@@ -818,10 +899,11 @@ def test_task_set_port_mappings(task_definition):
     assert {'containerPort': 8080, 'hostPort': 8080, 'protocol': 'tcp'} in task_definition.containers[0]['portMappings']
     assert {'containerPort': 81, 'hostPort': 80, 'protocol': 'tcp'} in task_definition.containers[0]['portMappings']
 
+
 def test_task_set_port_mappings_exclusively(task_definition):
     assert len(task_definition.containers[0]['portMappings']) == 1
     assert 8080 == task_definition.containers[0]['portMappings'][0]['containerPort']
-    
+
     task_definition.set_port_mappings(((u'webserver', 81, 80),), exclusive=True)
 
     assert len(task_definition.containers[0]['portMappings']) == 1
@@ -829,39 +911,48 @@ def test_task_set_port_mappings_exclusively(task_definition):
     assert 81 == task_definition.containers[0]['portMappings'][0]['containerPort']
     assert {'containerPort': 81, 'hostPort': 80, 'protocol': 'tcp'} in task_definition.containers[0]['portMappings']
 
+
 def test_task_set_mount_points(task_definition):
     assert len(task_definition.containers[0]['mountPoints']) == 1
     assert '/container/path' == task_definition.containers[0]['mountPoints'][0]['containerPath']
-    
-    task_definition.set_mount_points(((u'webserver', u'volume', u'/data/path'), (u'webserver', u'another_volume', u'/logs/path')))
+
+    task_definition.set_mount_points(
+        ((u'webserver', u'volume', u'/data/path'), (u'webserver', u'another_volume', u'/logs/path')))
 
     assert len(task_definition.containers[0]['mountPoints']) == 2
 
-    assert {'sourceVolume': 'volume', 'containerPath': '/data/path', 'readOnly': False} in task_definition.containers[0]['mountPoints']
-    assert {'sourceVolume': 'another_volume', 'containerPath': '/logs/path', 'readOnly': False} in task_definition.containers[0]['mountPoints']
+    assert {'sourceVolume': 'volume', 'containerPath': '/data/path', 'readOnly': False} in \
+           task_definition.containers[0]['mountPoints']
+    assert {'sourceVolume': 'another_volume', 'containerPath': '/logs/path', 'readOnly': False} in \
+           task_definition.containers[0]['mountPoints']
+
 
 def test_task_set_task_cpu(task_definition):
     assert task_definition.cpu is None
     task_definition.set_task_cpu(256)
     assert task_definition.cpu == '256'
 
+
 def test_task_set_task_memory(task_definition):
     assert task_definition.memory is None
     task_definition.set_task_memory(1024)
     assert task_definition.memory == '1024'
 
+
 def test_task_set_mount_points_exclusively(task_definition):
     assert len(task_definition.containers[0]['mountPoints']) == 1
     assert '/container/path' == task_definition.containers[0]['mountPoints'][0]['containerPath']
     assert 'volume' == task_definition.containers[0]['mountPoints'][0]['sourceVolume']
-    
+
     task_definition.set_mount_points(((u'webserver', u'another_volume', u'/logs/path'),), exclusive=True)
 
     assert len(task_definition.containers[0]['mountPoints']) == 1
 
     assert '/logs/path' == task_definition.containers[0]['mountPoints'][0]['containerPath']
     assert 'another_volume' == task_definition.containers[0]['mountPoints'][0]['sourceVolume']
-    assert {'sourceVolume': 'another_volume', 'containerPath': '/logs/path', 'readOnly': False} in task_definition.containers[0]['mountPoints']
+    assert {'sourceVolume': 'another_volume', 'containerPath': '/logs/path', 'readOnly': False} in \
+           task_definition.containers[0]['mountPoints']
+
 
 def test_task_set_image_for_unknown_container(task_definition):
     with pytest.raises(UnknownContainerError):
@@ -885,6 +976,7 @@ def test_task_set_command_with_multiple_arguments(task_definition):
         if container[u'name'] == u'application':
             assert container[u'command'] == [u'run-application', u'arg1', u'arg2']
 
+
 def test_task_set_command_with_empty_argument(task_definition):
     empty_argument = " "
     task_definition.set_commands(webserver=empty_argument + u'run-webserver arg1 arg2')
@@ -892,17 +984,21 @@ def test_task_set_command_with_empty_argument(task_definition):
         if container[u'name'] == u'webserver':
             assert container[u'command'] == [u'run-webserver', u'arg1', u'arg2']
 
+
 def test_task_set_command_as_json_list(task_definition):
-    task_definition.set_commands(webserver=u'["run-webserver", "arg1", "arg2"]', application=u'["run-application", "arg1", "arg2"]')
+    task_definition.set_commands(webserver=u'["run-webserver", "arg1", "arg2"]',
+                                 application=u'["run-application", "arg1", "arg2"]')
     for container in task_definition.containers:
         if container[u'name'] == u'webserver':
             assert container[u'command'] == [u'run-webserver', u'arg1', u'arg2']
         if container[u'name'] == u'application':
             assert container[u'command'] == [u'run-application', u'arg1', u'arg2']
 
+
 def test_task_set_command_as_invalid_json_list(task_definition):
     with pytest.raises(EcsTaskDefinitionCommandError):
-        task_definition.set_commands(webserver=u'["run-webserver, "arg1" arg2"]', application=u'["run-application" "arg1 "arg2"]')
+        task_definition.set_commands(webserver=u'["run-webserver, "arg1" arg2"]',
+                                     application=u'["run-application" "arg1 "arg2"]')
 
 
 def test_task_set_command_for_unknown_container(task_definition):
@@ -914,17 +1010,17 @@ class TestSetHealthChecks:
     @pytest.mark.parametrize(
         'webserver_health_check, application_health_check',
         (
-            (
-                (u'webserver', u'curl -f http://webserver/alive/', 30, 5, 3, 0),
-                (u'application', u'curl -f http://application/alive/', 60, 10, 6, 5)
-            ),
-            (
-                (u'webserver', u'curl -f http://webserver/alive/', 30, 5, 3, 0),
-                (u'application', u'curl -f http://application/alive/', 60, 10, 6, 5)
-            )
+                (
+                        (u'webserver', u'curl -f http://webserver/alive/', 30, 5, 3, 0),
+                        (u'application', u'curl -f http://application/alive/', 60, 10, 6, 5)
+                ),
+                (
+                        (u'webserver', u'curl -f http://webserver/alive/', 30, 5, 3, 0),
+                        (u'application', u'curl -f http://application/alive/', 60, 10, 6, 5)
+                )
         )
     )
-    def test_success(self, webserver_health_check, application_health_check, task_definition):        
+    def test_success(self, webserver_health_check, application_health_check, task_definition):
         task_definition.set_health_checks((
             webserver_health_check,
             application_health_check,
@@ -949,7 +1045,8 @@ class TestSetHealthChecks:
 
     def test_unknown_container(self, task_definition):
         with pytest.raises(UnknownContainerError):
-            task_definition.set_health_checks(((u'foobar', u'curl -f http://application/alive/', 60, 10, 6,  5),))
+            task_definition.set_health_checks(((u'foobar', u'curl -f http://application/alive/', 60, 10, 6, 5),))
+
 
 def test_task_get_overrides(task_definition):
     assert task_definition.get_overrides() == []
@@ -959,7 +1056,7 @@ def test_task_get_overrides_with_command(task_definition):
     task_definition.set_commands(webserver='/usr/bin/python script.py')
     overrides = task_definition.get_overrides()
     assert len(overrides) == 1
-    assert overrides[0]['command'] == ['/usr/bin/python','script.py']
+    assert overrides[0]['command'] == ['/usr/bin/python', 'script.py']
 
 
 def test_task_get_overrides_with_environment(task_definition):
@@ -975,7 +1072,7 @@ def test_task_get_overrides_with_docker_labels(task_definition):
     overrides = task_definition.get_overrides()
     assert len(overrides) == 1
     assert overrides[0]['name'] == 'webserver'
-    #assert 'foo' in overrides[0]['dockerLabels']
+    # assert 'foo' in overrides[0]['dockerLabels']
     assert overrides[0]['dockerLabels']['foo'] == 'baz'
 
 
@@ -994,7 +1091,7 @@ def test_task_get_overrides_with_command_environment_and_secrets(task_definition
     overrides = task_definition.get_overrides()
     assert len(overrides) == 1
     assert overrides[0]['name'] == 'webserver'
-    assert overrides[0]['command'] == ['/usr/bin/python','script.py']
+    assert overrides[0]['command'] == ['/usr/bin/python', 'script.py']
     assert dict(name='foo', value='baz') in overrides[0]['environment']
     assert dict(name='bar', valueFrom='qux') in overrides[0]['secrets']
 
@@ -1006,7 +1103,7 @@ def test_task_get_overrides_with_command_secrets_and_environment_for_multiple_co
     overrides = task_definition.get_overrides()
     assert len(overrides) == 2
     assert overrides[0]['name'] == 'application'
-    assert overrides[0]['command'] == ['/usr/bin/python','script.py']
+    assert overrides[0]['command'] == ['/usr/bin/python', 'script.py']
     assert overrides[1]['name'] == 'webserver'
     assert dict(name='foo', value='baz') in overrides[1]['environment']
     assert dict(name='bar', valueFrom='qux') in overrides[1]['secrets']
@@ -1015,7 +1112,7 @@ def test_task_get_overrides_with_command_secrets_and_environment_for_multiple_co
 def test_task_get_overrides_command(task_definition):
     command = task_definition.get_overrides_command('/usr/bin/python script.py')
     assert isinstance(command, list)
-    assert command == ['/usr/bin/python','script.py']
+    assert command == ['/usr/bin/python', 'script.py']
 
 
 def test_task_get_overrides_environment(task_definition):
@@ -1060,6 +1157,55 @@ def test_client_init(mocked_init, mocked_client):
     mocked_client.assert_any_call(u'events')
 
 
+@patch.object(Session, 'client')
+@patch.object(Session, '__init__')
+@patch.object(EcsClient, 'assume_role')
+def test_client_init_assuming_role(assume_role_mock, mocked_init, mocked_client):
+    mocked_init.return_value = None
+    assume_role_mock.return_value = 'sts-key', 'sts-secret', 'sts-token'
+
+    EcsClient(u'access_key_id', u'secret_access_key', u'region', u'profile',
+              assume_account='1234567890', assume_role='DeployRole')
+
+    mocked_init.assert_called_once_with(aws_access_key_id=u'sts-key',
+                                        aws_secret_access_key=u'sts-secret',
+                                        profile_name=None,
+                                        region_name=u'region',
+                                        aws_session_token=u'sts-token')
+    mocked_client.assert_any_call(u'ecs')
+    mocked_client.assert_any_call(u'events')
+
+
+@patch.object(Session, 'client')
+@patch.object(Session, '__init__')
+def test_client_assume_role(session_mock, mocked_client):
+    sts = Mock()
+    mocked_client.return_value = sts
+    session_mock.return_value = None
+
+    sts.assume_role.return_value = {
+        'Credentials': {
+            'AccessKeyId': 'sts-key',
+            'SecretAccessKey': 'sts-secret',
+            'SessionToken': 'sts-token',
+        }
+    }
+
+    key, secret, token = EcsClient.assume_role('key', 'secret', 'region', 'profile', 'token', '1234567890', 'MyRole')
+
+    session_mock.assert_called_once_with(aws_access_key_id=u'key',
+                                         aws_secret_access_key=u'secret',
+                                         profile_name=u'profile',
+                                         region_name=u'region',
+                                         aws_session_token=u'token')
+
+    sts.assume_role.assert_called_with(RoleArn='arn:aws:iam::1234567890:role/MyRole', RoleSessionName='ecsDeploy')
+
+    assert key == 'sts-key'
+    assert secret == 'sts-secret'
+    assert token == 'sts-token'
+
+
 @pytest.fixture
 @patch.object(Session, 'client')
 @patch.object(Session, '__init__')
@@ -1075,7 +1221,8 @@ def test_client_describe_services(client):
 
 def test_client_describe_task_definition(client):
     client.describe_task_definition(u'task_definition_arn')
-    client.boto.describe_task_definition.assert_called_once_with(include=['TAGS'], taskDefinition=u'task_definition_arn')
+    client.boto.describe_task_definition.assert_called_once_with(include=['TAGS'],
+                                                                 taskDefinition=u'task_definition_arn')
 
 
 def test_client_describe_unknown_task_definition(client):
@@ -1290,7 +1437,7 @@ def test_ecs_action_init(client):
 
 def test_ecs_action_init_with_invalid_cluster():
     with pytest.raises(EcsConnectionError) as excinfo:
-        client = EcsTestClient(u'access_key',  u'secret_key')
+        client = EcsTestClient(u'access_key', u'secret_key')
         EcsAction(client, u'invliad-cluster', u'test-service')
     assert str(excinfo.value) == u'An error occurred (ClusterNotFoundException) when calling the DescribeServices ' \
                                  u'operation: Cluster not found.'
@@ -1298,7 +1445,7 @@ def test_ecs_action_init_with_invalid_cluster():
 
 def test_ecs_action_init_with_invalid_service():
     with pytest.raises(EcsConnectionError) as excinfo:
-        client = EcsTestClient(u'access_key',  u'secret_key')
+        client = EcsTestClient(u'access_key', u'secret_key')
         EcsAction(client, u'test-cluster', u'invalid-service')
     assert str(excinfo.value) == u'An error occurred when calling the DescribeServices operation: Service not found.'
 
@@ -1691,7 +1838,8 @@ class EcsTestClient(object):
         if not self.access_key_id or not self.secret_access_key:
             raise EcsConnectionError(u'Unable to locate credentials. Configure credentials by running "aws configure".')
         if cluster == 'unknown-cluster':
-            raise EcsConnectionError(u'An error occurred (ClusterNotFoundException) when calling the RunTask operation: Cluster not found.')
+            raise EcsConnectionError(
+                u'An error occurred (ClusterNotFoundException) when calling the RunTask operation: Cluster not found.')
         if self.deployment_errors:
             error = dict(Error=dict(Code=123, Message="Something went wrong"))
             raise ClientError(error, 'fake_error')
@@ -1701,4 +1849,5 @@ class EcsTestClient(object):
         if not self.access_key_id or not self.secret_access_key:
             raise EcsConnectionError(u'Unable to locate credentials. Configure credentials by running "aws configure".')
         if cluster == 'unknown-cluster':
-            raise EcsConnectionError(u'An error occurred (ClusterNotFoundException) when calling the RunTask operation: Cluster not found.')
+            raise EcsConnectionError(
+                u'An error occurred (ClusterNotFoundException) when calling the RunTask operation: Cluster not found.')
