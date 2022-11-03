@@ -22,8 +22,9 @@ def runner():
 @patch.object(EcsClient, '__init__')
 def test_get_client(ecs_client):
     ecs_client.return_value = None
-    client = get_client('access_key_id', 'secret_access_key', 'region', 'profile')
-    ecs_client.assert_called_once_with('access_key_id', 'secret_access_key', 'region', 'profile')
+    client = get_client('access_key_id', 'secret_access_key', 'region', 'profile', 'account', 'role')
+    ecs_client.assert_called_once_with('access_key_id', 'secret_access_key', 'region', 'profile',
+                                       assume_account='account', assume_role='role')
     assert isinstance(client, EcsClient)
 
 
