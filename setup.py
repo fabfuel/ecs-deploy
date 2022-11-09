@@ -19,6 +19,7 @@ dependencies = [
     'future',
     'requests',
     'dictdiffer==0.8.0',
+    'awscli',
 ]
 
 setup(
