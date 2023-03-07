@@ -379,7 +379,8 @@ RESPONSE_TASK_DEFINITION = {
 }
 
 RESPONSE_TASK_DEFINITION_2 = {
-    u"taskDefinition": PAYLOAD_TASK_DEFINITION_2
+    u"taskDefinition": PAYLOAD_TASK_DEFINITION_2,
+    u'tags': [{'key': 'old-key', 'value': 'old-value'}]
 }
 
 RESPONSE_TASK_DEFINITION_3 = {
