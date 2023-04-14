@@ -1328,8 +1328,8 @@ class EcsTaskDefinitionDiff(object):
         msg = u'Changed task tag "%s" value to: "%s"'
         msg_added = u'Added task tag "%s" with: "%s"'
         msg_removed = u'Removed task tag "%s"'
-        tags_dict = __class__._tag_list_to_dict(task_tag_list)
-        old_tags_dict = __class__._tag_list_to_dict(old_task_tag_list)
+        tags_dict = EcsTaskDefinitionDiff._tag_list_to_dict(task_tag_list)
+        old_tags_dict = EcsTaskDefinitionDiff._tag_list_to_dict(old_task_tag_list)
         diffs = []
         for key, value in tags_dict.items():
             old_value = old_tags_dict.get(key)
