@@ -5,9 +5,9 @@ on:
     branches:
       - 'develop'
       - 'master'
-    tags: 
+    tags:
       - '*.*.*'
-    
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -15,7 +15,7 @@ jobs:
 
     steps:
       -
-        name: Checkout 
+        name: Checkout
         uses: actions/checkout@v2
       -
         name: Login to Docker Hub
@@ -32,6 +32,7 @@ jobs:
         with:
           context: .
           file: ./Dockerfile
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: fabfuel/ecs-deploy:${{ github.ref_name }}
       -
@@ -41,5 +42,6 @@ jobs:
         with:
           context: .
           file: ./Dockerfile
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: fabfuel/ecs-deploy:latest
