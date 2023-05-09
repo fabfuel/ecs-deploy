@@ -32,6 +32,7 @@ jobs:
         with:
           context: .
           file: ./Dockerfile
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: fabfuel/ecs-deploy:${{ github.ref_name }}
       -
@@ -41,5 +42,6 @@ jobs:
         with:
           context: .
           file: ./Dockerfile
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: fabfuel/ecs-deploy:latest
