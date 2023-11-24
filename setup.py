@@ -17,7 +17,7 @@ dependencies = [
     'botocore>=1.32.6',
     'boto3>=1.29.6',
     'future',
-    'requests',
+    'requests<2.30.0',
     'dictdiffer>=0.9.0',
 ]
 
