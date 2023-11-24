@@ -18,7 +18,7 @@ dependencies = [
     'boto3>=1.14.47',
     'future',
     'requests<2.30.0',
-    'dictdiffer==0.8.0',
+    'dictdiffer>=0.9.0',
     'awscli',
 ]
 
