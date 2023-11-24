@@ -14,12 +14,11 @@ def readme():
 dependencies = [
     'click>=7.1.2, <9',
     'click-log==0.3.2',
-    'botocore>=1.17.47',
-    'boto3>=1.14.47',
+    'botocore>=1.32.6',
+    'boto3>=1.29.6',
     'future',
-    'requests<2.30.0',
-    'dictdiffer==0.8.0',
-    'awscli',
+    'requests',
+    'dictdiffer>=0.9.0',
 ]
 
 setup(
