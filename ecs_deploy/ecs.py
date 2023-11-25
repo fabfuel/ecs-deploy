@@ -525,6 +525,44 @@ class EcsTaskDefinition(object):
             self.runtime_platform = new_runtime_platform
             self._diff.append(diff)
 
+    def set_task_tags(self, task_tag_list, exclusive=False):
+        new_tags_dict = {}
+        for tag in task_tag_list:
+            new_tags_dict[tag[0]] = tag[1]
+
+        old_tags_dict = {}
+        if self.tags:
+          for tag in self.tags:
+              old_tags_dict[tag["key"]] = tag["value"]
+
+        if exclusive is True:
+            merged = new_tags_dict
+        else:
+            merged = old_tags_dict.copy()
+            merged.update(new_tags_dict)
+
+        if old_tags_dict == merged:
+            return
+
+        new_tags = []
+        for key, value in merged.items():
+            mapping = {}
+            mapping["key"] = key
+            mapping["value"] = value
+            new_tags.append(mapping)
+
+        self.apply_task_tags(new_tags)
+
+    def apply_task_tags(self, new_tags):
+        diff = EcsTaskDefinitionDiff(
+            container=None,
+            field=u'tags',
+            value=new_tags,
+            old_value=self.tags
+        )
+        self._diff.append(diff)
+        self.tags = new_tags
+
     def set_cpu(self, **cpu):
         self.validate_container_options(**cpu)
         for container in self.containers:
@@ -1234,6 +1272,11 @@ class EcsTaskDefinitionDiff(object):
                 self.value,
                 self.old_value,
             ))
+        elif self.field == u'tags':
+            return '\n'.join(self._get_task_tag_diffs(
+                self.value,
+                self.old_value,
+            ))
         elif self.container:
             return u'Changed %s of container "%s" to: "%s" (was: "%s")' % (
                 self.field,
@@ -1279,6 +1322,38 @@ class EcsTaskDefinitionDiff(object):
                 message = msg_removed % (old_name, container)
                 diffs.append(message)
         return diffs
+
+    @staticmethod
+    def _get_task_tag_diffs(task_tag_list, old_task_tag_list):
+        msg = u'Changed task tag "%s" value to: "%s"'
+        msg_added = u'Added task tag "%s" with: "%s"'
+        msg_removed = u'Removed task tag "%s"'
+        tags_dict = EcsTaskDefinitionDiff._tag_list_to_dict(task_tag_list)
+        old_tags_dict = EcsTaskDefinitionDiff._tag_list_to_dict(old_task_tag_list)
+        diffs = []
+        for key, value in tags_dict.items():
+            old_value = old_tags_dict.get(key)
+            if value and not old_value:
+                message = msg_added % (key, value)
+                diffs.append(message)
+            elif value != old_value:
+                message = msg % (key, value)
+                diffs.append(message)
+        for old_key in old_tags_dict.keys():
+            if old_key not in tags_dict.keys():
+                message = msg_removed % (old_key)
+                diffs.append(message)
+        return diffs
+
+    @staticmethod
+    def _tag_list_to_dict(tag_list):
+        tag_dict = {}
+        if tag_list:
+          for tag in tag_list:
+              key = tag["key"]
+              value = tag["value"]
+              tag_dict[key] = value
+        return tag_dict
 
     @staticmethod
     def _get_secrets_diffs(container, secrets, old_secrets):
