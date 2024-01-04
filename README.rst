@@ -270,7 +270,7 @@ file like the following:
 SOME_SECRET=arn:aws:ssm:<aws region>:<aws account id>:parameter/KEY_OF_SECRET_IN_PARAMETER_STORE
 ```
 
-$ ecs deploy my-cluster my-service --secret-env-file webserver env/secrets.env
+$ ecs deploy my-cluster my-service --secrets-env-file webserver env/secrets.env
 
 This will modify the **webserver** container definition and add or overwrite the environment variable `SOME_SECRET` with the value of the `KEY_OF_SECRET_IN_PARAMETER_STORE` in the AWS Parameter Store of the AWS Systems Manager.
 
