@@ -14,8 +14,8 @@ def readme():
 dependencies = [
     'click>=7.1.2, <9',
     'click-log==0.3.2',
-    'botocore>=1.32.6',
-    'boto3>=1.29.6',
+    'botocore>=1.34.42',
+    'boto3>=1.34.42',
     'future',
     'requests<2.30.0',
     'dictdiffer>=0.9.0',
