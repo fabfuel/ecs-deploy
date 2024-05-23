@@ -6,7 +6,6 @@ from time import sleep
 import click
 import json
 import getpass
-from datetime import datetime, timedelta
 from botocore.exceptions import ClientError
 from ecs_deploy import VERSION
 from ecs_deploy.ecs import DeployAction, ScaleAction, RunAction, EcsClient, DiffAction, \
@@ -521,41 +520,17 @@ def diff(task, revision_a, revision_b, region, access_key_id, secret_access_key,
 def wait_for_finish(action, timeout, title, success_message, failure_message,
                     ignore_warnings, sleep_time=1):
     click.secho(title)
-    start_timestamp = datetime.now()
-    waiting_timeout = datetime.now() + timedelta(seconds=timeout)
-    service = action.get_service()
-    inspected_until = None
 
     if timeout == -1:
-        waiting = False
-    else:
-        waiting = True
+        click.secho("Timeout disabled. Fire and forget.")
+        return
 
-    while waiting and datetime.now() < waiting_timeout:
+    while not action.has_finished(timeout, failure_message, ignore_warnings):
         click.secho('.', nl=False)
-        service = action.get_service()
-        inspected_until = inspect_errors(
-            service=service,
-            failure_message=failure_message,
-            ignore_warnings=ignore_warnings,
-            since=inspected_until,
-            timeout=False
-        )
-        waiting = not action.is_deployed(service)
-
-        if waiting:
-            sleep(sleep_time)
-
-    inspect_errors(
-        service=service,
-        failure_message=failure_message,
-        ignore_warnings=ignore_warnings,
-        since=inspected_until,
-        timeout=waiting
-    )
+        sleep(sleep_time)
 
     click.secho('\n%s' % success_message, fg='green')
-    click.secho('Duration: %s sec\n' % (datetime.now() - start_timestamp).seconds)
+    click.secho('Duration: %s sec\n' % action.get_duration())
 
 
 def deploy_task_definition(deployment, task_definition, title, success_message,
@@ -667,51 +642,6 @@ def print_diff(task_definition, title='Updating task definition'):
         for diff in task_definition.diff:
             click.secho(str(diff), fg='blue')
         click.secho('')
-
-
-def inspect_errors(service, failure_message, ignore_warnings, since, timeout):
-    error = False
-    last_error_timestamp = since
-    warnings = service.get_warnings(since)
-    for timestamp in warnings:
-        message = warnings[timestamp]
-        click.secho('')
-        if ignore_warnings:
-            last_error_timestamp = timestamp
-            click.secho(
-                '%s\nWARNING: %s' % (timestamp, message),
-                fg='yellow',
-                err=False
-            )
-            click.secho('Continuing.', nl=False)
-        else:
-            click.secho(
-                '%s\nERROR: %s\n' % (timestamp, message),
-                fg='red',
-                err=True
-            )
-            error = True
-
-    if service.older_errors:
-        click.secho('')
-        click.secho('Older errors', fg='yellow', err=True)
-        for timestamp in service.older_errors:
-            click.secho(
-                text='%s\n%s\n' % (timestamp, service.older_errors[timestamp]),
-                fg='yellow',
-                err=True
-            )
-
-    if timeout:
-        error = True
-        failure_message += ' due to timeout. Please see: ' \
-                           'https://github.com/fabfuel/ecs-deploy#timeout'
-        click.secho('')
-
-    if error:
-        raise TaskPlacementError(failure_message)
-
-    return last_error_timestamp
 
 
 ecs.add_command(deploy)
