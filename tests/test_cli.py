@@ -1,3 +1,4 @@
+import re
 from datetime import datetime
 
 import pytest
@@ -260,7 +261,7 @@ def test_deploy_one_new_health_check(get_client, cmd_input, cmd_expected, runner
     assert u'Successfully deregistered revision: 1' in result.output
     assert u'Successfully changed task definition to: test-task:2' in result.output
     assert u'Deployment successful' in result.output
-    
+
 
 
 @patch('ecs_deploy.cli.get_client')
@@ -651,8 +652,7 @@ def test_deploy_with_errors(get_client, runner):
     result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME))
     assert result.exit_code == 1
     assert u"Deployment failed" in result.output
-    assert u"ERROR: Service was unable to Lorem Ipsum" in result.output
-
+    assert re.search("error: [0-9-: \\.+]+Service was unable to Lorem Ipsum", result.output)
 
 @patch('ecs_deploy.cli.get_client')
 def test_deploy_with_client_errors(get_client, runner):
@@ -673,7 +673,7 @@ def test_deploy_ignore_warnings(get_client, runner):
     assert u'Successfully created revision: 2' in result.output
     assert u'Successfully deregistered revision: 1' in result.output
     assert u'Successfully changed task definition to: test-task:2' in result.output
-    assert u"WARNING: Service was unable to Lorem Ipsum" in result.output
+    assert re.search("warning: [0-9-: \\.+]+Service was unable to Lorem Ipsum", result.output)
     assert u"Continuing." in result.output
     assert u'Deployment successful' in result.output
 
@@ -797,7 +797,7 @@ def test_deploy_with_wait_within_timeout(get_client, runner):
     result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '--timeout', '10'))
     assert result.exit_code == 0
     assert u'Deploying new task definition' in result.output
-    assert u'...' in result.output
+    assert u'..' in result.output
 
 
 @patch('ecs_deploy.cli.get_client')
@@ -865,7 +865,7 @@ def test_scale_with_errors(get_client, runner):
     result = runner.invoke(cli.scale, (CLUSTER_NAME, SERVICE_NAME, '2'))
     assert result.exit_code == 1
     assert u"Scaling failed" in result.output
-    assert u"ERROR: Service was unable to Lorem Ipsum" in result.output
+    assert re.search("error: [0-9-: \\.+]+Service was unable to Lorem Ipsum", result.output)
 
 
 @patch('ecs_deploy.cli.get_client')
@@ -884,7 +884,7 @@ def test_scale_ignore_warnings(get_client, runner):
     assert not result.exception
     assert result.exit_code == 0
     assert u"Successfully changed desired count to: 2" in result.output
-    assert u"WARNING: Service was unable to Lorem Ipsum" in result.output
+    assert re.search("warning: [0-9-: \\.+]+Service was unable to Lorem Ipsum", result.output)
     assert u"Continuing." in result.output
     assert u"Scaling successful" in result.output
 
