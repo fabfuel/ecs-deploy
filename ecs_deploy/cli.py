@@ -100,7 +100,7 @@ def deploy(cluster, service, tag, image, command, health_check, cpu, memory, mem
         client = get_client(access_key_id, secret_access_key, region, profile, account, assume_role)
         deployment = DeployAction(client, cluster, service)
 
-        td = get_task_definition(deployment, task)
+        td = deployment.get_task_definition(task)
         # If there is a new container, add it at frist.
         td.add_containers(add_container)
         td.remove_containers(remove_container)
@@ -558,14 +558,6 @@ def deploy_task_definition(deployment, task_definition, title, success_message,
 
     if deregister:
         deregister_task_definition(deployment, previous_task_definition)
-
-
-def get_task_definition(action, task):
-    if task:
-        task_definition = action.get_task_definition(task)
-    else:
-        task_definition = action.get_current_task_definition(action.service)
-    return task_definition
 
 
 def create_task_definition(action, task_definition):

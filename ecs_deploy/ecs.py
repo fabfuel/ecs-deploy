@@ -1331,10 +1331,11 @@ class EcsAction(object):
             service_definition=services_definition[u'services'][0]
         )
 
-    def get_current_task_definition(self, service):
-        return self.get_task_definition(service.task_definition)
 
     def get_task_definition(self, task_definition):
+        if not task_definition:
+            task_definition = self._service.task_definition
+
         task_definition_payload = self._client.describe_task_definition(
             task_definition_arn=task_definition
         )
