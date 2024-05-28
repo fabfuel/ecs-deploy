@@ -2,6 +2,7 @@ from __future__ import print_function, absolute_import
 
 from os import getenv
 from time import sleep
+from pathlib import Path
 
 import click
 import json
@@ -83,7 +84,8 @@ def get_client(access_key_id, secret_access_key, region, profile, assume_account
 @click.option('--volume', type=(str, str), multiple=True, required=False, help='Set volume mapping from host to container in the task definition.')
 @click.option('--add-container', type=str, multiple=True, required=False, help='Add a placeholder container in the task definition.')
 @click.option('--remove-container', type=str, multiple=True, required=False, help='Remove a container from the task definition.')
-def deploy(cluster_service, tag, image, command, health_check, cpu, memory, memoryreservation, task_cpu, task_memory, privileged, essential, env, env_file, s3_env_file, secret, secrets_env_file, ulimit, system_control, port, mount, log, role, execution_role, runtime_platform, task, region, access_key_id, secret_access_key, profile, account, assume_role, timeout, newrelic_apikey, newrelic_appid, newrelic_region, newrelic_revision, comment, user, ignore_warnings, diff, deregister, rollback, exclusive_env, exclusive_secrets, exclusive_s3_env_file, sleep_time, exclusive_ulimits, exclusive_system_controls, exclusive_ports, exclusive_mounts, volume, add_container, remove_container, slack_url, docker_label, exclusive_docker_labels, slack_service_match='.*'):
+@click.option('-o', '--out-file', type=str, required=False, help='Sets the file to write structured JSON output to')
+def deploy(cluster_service, tag, image, command, health_check, cpu, memory, memoryreservation, task_cpu, task_memory, privileged, essential, env, env_file, s3_env_file, secret, secrets_env_file, ulimit, system_control, port, mount, log, role, execution_role, runtime_platform, task, region, access_key_id, secret_access_key, profile, account, assume_role, timeout, newrelic_apikey, newrelic_appid, newrelic_region, newrelic_revision, comment, user, ignore_warnings, diff, deregister, rollback, exclusive_env, exclusive_secrets, exclusive_s3_env_file, sleep_time, exclusive_ulimits, exclusive_system_controls, exclusive_ports, exclusive_mounts, volume, add_container, remove_container, slack_url, docker_label, exclusive_docker_labels, out_file, slack_service_match='.*'):
     """
     Redeploy or modify a service.
 
@@ -173,6 +175,27 @@ def deploy(cluster_service, tag, image, command, health_check, cpu, memory, memo
         record_deployment(tag, newrelic_apikey, newrelic_appid, newrelic_region, newrelic_revision, comment, user)
 
         slack.notify_success(cluster, td.revision, service=service)
+
+        if out_file:
+            output = Path(out_file)
+            if output.exists() and not output.is_file():
+                click.secho('Out-file already exists and is not a file.\n', fg='red', err=True)
+            else:
+                click.secho('Writing structured JSON output to: %s\n' % output)
+                with output.open('w') as file:
+                    data = [
+                        {
+                            'cluster': deployment.cluster_name,
+                            'service': deployment.service_name,
+                            'old_task_definition': old_td.family_revision,
+                            'old_task_definition_arn': old_td.arn,
+                            'task_definition': new_td.family_revision,
+                            'task_definition_arn': new_td.arn
+                        }
+                        for deployment, old_td, new_td in deployments
+                    ]
+                    json.dump(data, file)
+
 
     except (EcsError, NewRelicException, ClientError) as e:
         click.secho('%s\n' % str(e), fg='red', err=True)
