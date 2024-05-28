@@ -1,3 +1,4 @@
+import json
 import re
 from datetime import datetime
 
@@ -110,6 +111,50 @@ def test_deploy_without_cluster_service_pairs(get_client, runner, arguments):
     result = runner.invoke(cli.deploy, arguments)
     assert result.exit_code == 2
     assert u'CLUSTER_SERVICE must be one or more pairs of CLUSTER and SERVICE.' in result.output
+    assert u'Deploying based on task definition' not in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_deploy_with_out_file(get_client, runner, tmp_path):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    out_file = tmp_path / 'deployment.json'
+    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '--out-file', str(out_file)))
+    assert result.exit_code == 0
+    assert not result.exception
+    assert u'Writing structured JSON output to: %s' % out_file in result.output
+
+    assert json.loads(out_file.read_text()) == [{
+        u'cluster': CLUSTER_NAME,
+        u'service': SERVICE_NAME,
+        u'old_task_definition': u'test-task:1',
+        u'old_task_definition_arn': TASK_DEFINITION_ARN_1,
+        u'task_definition': u'test-task:2',
+        u'task_definition_arn': TASK_DEFINITION_ARN_2,
+    }]
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_deploy_with_out_file_for_multiple_services(get_client, runner, tmp_path):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    out_file = tmp_path / 'deployment.json'
+    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, CLUSTER_NAME, SERVICE_NAME,
+                                        '--out-file', str(out_file)))
+    assert result.exit_code == 0
+    assert not result.exception
+
+    deployments = json.loads(out_file.read_text())
+    assert len(deployments) == 2
+    for deployment in deployments:
+        assert deployment[u'service'] == SERVICE_NAME
+        assert deployment[u'task_definition'] == u'test-task:2'
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_deploy_with_out_file_pointing_to_a_directory(get_client, runner, tmp_path):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '--out-file', str(tmp_path)))
+    assert result.exit_code == 2
+    assert u"Invalid value for '-o' / '--out-file'" in result.output
     assert u'Deploying based on task definition' not in result.output
 
 
