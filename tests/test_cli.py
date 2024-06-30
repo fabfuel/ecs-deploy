@@ -1003,8 +1003,11 @@ def test_record_deployment_without_apikey(Deployment):
 @patch('click.secho')
 @patch('ecs_deploy.newrelic.Deployment')
 def test_record_deployment_without_appid(Deployment, secho):
-    result = record_deployment('1.2.3', 'APIKEY',None, None, None, None, None)
-    secho.assert_any_call('Missing required parameters for recording New Relic deployment.Please see https://github.com/fabfuel/ecs-deploy#new-relic')
+    result = record_deployment('1.2.3', 'APIKEY', None, None, None, None, None)
+    secho.assert_any_call(
+        'Missing required parameters for recording New Relic deployment. '
+        'Please see https://github.com/fabfuel/ecs-deploy#new-relic'
+    )
     assert result is False
 
 

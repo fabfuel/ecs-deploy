@@ -645,7 +645,7 @@ def record_deployment(tag, api_key, app_id, region, revision, comment, user):
 
     if not revision or not api_key or not app_id:
         if api_key:
-            click.secho('Missing required parameters for recording New Relic deployment.' \
+            click.secho('Missing required parameters for recording New Relic deployment. '
                         'Please see https://github.com/fabfuel/ecs-deploy#new-relic')
         return False
 
