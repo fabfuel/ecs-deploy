@@ -49,6 +49,9 @@ The project is available on PyPI. Simply run::
 
     $ pip install ecs-deploy
 
+For [Homebrew](https://brew.sh/) users, you can also install [it](https://formulae.brew.sh/formula/ecs-deploy) via brew::
+
+    $ brew install ecs-deploy
 
 Run via Docker
 --------------
@@ -57,7 +60,7 @@ Instead of installing **ecs-deploy** locally, which requires a Python environmen
 Running **ecs-deploy** via Docker is easy as::
 
     docker run fabfuel/ecs-deploy:1.10.2
-    
+
 In this example, the stable version 1.10.2 is executed. Alternatively you can use Docker tags ``master`` or ``latest`` for the latest stable version or Docker tag ``develop`` for the newest development version of **ecs-deploy**.
 
 Please be aware, that when running **ecs-deploy** via Docker, the configuration - as described below - does not apply. You have to provide credentials and the AWS region via the command as attributes or environment variables::
@@ -80,7 +83,7 @@ AWS IAM
 -------
 
 If you are using **ecs-deploy** with a role or user account that does not have full AWS access, such as in a deploy script, you will
-need to use or create an IAM policy with the correct set of permissions in order for your deploys to succeed. One option is to use the 
+need to use or create an IAM policy with the correct set of permissions in order for your deploys to succeed. One option is to use the
 pre-specified ``AmazonECS_FullAccess`` (https://docs.aws.amazon.com/AmazonECS/latest/userguide/security-iam-awsmanpol.html#security-iam-awsmanpol-AmazonECS_FullAccess) policy. If you would prefer to create a role with a more minimal set of permissions,
 the following are required:
 
@@ -93,7 +96,7 @@ the following are required:
 * ``ecs:ListTaskDefinitions``
 * ``ecs:DescribeTaskDefinition``
 * ``ecs:DeregisterTaskDefinition``
- 
+
 If using custom IAM permissions, you will also need to set the ``iam:PassRole`` policy for each IAM role. See here https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_passrole.html for more information.
 
 Note that not every permission is required for every action you can take in **ecs-deploy**. You may be able to adjust permissions based on your specific needs.
@@ -310,7 +313,7 @@ To change the command of a specific container, run the following command::
 
     $ ecs deploy my-cluster my-service --command webserver "nginx"
 
-This will modify the **webserver** container and change its command to "nginx". If you have 
+This will modify the **webserver** container and change its command to "nginx". If you have
 a command that requires arguments as well, then you can simply specify it like this as you would normally do:
 
     $ ecs deploy my-cluster my-service --command webserver "ngnix -c /etc/ngnix/ngnix.conf"
