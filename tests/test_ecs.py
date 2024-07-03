@@ -1466,15 +1466,13 @@ def test_ecs_action_get_service():
 
 
 @patch.object(EcsClient, '__init__')
-def test_ecs_action_get_current_task_definition(client, service):
+def test_ecs_action_get_task_definition(client, service):
     client.describe_task_definition.return_value = RESPONSE_TASK_DEFINITION
 
     action = EcsAction(client, u'test-cluster', u'test-service')
-    task_definition = action.get_current_task_definition(service)
+    task_definition = action.get_task_definition(None)
 
-    client.describe_task_definition.assert_called_once_with(
-        task_definition_arn=service.task_definition
-    )
+    client.describe_task_definition.assert_called_once()
 
     assert isinstance(task_definition, EcsTaskDefinition)
     assert task_definition.family == u'test-task'
