@@ -516,6 +516,41 @@ def test_deploy_exclusive_docker_label(get_client, runner):
     assert u'Successfully changed task definition to: test-task:2' in result.output
     assert u'Deployment successful' in result.output
 
+@patch('ecs_deploy.cli.get_client')
+def test_deploy_task_task_tag_merge(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '--task-tag', 'key1', 'value1', '--task-tag', 'key2', 'value2'))
+    assert result.exit_code == 0
+    assert not result.exception
+    assert u"Deploying based on task definition: test-task:1" in result.output
+    assert u"Updating task definition" in result.output
+    assert u'Added task tag "key1" with: "value1"' in result.output
+    assert u'Added task tag "key2" with: "value2"' in result.output
+    assert u'Successfully created revision: 2' in result.output
+
+@patch('ecs_deploy.cli.get_client')
+def test_update_task_task_tag_merge(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_2, '--task-tag', 'old-key', 'replace-value', '--task-tag', 'new-key', 'new-value'))
+    assert result.exit_code == 0
+    assert not result.exception
+    assert u"Update task definition based on: test-task:2" in result.output
+    assert u"Updating task definition" in result.output
+    assert u'Changed task tag "old-key" value to: "replace-value"' in result.output
+    assert u'Added task tag "new-key" with: "new-value"' in result.output
+    assert u'Successfully created revision: 2' in result.output
+
+@patch('ecs_deploy.cli.get_client')
+def test_update_task_exclusive_task_tag(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_2, '--task-tag', 'new-key', 'new-value', '--exclusive-task-tags'))
+    assert result.exit_code == 0
+    assert not result.exception
+    assert u"Update task definition based on: test-task:2" in result.output
+    assert u"Updating task definition" in result.output
+    assert u'Removed task tag "old-key"' in result.output
+    assert u'Added task tag "new-key" with: "new-value"' in result.output
+    assert u'Successfully created revision: 2' in result.output
 
 @patch('ecs_deploy.cli.get_client')
 def test_deploy_exclusive_secret(get_client, runner):
