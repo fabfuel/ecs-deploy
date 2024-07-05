@@ -21,8 +21,8 @@ def ecs():  # pragma: no cover
     pass
 
 
-def get_client(access_key_id, secret_access_key, region, profile, assume_account, assume_role):
-    return EcsClient(access_key_id, secret_access_key, region, profile, assume_account=assume_account, assume_role=assume_role)
+def get_client(access_key_id, secret_access_key, region, profile, session_token, assume_account, assume_role):
+    return EcsClient(access_key_id, secret_access_key, region, profile, session_token, assume_account=assume_account, assume_role=assume_role)
 
 
 @click.command()
@@ -57,6 +57,7 @@ def get_client(access_key_id, secret_access_key, region, profile, assume_account
 @click.option('--region', required=False, help='AWS region (e.g. eu-central-1)')
 @click.option('--access-key-id', required=False, help='AWS access key id')
 @click.option('--secret-access-key', required=False, help='AWS secret access key')
+@click.option('--session-token', required=False, help='AWS session token')
 @click.option('--profile', required=False, help='AWS configuration profile name')
 @click.option('--account', help='Target AWS account id to deploy in')
 @click.option('--assume-role', help='AWS Role to assume in target account')
@@ -85,7 +86,7 @@ def get_client(access_key_id, secret_access_key, region, profile, assume_account
 @click.option('--volume', type=(str, str), multiple=True, required=False, help='Set volume mapping from host to container in the task definition.')
 @click.option('--add-container', type=str, multiple=True, required=False, help='Add a placeholder container in the task definition.')
 @click.option('--remove-container', type=str, multiple=True, required=False, help='Remove a container from the task definition.')
-def deploy(cluster, service, tag, image, command, health_check, cpu, memory, memoryreservation, task_cpu, task_memory, privileged, essential, env, env_file, s3_env_file, secret, secrets_env_file, ulimit, system_control, port, mount, log, role, execution_role, runtime_platform, task, region, access_key_id, secret_access_key, profile, account, assume_role, timeout, newrelic_apikey, newrelic_appid, newrelic_region, newrelic_revision, comment, user, ignore_warnings, diff, deregister, rollback, exclusive_env, exclusive_secrets, exclusive_s3_env_file, sleep_time, exclusive_ulimits, exclusive_system_controls, exclusive_ports, exclusive_mounts, volume, add_container, remove_container, slack_url, docker_label, exclusive_docker_labels, slack_service_match='.*'):
+def deploy(cluster, service, tag, image, command, health_check, cpu, memory, memoryreservation, task_cpu, task_memory, privileged, essential, env, env_file, s3_env_file, secret, secrets_env_file, ulimit, system_control, port, mount, log, role, execution_role, runtime_platform, task, region, access_key_id, secret_access_key, session_token, profile, account, assume_role, timeout, newrelic_apikey, newrelic_appid, newrelic_region, newrelic_revision, comment, user, ignore_warnings, diff, deregister, rollback, exclusive_env, exclusive_secrets, exclusive_s3_env_file, sleep_time, exclusive_ulimits, exclusive_system_controls, exclusive_ports, exclusive_mounts, volume, add_container, remove_container, slack_url, docker_label, exclusive_docker_labels, slack_service_match='.*'):
     """
     Redeploy or modify a service.
 
@@ -98,7 +99,7 @@ def deploy(cluster, service, tag, image, command, health_check, cpu, memory, mem
     and redeployed.
     """
     try:
-        client = get_client(access_key_id, secret_access_key, region, profile, account, assume_role)
+        client = get_client(access_key_id, secret_access_key, region, profile, session_token, account, assume_role)
         deployment = DeployAction(client, cluster, service)
 
         td = get_task_definition(deployment, task)
@@ -203,6 +204,7 @@ def deploy(cluster, service, tag, image, command, health_check, cpu, memory, mem
 @click.option('--region', help='AWS region (e.g. eu-central-1)')
 @click.option('--access-key-id', help='AWS access key id')
 @click.option('--secret-access-key', help='AWS secret access key')
+@click.option('--session-token', required=False, help='AWS session token')
 @click.option('--newrelic-apikey', required=False, help='New Relic API Key for recording the deployment. Can also be defined via environment variable NEW_RELIC_API_KEY')
 @click.option('--newrelic-appid', required=False, help='New Relic App ID for recording the deployment. Can also be defined via environment variable NEW_RELIC_APP_ID')
 @click.option('--newrelic-region', required=False, help='New Relic region: US or EU (default: US). Can also be defined via environment variable NEW_RELIC_REGION')
@@ -226,7 +228,7 @@ def deploy(cluster, service, tag, image, command, health_check, cpu, memory, mem
 @click.option('--exclusive-ports', is_flag=True, default=False, help='Set the given port mappings exclusively and remove all other pre-existing port mappings from all containers')
 @click.option('--exclusive-mounts', is_flag=True, default=False, help='Set the given mount points exclusively and remove all other pre-existing mount points from all containers')
 @click.option('--volume', type=(str, str), multiple=True, required=False, help='Set volume mapping from host to container in the task definition.')
-def cron(cluster, task, rule, image, tag, command, cpu, memory, memoryreservation, task_cpu, task_memory, privileged, env, env_file, s3_env_file, secret, secrets_env_file, ulimit, system_control, port, mount, log, role, execution_role, region, access_key_id, secret_access_key, newrelic_apikey, newrelic_appid, newrelic_region, newrelic_revision, comment, user, profile, account, assume_role, diff, deregister, rollback, exclusive_env, exclusive_secrets, exclusive_s3_env_file, slack_url, slack_service_match, exclusive_ulimits, exclusive_system_controls, exclusive_ports, exclusive_mounts, volume, docker_label, exclusive_docker_labels):
+def cron(cluster, task, rule, image, tag, command, cpu, memory, memoryreservation, task_cpu, task_memory, privileged, env, env_file, s3_env_file, secret, secrets_env_file, ulimit, system_control, port, mount, log, role, execution_role, region, access_key_id, secret_access_key, session_token, newrelic_apikey, newrelic_appid, newrelic_region, newrelic_revision, comment, user, profile, account, assume_role, diff, deregister, rollback, exclusive_env, exclusive_secrets, exclusive_s3_env_file, slack_url, slack_service_match, exclusive_ulimits, exclusive_system_controls, exclusive_ports, exclusive_mounts, volume, docker_label, exclusive_docker_labels):
     """
     Update a scheduled task.
 
@@ -236,7 +238,7 @@ def cron(cluster, task, rule, image, tag, command, cpu, memory, memoryreservatio
     RULE is the name of the rule to use the new task definition.
     """
     try:
-        client = get_client(access_key_id, secret_access_key, region, profile, account, assume_role)
+        client = get_client(access_key_id, secret_access_key, region, profile, session_token, account, assume_role)
         action = RunAction(client, cluster)
 
         td = action.get_task_definition(task)
@@ -310,6 +312,7 @@ def cron(cluster, task, rule, image, tag, command, cpu, memory, memoryreservatio
 @click.option('--region', help='AWS region (e.g. eu-central-1)')
 @click.option('--access-key-id', help='AWS access key id')
 @click.option('--secret-access-key', help='AWS secret access key')
+@click.option('--session-token', required=False, help='AWS session token')
 @click.option('--profile', help='AWS configuration profile name')
 @click.option('--account', help='Target AWS account id to deploy in')
 @click.option('--assume-role', help='AWS Role to assume in target account')
@@ -319,7 +322,7 @@ def cron(cluster, task, rule, image, tag, command, cpu, memory, memoryreservatio
 @click.option('--exclusive-docker-labels', is_flag=True, default=False, help='Set the given docker labels exclusively and remove all other pre-existing docker-labels from all containers')
 @click.option('--exclusive-s3-env-file', is_flag=True, default=False, help='Set the given s3 env files exclusively and remove all other pre-existing s3 env files from all containers')
 @click.option('--deregister/--no-deregister', default=True, help='Deregister or keep the old task definition (default: --deregister)')
-def update(task, image, tag, command, env, env_file, s3_env_file, secret, secrets_env_file, role, region, access_key_id, secret_access_key, profile, account, assume_role, diff, exclusive_env, exclusive_s3_env_file, exclusive_secrets, runtime_platform, deregister, docker_label, exclusive_docker_labels):
+def update(task, image, tag, command, env, env_file, s3_env_file, secret, secrets_env_file, role, region, access_key_id, secret_access_key, session_token, profile, account, assume_role, diff, exclusive_env, exclusive_s3_env_file, exclusive_secrets, runtime_platform, deregister, docker_label, exclusive_docker_labels):
     """
     Update a task definition.
 
@@ -327,7 +330,7 @@ def update(task, image, tag, command, env, env_file, s3_env_file, secret, secret
     TASK is the name of your task definition family (e.g. 'my-task') within ECS.
     """
     try:
-        client = get_client(access_key_id, secret_access_key, region, profile, account, assume_role)
+        client = get_client(access_key_id, secret_access_key, region, profile, session_token, account, assume_role)
         action = UpdateAction(client)
 
         td = action.get_task_definition(task)
@@ -362,13 +365,14 @@ def update(task, image, tag, command, env, env_file, s3_env_file, secret, secret
 @click.option('--region', help='AWS region (e.g. eu-central-1)')
 @click.option('--access-key-id', help='AWS access key id')
 @click.option('--secret-access-key', help='AWS secret access key')
+@click.option('--session-token', required=False, help='AWS session token')
 @click.option('--profile', help='AWS configuration profile name')
 @click.option('--account', help='Target AWS account id to deploy in')
 @click.option('--assume-role', help='AWS Role to assume in target account')
 @click.option('--timeout', default=300, type=int, help='Amount of seconds to wait for deployment before command fails (default: 300). To disable timeout (fire and forget) set to -1')
 @click.option('--ignore-warnings', is_flag=True, help='Do not fail deployment on warnings (port already in use or insufficient memory/CPU)')
 @click.option('--sleep-time', default=1, type=int, help='Amount of seconds to wait between each check of the service (default: 1)')
-def scale(cluster, service, desired_count, access_key_id, secret_access_key, region, profile, account, assume_role, timeout, ignore_warnings, sleep_time):
+def scale(cluster, service, desired_count, access_key_id, secret_access_key, session_token, region, profile, account, assume_role, timeout, ignore_warnings, sleep_time):
     """
     Scale a service up or down.
 
@@ -378,7 +382,7 @@ def scale(cluster, service, desired_count, access_key_id, secret_access_key, reg
     DESIRED_COUNT is the number of tasks your service should run.
     """
     try:
-        client = get_client(access_key_id, secret_access_key, region, profile, account, assume_role)
+        client = get_client(access_key_id, secret_access_key,  session_token,  region, profile, account, assume_role)
         scaling = ScaleAction(client, cluster, service)
         click.secho('Updating service')
         scaling.scale(desired_count)
@@ -420,6 +424,7 @@ def scale(cluster, service, desired_count, access_key_id, secret_access_key, reg
 @click.option('--region', help='AWS region (e.g. eu-central-1)')
 @click.option('--access-key-id', help='AWS access key id')
 @click.option('--secret-access-key', help='AWS secret access key')
+@click.option('--session-token', required=False, help='AWS session token')
 @click.option('--profile', help='AWS configuration profile name')
 @click.option('--account', help='Target AWS account id to deploy in')
 @click.option('--assume-role', help='AWS Role to assume in target account')
@@ -428,7 +433,7 @@ def scale(cluster, service, desired_count, access_key_id, secret_access_key, reg
 @click.option('--exclusive-docker-labels', is_flag=True, default=False, help='Set the given docker labels exclusively and remove all other pre-existing docker-labels from all containers')
 @click.option('--exclusive-s3-env-file', is_flag=True, default=False, help='Set the given s3 env files exclusively and remove all other pre-existing s3 env files from all containers')
 @click.option('--diff/--no-diff', default=True, help='Print what values were changed in the task definition')
-def run(cluster, task, count, command, env, env_file, s3_env_file, secret, secrets_env_file, launchtype, subnet, securitygroup, public_ip, platform_version, region, access_key_id, secret_access_key, profile, account, assume_role, exclusive_env, exclusive_secrets, exclusive_s3_env_file, diff, docker_label, exclusive_docker_labels):
+def run(cluster, task, count, command, env, env_file, s3_env_file, secret, secrets_env_file, launchtype, subnet, securitygroup, public_ip, platform_version, region, access_key_id, secret_access_key,  session_token, profile, account, assume_role, exclusive_env, exclusive_secrets, exclusive_s3_env_file, diff, docker_label, exclusive_docker_labels):
     """
     Run a one-off task.
 
@@ -438,7 +443,7 @@ def run(cluster, task, count, command, env, env_file, s3_env_file, secret, secre
     COUNT is the number of tasks your service should run.
     """
     try:
-        client = get_client(access_key_id, secret_access_key, region, profile, account, assume_role)
+        client = get_client(access_key_id, secret_access_key,  session_token, region, profile, account, assume_role)
         action = RunAction(client, cluster)
 
         td = action.get_task_definition(task)
@@ -477,10 +482,11 @@ def run(cluster, task, count, command, env, env_file, s3_env_file, secret, secre
 @click.option('--region', help='AWS region (e.g. eu-central-1)')
 @click.option('--access-key-id', help='AWS access key id')
 @click.option('--secret-access-key', help='AWS secret access key')
+@click.option('--session-token', required=False, help='AWS session token')
 @click.option('--profile', help='AWS configuration profile name')
 @click.option('--account', help='Target AWS account id to deploy in')
 @click.option('--assume-role', help='AWS Role to assume in target account')
-def diff(task, revision_a, revision_b, region, access_key_id, secret_access_key, profile, account, assume_role):
+def diff(task, revision_a, revision_b, region, access_key_id, secret_access_key,  session_token, profile, account, assume_role):
     """
     Compare two task definition revisions.
 
@@ -490,7 +496,7 @@ def diff(task, revision_a, revision_b, region, access_key_id, secret_access_key,
     """
 
     try:
-        client = get_client(access_key_id, secret_access_key, region, profile, account, assume_role)
+        client = get_client(access_key_id, secret_access_key,  session_token, region, profile, account, assume_role)
         action = DiffAction(client)
 
         td_a = action.get_task_definition('%s:%s' % (task, revision_a))
