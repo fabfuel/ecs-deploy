@@ -27,6 +27,7 @@ TASK_DEFINITION_ROLE_ARN_1 = u'arn:test:role:1'
 TASK_DEFINITION_ARN_1 = u'arn:aws:ecs:eu-central-1:123456789012:task-definition/%s:%s' % (TASK_DEFINITION_FAMILY_1,
                                                                                           TASK_DEFINITION_REVISION_1)
 TASK_DEFINITION_RUNTIME_PLATFORM_1 = {u'cpuArchitecture': u'X86_64', u'operatingSystemFamily': u'LINUX'}
+IMAGE_DIGEST = u'sha256:67682bda769fae1ccf5183192b8daf37b64cae99c6c3302650f6f8bf5f0f95df'
 TASK_DEFINITION_VOLUMES_1 = []
 TASK_DEFINITION_CONTAINERS_1 = [
     {u'name': u'webserver', u'image': u'webserver:123', u'command': u'run',
@@ -531,6 +532,31 @@ def test_task_set_tag(task_definition):
     task_definition.set_images(u'foobar')
     for container in task_definition.containers:
         assert container[u'image'].endswith(u':foobar')
+
+
+@pytest.mark.parametrize(
+    'image, expected_image',
+    (
+            (u'webserver', u'webserver:foobar'),
+            (u'webserver:123', u'webserver:foobar'),
+            (u'webserver@%s' % IMAGE_DIGEST, u'webserver:foobar'),
+            (u'webserver:123@%s' % IMAGE_DIGEST, u'webserver:foobar'),
+            (u'registry.example.com:5000/webserver', u'registry.example.com:5000/webserver:foobar'),
+            (u'registry.example.com:5000/webserver:123', u'registry.example.com:5000/webserver:foobar'),
+            (u'registry.example.com:5000/webserver@%s' % IMAGE_DIGEST,
+             u'registry.example.com:5000/webserver:foobar'),
+            (u'123456789012.dkr.ecr.eu-central-1.amazonaws.com/webserver:123@%s' % IMAGE_DIGEST,
+             u'123456789012.dkr.ecr.eu-central-1.amazonaws.com/webserver:foobar'),
+    )
+)
+def test_task_set_tag_on_image_with_tag_or_digest(task_definition, image, expected_image):
+    for container in task_definition.containers:
+        container[u'image'] = image
+
+    task_definition.set_images(u'foobar')
+
+    for container in task_definition.containers:
+        assert container[u'image'] == expected_image
 
 
 def test_task_set_image(task_definition):
