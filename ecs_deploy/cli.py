@@ -722,7 +722,7 @@ def event_log(timestamp, message, level):
     color = color_map.get(level, 'white')  # Default to white if the level is unknown
 
     click.secho(
-        f'{timestamp}\n{level}: {message}',
+        f'{timestamp} {level}: {message}',
         fg=color,
         err=(level == 'ERROR')
     )
