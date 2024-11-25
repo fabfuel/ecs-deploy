@@ -155,13 +155,15 @@ def deploy(cluster, service, tag, image, command, health_check, cpu, memory, mem
                 ignore_warnings=ignore_warnings,
                 sleep_time=sleep_time
             )
-
+            if deployment.rollback:
+                slack.notify_failure(cluster, "Rollback", service=service)
+                exit(100)
         except TaskPlacementError as e:
             slack.notify_failure(cluster, str(e), service=service)
             if rollback:
                 click.secho('%s\n' % str(e), fg='red', err=True)
                 rollback_task_definition(deployment, td, new_td, sleep_time=sleep_time)
-                exit(1)
+                exit(100)
             else:
                 raise
 
@@ -532,7 +534,6 @@ def wait_for_finish(action, timeout, title, success_message, failure_message,
         waiting = True
 
     while waiting and datetime.now() < waiting_timeout:
-        click.secho('.', nl=False)
         service = action.get_service()
         inspected_until = inspect_errors(
             service=service,
@@ -541,7 +542,10 @@ def wait_for_finish(action, timeout, title, success_message, failure_message,
             since=inspected_until,
             timeout=False
         )
+
         waiting = not action.is_deployed(service)
+        if action.primary_deployment_updated(service):
+            click.secho(f"{action.primary_deployment.status_message}", nl=True)
 
         if waiting:
             sleep(sleep_time)
@@ -556,7 +560,8 @@ def wait_for_finish(action, timeout, title, success_message, failure_message,
 
     click.secho('\n%s' % success_message, fg='green')
     click.secho('Duration: %s sec\n' % (datetime.now() - start_timestamp).seconds)
-
+    if action.rollback:
+        click.secho('Rollback complete', fg='green')
 
 def deploy_task_definition(deployment, task_definition, title, success_message,
                            failure_message, timeout, deregister,
@@ -669,28 +674,53 @@ def print_diff(task_definition, title='Updating task definition'):
         click.secho('')
 
 
+# def inspect_events(service, since):
+#     last_event_timestamp = since
+#     events = service.get_events(since)
+#     for timestamp in events:
+#         message = events[timestamp]
+#         last_event_timestamp = timestamp
+#         click.secho('%s\INFO: %s' % (timestamp, message))
+
+#     return last_event_timestamp
+
+
 def inspect_errors(service, failure_message, ignore_warnings, since, timeout):
     error = False
-    last_error_timestamp = since
-    warnings = service.get_warnings(since)
-    for timestamp in warnings:
-        message = warnings[timestamp]
+    last_event_timestamp = since
+    events = service.get_events(since)
+    for timestamp in events:
+        message = events[timestamp]
+        last_event_timestamp = timestamp
         click.secho('')
-        if ignore_warnings:
-            last_error_timestamp = timestamp
-            click.secho(
-                '%s\nWARNING: %s' % (timestamp, message),
-                fg='yellow',
-                err=False
-            )
-            click.secho('Continuing.', nl=False)
+        if 'unable' in message.lower():
+            if ignore_warnings:
+                click.secho(
+                    '%s\nWARNING: %s' % (timestamp, message),
+                    fg='yellow',
+                    err=False
+                )
+                click.secho('Continuing.', nl=False)
+            else:
+                click.secho(
+                    '%s\nERROR: %s\n' % (timestamp, message),
+                    fg='red',
+                    err=True
+                )
+                error = True
         else:
-            click.secho(
-                '%s\nERROR: %s\n' % (timestamp, message),
-                fg='red',
-                err=True
-            )
-            error = True
+            if 'rolling back' in message.lower():
+                click.secho(
+                    '%s\WARNING: %s' % (timestamp, message),
+                    fg='yellow',
+                    err=False
+                )
+            else:
+                click.secho(
+                    '%s\INFO: %s' % (timestamp, message),
+                    fg='green',
+                    err=False
+                )
 
     if service.older_errors:
         click.secho('')
@@ -711,7 +741,7 @@ def inspect_errors(service, failure_message, ignore_warnings, since, timeout):
     if error:
         raise TaskPlacementError(failure_message)
 
-    return last_error_timestamp
+    return last_event_timestamp
 
 
 ecs.add_command(deploy)

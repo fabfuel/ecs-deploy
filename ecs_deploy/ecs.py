@@ -205,6 +205,21 @@ class EcsDeployment(dict):
     ROLLOUT_STATE_FAILED = u'FAILED'
     ROLLOUT_STATE_COMPLETED = u'COMPLETED'
 
+    def __init__(self, deployment_definition):
+        super(EcsDeployment, self).__init__(deployment_definition)
+
+    def __eq__(self, other):
+        return self.get(u'status')  == other.get(u'status') and \
+            other.get('runningCount') == self.get('runningCount') and \
+            other.get('pendingCount') == self.get('pendingCount') and \
+                other.get('failedTasks') == self.get('failedTasks') and \
+                    other.get('rolloutState') == self.get('rolloutState') and \
+                        other.get('rolloutStateReason') == self.get('rolloutStateReason')
+
+    @property
+    def status_message(self):
+        return f"{self.get('rolloutState')} : {self.rollout_state_reason}  Running: {self.get('runningCount')} / Pending: {self.get('pendingCount')} / Failed: {self.get('failedTasks')}"
+
     @property
     def is_primary(self):
         return self.get(u'status') == self.STATUS_PRIMARY
@@ -216,6 +231,10 @@ class EcsDeployment(dict):
     @property
     def has_failed(self):
         return self.get(u'rolloutState') == self.ROLLOUT_STATE_FAILED
+
+    @property
+    def is_rollback(self):
+        return "circuit breaker: rolling back" in self.get(u'rolloutStateReason')
 
     @property
     def has_completed(self):
@@ -298,15 +317,21 @@ class EcsService(dict):
         )
 
     def get_warnings(self, since=None, until=None):
+        warning = {}
+        events = self.get_events(since, until)
+        for k in events:
+            if u'unable' in events[k]:
+                warning[k] = events[k]
+        return warning
+
+    def get_events(self, since=None, until=None):
         since = since or self.deployment_created_at
         until = until or datetime.now(tz=tzlocal())
-        errors = {}
+        events = {}
         for event in self.get(u'events'):
-            if u'unable' not in event[u'message']:
-                continue
             if since < event[u'createdAt'] < until:
-                errors[event[u'createdAt']] = event[u'message']
-        return errors
+                events[event[u'createdAt']] = event[u'message']
+        return events
 
 
 class EcsTaskDefinition(object):
@@ -1308,6 +1333,9 @@ class EcsAction(object):
         try:
             if service_name:
                 self._service = self.get_service()
+                self.primary_deployment = self._service.primary_deployment
+                self.active_deployment = self._service.active_deployment
+                self.rollback = False
         except IndexError:
             raise EcsConnectionError(
                 u'An error occurred when calling the DescribeServices '
@@ -1372,8 +1400,23 @@ class EcsAction(object):
             task_definition=service.task_definition
         )
         return EcsService(self._cluster_name, response[u'service'])
+  
+    def primary_deployment_updated(self, service):
+        if service.primary_deployment != self.primary_deployment:
+            self.primary_deployment = service.primary_deployment
+            return True
 
+    def active_deployment_updated(self, service):
+        if service.active_deployment != self.active_deployment:
+            self.active_deployment = service.active_deployment
+            return True            
+
+    def deployment_status_updated(self, service):
+        return self.primary_deployment_updated(service) or self.active_deployment_updated(service)
+ 
     def is_deployed(self, service):
+        if service.primary_deployment.is_rollback:
+            self.rollback = True
         if service.primary_deployment.has_failed:
             raise EcsDeploymentError(u'Deployment Failed! ' + service.primary_deployment.rollout_state_reason)
         if service.primary_deployment.failed_tasks > 0 and service.primary_deployment.failed_tasks != self.FAILED_TASKS:
@@ -1392,7 +1435,7 @@ class EcsAction(object):
             service=service,
             task_arns=running_tasks[u'taskArns']
         )
-        return service.desired_count == running_count
+        return service.desired_count == running_count and service.primary_deployment.has_completed
 
     def get_running_tasks_count(self, service, task_arns):
         running_count = 0
