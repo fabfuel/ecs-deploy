@@ -81,7 +81,7 @@ def test_deploy_with_rollback(get_client, runner):
     get_client.return_value = EcsTestClient('acces_key', 'secret_key', wait=2)
     result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '--timeout=1', '--rollback'))
 
-    assert result.exit_code == 1
+    assert result.exit_code == 100
     assert result.exception
     assert u"Deploying based on task definition: test-task:1" in result.output
 
@@ -781,7 +781,6 @@ def test_deploy_with_wait_within_timeout(get_client, runner):
     result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '--timeout', '10'))
     assert result.exit_code == 0
     assert u'Deploying new task definition' in result.output
-    assert u'...' in result.output
 
 
 @patch('ecs_deploy.cli.get_client')

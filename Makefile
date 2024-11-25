@@ -9,3 +9,9 @@ TEST_FILE      ?= ...
 
 build:
 	docker build --pull -t ${IMAGE_URI} .
+
+test: build
+	docker run -t --rm $(IMAGE_URI) pytest -p no:cacheprovider -x -vv /usr/src/app
+
+dev: build
+	docker run -it --rm -v $(PWD):/usr/src/app $(IMAGE_URI) bash

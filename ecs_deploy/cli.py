@@ -687,6 +687,7 @@ def inspect_events(service, failure_message, ignore_warnings, since, timeout):
         if 'unable' in message_lower:
             error = False if  ignore_warnings else True
             level = 'ERROR' if error else 'WARNING'
+            click.secho('Continuing.', nl=False)
             event_log(timestamp, message, level)
         elif 'rolling back' in message_lower:
             event_log(timestamp, message, 'WARNING')
