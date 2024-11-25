@@ -527,6 +527,7 @@ def wait_for_finish(action, timeout, title, success_message, failure_message,
     waiting_timeout = datetime.now() + timedelta(seconds=timeout)
     service = action.get_service()
     inspected_until = None
+    # inspected_events_until = None
 
     if timeout == -1:
         waiting = False
@@ -535,7 +536,7 @@ def wait_for_finish(action, timeout, title, success_message, failure_message,
 
     while waiting and datetime.now() < waiting_timeout:
         service = action.get_service()
-        inspected_until = inspect_errors(
+        inspected_until = inspect_events(
             service=service,
             failure_message=failure_message,
             ignore_warnings=ignore_warnings,
@@ -550,7 +551,7 @@ def wait_for_finish(action, timeout, title, success_message, failure_message,
         if waiting:
             sleep(sleep_time)
 
-    inspect_errors(
+    inspect_events(
         service=service,
         failure_message=failure_message,
         ignore_warnings=ignore_warnings,
@@ -674,63 +675,28 @@ def print_diff(task_definition, title='Updating task definition'):
         click.secho('')
 
 
-# def inspect_events(service, since):
-#     last_event_timestamp = since
-#     events = service.get_events(since)
-#     for timestamp in events:
-#         message = events[timestamp]
-#         last_event_timestamp = timestamp
-#         click.secho('%s\INFO: %s' % (timestamp, message))
-
-#     return last_event_timestamp
-
-
-def inspect_errors(service, failure_message, ignore_warnings, since, timeout):
+def inspect_events(service, failure_message, ignore_warnings, since, timeout):
     error = False
     last_event_timestamp = since
     events = service.get_events(since)
     for timestamp in events:
         message = events[timestamp]
         last_event_timestamp = timestamp
-        click.secho('')
-        if 'unable' in message.lower():
-            if ignore_warnings:
-                click.secho(
-                    '%s\nWARNING: %s' % (timestamp, message),
-                    fg='yellow',
-                    err=False
-                )
-                click.secho('Continuing.', nl=False)
-            else:
-                click.secho(
-                    '%s\nERROR: %s\n' % (timestamp, message),
-                    fg='red',
-                    err=True
-                )
-                error = True
+        message_lower = message.lower()
+
+        if 'unable' in message_lower:
+            error = False if  ignore_warnings else True
+            level = 'ERROR' if error else 'WARNING'
+            event_log(timestamp, message, level)
+        elif 'rolling back' in message_lower:
+            event_log(timestamp, message, 'WARNING')
         else:
-            if 'rolling back' in message.lower():
-                click.secho(
-                    '%s\WARNING: %s' % (timestamp, message),
-                    fg='yellow',
-                    err=False
-                )
-            else:
-                click.secho(
-                    '%s\INFO: %s' % (timestamp, message),
-                    fg='green',
-                    err=False
-                )
+            event_log(timestamp, message, 'INFO')
 
     if service.older_errors:
-        click.secho('')
-        click.secho('Older errors', fg='yellow', err=True)
+        event_log(timestamp, 'Older errors', 'WARNING')
         for timestamp in service.older_errors:
-            click.secho(
-                text='%s\n%s\n' % (timestamp, service.older_errors[timestamp]),
-                fg='yellow',
-                err=True
-            )
+            event_log(timestamp, service.older_errors[timestamp], 'WARNING')
 
     if timeout:
         error = True
@@ -743,6 +709,22 @@ def inspect_errors(service, failure_message, ignore_warnings, since, timeout):
 
     return last_event_timestamp
 
+def event_log(timestamp, message, level):
+    """
+    Helper function to display a message with consistent formatting and color coding.
+    """
+    color_map = {
+        'INFO': 'green',
+        'WARNING': 'yellow',
+        'ERROR': 'red'
+    }
+    color = color_map.get(level, 'white')  # Default to white if the level is unknown
+
+    click.secho(
+        f'{timestamp}\n{level}: {message}',
+        fg=color,
+        err=(level == 'ERROR')
+    )
 
 ecs.add_command(deploy)
 ecs.add_command(scale)

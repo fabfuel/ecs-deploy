@@ -205,9 +205,6 @@ class EcsDeployment(dict):
     ROLLOUT_STATE_FAILED = u'FAILED'
     ROLLOUT_STATE_COMPLETED = u'COMPLETED'
 
-    def __init__(self, deployment_definition):
-        super(EcsDeployment, self).__init__(deployment_definition)
-
     def __eq__(self, other):
         return self.get(u'status')  == other.get(u'status') and \
             other.get('runningCount') == self.get('runningCount') and \
@@ -317,12 +314,8 @@ class EcsService(dict):
         )
 
     def get_warnings(self, since=None, until=None):
-        warning = {}
         events = self.get_events(since, until)
-        for k in events:
-            if u'unable' in events[k]:
-                warning[k] = events[k]
-        return warning
+        return {k: v for k, v in events.items() if 'unable' in v}
 
     def get_events(self, since=None, until=None):
         since = since or self.deployment_created_at
