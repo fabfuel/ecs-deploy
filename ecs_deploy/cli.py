@@ -155,13 +155,15 @@ def deploy(cluster, service, tag, image, command, health_check, cpu, memory, mem
                 ignore_warnings=ignore_warnings,
                 sleep_time=sleep_time
             )
-
+            if deployment.rollback:
+                slack.notify_failure(cluster, "Rollback", service=service)
+                exit(100)
         except TaskPlacementError as e:
             slack.notify_failure(cluster, str(e), service=service)
             if rollback:
                 click.secho('%s\n' % str(e), fg='red', err=True)
                 rollback_task_definition(deployment, td, new_td, sleep_time=sleep_time)
-                exit(1)
+                exit(100)
             else:
                 raise
 
@@ -532,21 +534,23 @@ def wait_for_finish(action, timeout, title, success_message, failure_message,
         waiting = True
 
     while waiting and datetime.now() < waiting_timeout:
-        click.secho('.', nl=False)
         service = action.get_service()
-        inspected_until = inspect_errors(
+        inspected_until = inspect_events(
             service=service,
             failure_message=failure_message,
             ignore_warnings=ignore_warnings,
             since=inspected_until,
             timeout=False
         )
+
         waiting = not action.is_deployed(service)
+        if action.primary_deployment_updated(service):
+            click.secho(f"{action.primary_deployment.status_message}", nl=True)
 
         if waiting:
             sleep(sleep_time)
 
-    inspect_errors(
+    inspect_events(
         service=service,
         failure_message=failure_message,
         ignore_warnings=ignore_warnings,
@@ -556,7 +560,8 @@ def wait_for_finish(action, timeout, title, success_message, failure_message,
 
     click.secho('\n%s' % success_message, fg='green')
     click.secho('Duration: %s sec\n' % (datetime.now() - start_timestamp).seconds)
-
+    if action.rollback:
+        click.secho('Rollback complete', fg='green')
 
 def deploy_task_definition(deployment, task_definition, title, success_message,
                            failure_message, timeout, deregister,
@@ -669,38 +674,29 @@ def print_diff(task_definition, title='Updating task definition'):
         click.secho('')
 
 
-def inspect_errors(service, failure_message, ignore_warnings, since, timeout):
+def inspect_events(service, failure_message, ignore_warnings, since, timeout):
     error = False
-    last_error_timestamp = since
-    warnings = service.get_warnings(since)
-    for timestamp in warnings:
-        message = warnings[timestamp]
-        click.secho('')
-        if ignore_warnings:
-            last_error_timestamp = timestamp
-            click.secho(
-                '%s\nWARNING: %s' % (timestamp, message),
-                fg='yellow',
-                err=False
-            )
+    last_event_timestamp = since
+    events = service.get_events(since)
+    for timestamp in events:
+        message = events[timestamp]
+        last_event_timestamp = timestamp
+        message_lower = message.lower()
+
+        if 'unable' in message_lower:
+            error = False if  ignore_warnings else True
+            level = 'ERROR' if error else 'WARNING'
             click.secho('Continuing.', nl=False)
+            event_log(timestamp, message, level)
+        elif 'rolling back' in message_lower:
+            event_log(timestamp, message, 'WARNING')
         else:
-            click.secho(
-                '%s\nERROR: %s\n' % (timestamp, message),
-                fg='red',
-                err=True
-            )
-            error = True
+            event_log(timestamp, message, 'INFO')
 
     if service.older_errors:
-        click.secho('')
-        click.secho('Older errors', fg='yellow', err=True)
+        event_log(timestamp, 'Older errors', 'WARNING')
         for timestamp in service.older_errors:
-            click.secho(
-                text='%s\n%s\n' % (timestamp, service.older_errors[timestamp]),
-                fg='yellow',
-                err=True
-            )
+            event_log(timestamp, service.older_errors[timestamp], 'WARNING')
 
     if timeout:
         error = True
@@ -711,8 +707,24 @@ def inspect_errors(service, failure_message, ignore_warnings, since, timeout):
     if error:
         raise TaskPlacementError(failure_message)
 
-    return last_error_timestamp
+    return last_event_timestamp
 
+def event_log(timestamp, message, level):
+    """
+    Helper function to display a message with consistent formatting and color coding.
+    """
+    color_map = {
+        'INFO': 'green',
+        'WARNING': 'yellow',
+        'ERROR': 'red'
+    }
+    color = color_map.get(level, 'white')  # Default to white if the level is unknown
+
+    click.secho(
+        f'{timestamp} {level}: {message}',
+        fg=color,
+        err=(level == 'ERROR')
+    )
 
 ecs.add_command(deploy)
 ecs.add_command(scale)
