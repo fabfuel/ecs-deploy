@@ -527,7 +527,6 @@ def wait_for_finish(action, timeout, title, success_message, failure_message,
     waiting_timeout = datetime.now() + timedelta(seconds=timeout)
     service = action.get_service()
     inspected_until = None
-    # inspected_events_until = None
 
     if timeout == -1:
         waiting = False
