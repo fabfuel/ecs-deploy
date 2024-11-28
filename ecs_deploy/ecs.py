@@ -231,7 +231,7 @@ class EcsDeployment(dict):
 
     @property
     def is_rollback(self):
-        return "circuit breaker: rolling back" in self.get(u'rolloutStateReason')
+        return "rolling back" in self.get(u'rolloutStateReason')
 
     @property
     def has_completed(self):
