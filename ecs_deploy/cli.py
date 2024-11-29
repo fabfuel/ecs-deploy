@@ -545,7 +545,9 @@ def wait_for_finish(action, timeout, title, success_message, failure_message,
 
         waiting = not action.is_deployed(service)
         if action.primary_deployment_updated(service):
-            click.secho(f"{action.primary_deployment.status_message}", nl=True)
+            event_log(datetime.now().isoformat(), 
+                      action.primary_deployment.status_message,
+                       'WARNING' if 'rolling back' in action.primary_deployment.status_message else 'INFO')
 
         if waiting:
             sleep(sleep_time)
@@ -558,10 +560,12 @@ def wait_for_finish(action, timeout, title, success_message, failure_message,
         timeout=waiting
     )
 
-    click.secho('\n%s' % success_message, fg='green')
     click.secho('Duration: %s sec\n' % (datetime.now() - start_timestamp).seconds)
+
     if action.rollback:
-        click.secho('Rollback complete', fg='green')
+        click.secho('Deployment failed, but service has been rolled back to previous task definition', fg='red')
+    else:
+        click.secho('\n%s' % success_message, fg='green')
 
 def deploy_task_definition(deployment, task_definition, title, success_message,
                            failure_message, timeout, deregister,
