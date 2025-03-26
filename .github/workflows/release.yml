@@ -2,7 +2,6 @@ name: Release
 
 on:
   push:
-    branches: [ 'feature/pypi' ]
     tags: [ '**' ]
 
 jobs:
