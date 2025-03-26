@@ -1,0 +1,39 @@
+name: Release
+
+on:
+  push:
+    tags: [ '**' ]
+
+jobs:
+  build:
+    uses: ./.github/workflows/build.yml
+
+  release:
+    needs:
+      - build
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    strategy:
+      fail-fast: false
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.12
+
+      - name: Install tools
+        run: |
+          pip install build twine
+
+      - name: Build project
+        run: python -m build
+
+      - name: Upload to PyPI
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.TWINE_API_KEY }}
+        run: twine upload dist/*
