@@ -5,9 +5,13 @@ on:
     branches: [ 'feature/pypi' ]
     tags: [ '**' ]
 
-
 jobs:
-  pypi:
+  build:
+    uses: ./.github/workflows/build.yml
+
+  release:
+    needs:
+      - build
     runs-on: ubuntu-latest
     permissions:
       id-token: write
