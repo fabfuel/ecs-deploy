@@ -17,7 +17,9 @@ dependencies = [
     'botocore>=1.32.6',
     'boto3>=1.29.6',
     'future',
-    'requests<2.30.0',
+    'requests',
+    'urllib3>=1.25.4,<1.27 ; python_version < "3.10"',
+    'urllib3>=1.25.4,<2.1 ; python_version >= "3.10"',
     'dictdiffer>=0.9.0',
 ]
 
