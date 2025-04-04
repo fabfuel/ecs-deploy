@@ -1,1472 +1,731 @@
-from datetime import datetime
+from __future__ import print_function, absolute_import
 
-import pytest
-from click.testing import CliRunner
-from mock.mock import patch
+from os import getenv
+from time import sleep
 
-from ecs_deploy import cli
-from ecs_deploy.cli import get_client, record_deployment
-from ecs_deploy.ecs import EcsClient
-from ecs_deploy.newrelic import Deployment, NewRelicDeploymentException
-from tests.test_ecs import EcsTestClient, CLUSTER_NAME, SERVICE_NAME, \
-    TASK_DEFINITION_ARN_1, TASK_DEFINITION_ARN_2, TASK_DEFINITION_FAMILY_1, \
-    TASK_DEFINITION_REVISION_2, TASK_DEFINITION_REVISION_1, \
-    TASK_DEFINITION_REVISION_3
-
-
-@pytest.fixture
-def runner():
-    return CliRunner()
+import click
+import json
+import getpass
+from datetime import datetime, timedelta
+from botocore.exceptions import ClientError
+from ecs_deploy import VERSION
+from ecs_deploy.ecs import DeployAction, ScaleAction, RunAction, EcsClient, DiffAction, \
+    TaskPlacementError, EcsError, UpdateAction, LAUNCH_TYPE_EC2, LAUNCH_TYPE_FARGATE
+from ecs_deploy.newrelic import Deployment, NewRelicException
+from ecs_deploy.slack import SlackNotification
 
 
-@patch.object(EcsClient, '__init__')
-def test_get_client(ecs_client):
-    ecs_client.return_value = None
-    client = get_client('access_key_id', 'secret_access_key', 'region', 'profile', 'account', 'role')
-    ecs_client.assert_called_once_with('access_key_id', 'secret_access_key', 'region', 'profile',
-                                       assume_account='account', assume_role='role')
-    assert isinstance(client, EcsClient)
+@click.group()
+@click.version_option(version=VERSION, prog_name='ecs-deploy')
+def ecs():  # pragma: no cover
+    pass
 
 
-def test_ecs(runner):
-    result = runner.invoke(cli.ecs)
-    assert result.exit_code == 0
-    assert not result.exception
-    assert 'Usage: ecs [OPTIONS] COMMAND [ARGS]' in result.output
-    assert '  deploy  ' in result.output
-    assert '  scale   ' in result.output
+def get_client(access_key_id, secret_access_key, region, profile, session_token, assume_account, assume_role):
+    return EcsClient(access_key_id, secret_access_key, region, profile, session_token, assume_account=assume_account, assume_role=assume_role)
 
 
-@patch('ecs_deploy.cli.get_client')
-def test_deploy_without_credentials(get_client, runner):
-    get_client.return_value = EcsTestClient()
-    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME))
-    assert result.exit_code == 1
-    assert result.output == u'Unable to locate credentials. Configure credentials by running "aws configure".\n\n'
+@click.command()
+@click.argument('cluster')
+@click.argument('service')
+@click.option('-t', '--tag', help='Changes the tag for ALL container images')
+@click.option('-i', '--image', type=(str, str), multiple=True, help='Overwrites the image for a container: <container> <image>')
+@click.option('-c', '--command', type=(str, str), multiple=True, help='Overwrites the command in a container: <container> <command>')
+@click.option('-h', '--health-check', type=(str, str, int, int, int, int), multiple=True, help='Overwrites the healthcheck in a container: <container> <command> <interval> <timeout> <retries> <start_period>')
+@click.option('--cpu', type=(str, int), multiple=True, help='Overwrites the cpu value for a container: <container> <cpu>')
+@click.option('--memory', type=(str, int), multiple=True, help='Overwrites the memory value for a container: <container> <memory>')
+@click.option('--memoryreservation', type=(str, int), multiple=True, help='Overwrites the memory reservation value for a container: <container> <memoryreservation>')
+@click.option('--task-cpu', type=int, help='Overwrites the cpu value for a task: <cpu>')
+@click.option('--task-memory', type=int, help='Overwrites the memory value for a task: <memory>')
+@click.option('--privileged', type=(str, bool), multiple=True, help='Overwrites the privileged value for a container: <container> <privileged>')
+@click.option('--essential', type=(str, bool), multiple=True, help='Overwrites the essential value for a container: <container> <essential>')
+@click.option('-e', '--env', type=(str, str, str), multiple=True, help='Adds or changes an environment variable: <container> <name> <value>')
+@click.option('--env-file', type=(str, str), default=((None, None),), multiple=True, required=False, help='Load environment variables from .env-file: <container> <env file path>')
+@click.option('--s3-env-file', type=(str, str), multiple=True, required=False, help='Location of .env-file in S3 in ARN format (eg arn:aws:s3:::/bucket_name/object_name): <container> <S3 ARN>')
+@click.option('-s', '--secret', type=(str, str, str), multiple=True, help='Adds or changes a secret environment variable from the AWS Parameter Store (Not available for Fargate): <container> <name> <parameter name>')
+@click.option('--secrets-env-file', type=(str, str), default=((None, None),), multiple=True, required=False, help='Load secrets from .env-file: <container> <env file path>')
+@click.option('-d', '--docker-label', type=(str, str, str), multiple=True, help='Adds or changes a docker label: <container> <name> <value>')
+@click.option('-u', '--ulimit', type=(str, str, int, int), multiple=True, help='Adds or changes a ulimit variable in the container description (Not available for Fargate): <container> <ulimit name> <softlimit value> <hardlimit value>')
+@click.option('--system-control', type=(str, str, str), multiple=True, help='Adds or changes a system control variable in the container description (Not available for Fargate): <container> <namespace> <value>')
+@click.option('-p', '--port', type=(str, int, int), multiple=True, help='Adds or changes a port mappings in the container description (Not available for Fargate): <container> <container port value> <host port value>')
+@click.option('-m', '--mount', type=(str, str, str), multiple=True, help='Adds or changes a mount points in the container description (Not available for Fargate): <container> <container port value> <host port value>')
+@click.option('-l', '--log', type=(str, str, str, str), multiple=True, help='Adds or changes a log configuration in the container description (Not available for Fargate): <container> <log driver> <option name> <option value>')
+@click.option('-r', '--role', type=str, help='Sets the task\'s role ARN: <task role ARN>')
+@click.option('-x', '--execution-role', type=str, help='Sets the execution\'s role ARN: <execution role ARN>')
+@click.option('--runtime-platform', type=str, nargs=2, help='Overwrites runtimePlatform: <cpuArchitecture> <operatingSystemFamily>')
+@click.option('--task', type=str, help='Task definition to be deployed. Can be a task ARN or a task family with optional revision')
+@click.option('--region', required=False, help='AWS region (e.g. eu-central-1)')
+@click.option('--access-key-id', required=False, help='AWS access key id')
+@click.option('--secret-access-key', required=False, help='AWS secret access key')
+@click.option('--session-token', required=False, help='AWS session token')
+@click.option('--profile', required=False, help='AWS configuration profile name')
+@click.option('--account', help='Target AWS account id to deploy in')
+@click.option('--assume-role', help='AWS Role to assume in target account')
+@click.option('--timeout', required=False, default=300, type=int, help='Amount of seconds to wait for deployment before command fails (default: 300). To disable timeout (fire and forget) set to -1')
+@click.option('--ignore-warnings', is_flag=True, help='Do not fail deployment on warnings (port already in use or insufficient memory/CPU)')
+@click.option('--newrelic-apikey', required=False, help='New Relic API Key for recording the deployment. Can also be defined via environment variable NEW_RELIC_API_KEY')
+@click.option('--newrelic-appid', required=False, help='New Relic App ID for recording the deployment. Can also be defined via environment variable NEW_RELIC_APP_ID')
+@click.option('--newrelic-region', required=False, help='New Relic region: US or EU (default: US). Can also be defined via environment variable NEW_RELIC_REGION')
+@click.option('--newrelic-revision', required=False, help='New Relic revision for recording the deployment (default: --tag value). Can also be defined via environment variable NEW_RELIC_REVISION')
+@click.option('--comment', required=False, help='Description/comment for recording the deployment')
+@click.option('--user', required=False, help='User who executes the deployment (used for recording)')
+@click.option('--diff/--no-diff', default=True, help='Print which values were changed in the task definition (default: --diff)')
+@click.option('--deregister/--no-deregister', default=True, help='Deregister or keep the old task definition (default: --deregister)')
+@click.option('--rollback/--no-rollback', default=False, help='Rollback to previous revision, if deployment failed (default: --no-rollback)')
+@click.option('--exclusive-env', is_flag=True, default=False, help='Set the given environment variables exclusively and remove all other pre-existing env variables from all containers')
+@click.option('--exclusive-secrets', is_flag=True, default=False, help='Set the given secrets exclusively and remove all other pre-existing secrets from all containers')
+@click.option('--exclusive-docker-labels', is_flag=True, default=False, help='Set the given docker labels exclusively and remove all other pre-existing docker-labels from all containers')
+@click.option('--exclusive-s3-env-file', is_flag=True, default=False, help='Set the given s3 env files exclusively and remove all other pre-existing s3 env files from all containers')
+@click.option('--sleep-time', default=1, type=int, help='Amount of seconds to wait between each check of the service (default: 1)')
+@click.option('--slack-url', required=False, help='Webhook URL of the Slack integration. Can also be defined via environment variable SLACK_URL')
+@click.option('--slack-service-match', default=".*", required=False, help='A regular expression for defining, which services should be notified. (default: .* =all). Can also be defined via environment variable SLACK_SERVICE_MATCH')
+@click.option('--exclusive-ulimits', is_flag=True, default=False, help='Set the given ulimits exclusively and remove all other pre-existing ulimits from all containers')
+@click.option('--exclusive-system-controls', is_flag=True, default=False, help='Set the given system controls exclusively and remove all other pre-existing system controls from all containers')
+@click.option('--exclusive-ports', is_flag=True, default=False, help='Set the given port mappings exclusively and remove all other pre-existing port mappings from all containers')
+@click.option('--exclusive-mounts', is_flag=True, default=False, help='Set the given mount points exclusively and remove all other pre-existing mount points from all containers')
+@click.option('--volume', type=(str, str), multiple=True, required=False, help='Set volume mapping from host to container in the task definition.')
+@click.option('--add-container', type=str, multiple=True, required=False, help='Add a placeholder container in the task definition.')
+@click.option('--remove-container', type=str, multiple=True, required=False, help='Remove a container from the task definition.')
+def deploy(cluster, service, tag, image, command, health_check, cpu, memory, memoryreservation, task_cpu, task_memory, privileged, essential, env, env_file, s3_env_file, secret, secrets_env_file, ulimit, system_control, port, mount, log, role, execution_role, runtime_platform, task, region, access_key_id, secret_access_key, session_token, profile, account, assume_role, timeout, newrelic_apikey, newrelic_appid, newrelic_region, newrelic_revision, comment, user, ignore_warnings, diff, deregister, rollback, exclusive_env, exclusive_secrets, exclusive_s3_env_file, sleep_time, exclusive_ulimits, exclusive_system_controls, exclusive_ports, exclusive_mounts, volume, add_container, remove_container, slack_url, docker_label, exclusive_docker_labels, slack_service_match='.*'):
+    """
+    Redeploy or modify a service.
 
+    \b
+    CLUSTER is the name of your cluster (e.g. 'my-cluster') within ECS.
+    SERVICE is the name of your service (e.g. 'my-app') within ECS.
 
-@patch('ecs_deploy.cli.get_client')
-def test_deploy_with_invalid_cluster(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.deploy, ('unknown-cluster', SERVICE_NAME))
-    assert result.exit_code == 1
-    assert result.output == u'An error occurred (ClusterNotFoundException) when calling the DescribeServices ' \
-                            u'operation: Cluster not found.\n\n'
+    When not giving any other options, the task definition will not be changed.
+    It will just be duplicated, so that all container images will be pulled
+    and redeployed.
+    """
+    try:
+        client = get_client(access_key_id, secret_access_key, region, profile, session_token, account, assume_role)
+        deployment = DeployAction(client, cluster, service)
 
+        td = get_task_definition(deployment, task)
+        # If there is a new container, add it at frist.
+        td.add_containers(add_container)
+        td.remove_containers(remove_container)
+        td.set_images(tag, **{key: value for (key, value) in image})
+        td.set_commands(**{key: value for (key, value) in command})
+        td.set_health_checks(health_check)
+        td.set_cpu(**{key: value for (key, value) in cpu})
+        td.set_memory(**{key: value for (key, value) in memory})
+        td.set_memoryreservation(**{key: value for (key, value) in memoryreservation})
+        td.set_task_cpu(task_cpu)
+        td.set_task_memory(task_memory)
+        td.set_privileged(**{key: value for (key, value) in privileged})
+        td.set_essential(**{key: value for (key, value) in essential})
+        td.set_environment(env, exclusive_env, env_file)
+        td.set_docker_labels(docker_label, exclusive_docker_labels)
+        td.set_s3_env_file(s3_env_file, exclusive_s3_env_file)
+        td.set_secrets(secret, exclusive_secrets, secrets_env_file)
+        td.set_ulimits(ulimit, exclusive_ulimits)
+        td.set_system_controls(system_control, exclusive_system_controls)
+        td.set_port_mappings(port, exclusive_ports)
+        td.set_mount_points(mount, exclusive_mounts)
+        td.set_log_configurations(log)
+        td.set_role_arn(role)
+        td.set_execution_role_arn(execution_role)
+        td.set_runtime_platform(runtime_platform)
+        td.set_volumes(volume)
 
-@patch('ecs_deploy.cli.get_client')
-def test_deploy_with_invalid_service(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.deploy, (CLUSTER_NAME, 'unknown-service'))
-    assert result.exit_code == 1
-    assert result.output == u'An error occurred when calling the DescribeServices operation: Service not found.\n\n'
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_deploy(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME))
-    assert result.exit_code == 0
-    assert not result.exception
-    assert u"Deploying based on task definition: test-task:1" in result.output
-    assert u'Successfully created revision: 2' in result.output
-    assert u'Successfully deregistered revision: 1' in result.output
-    assert u'Successfully changed task definition to: test-task:2' in result.output
-    assert u'Deployment successful' in result.output
-    assert u"Updating task definition" not in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_deploy_with_rollback(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key', wait=2)
-    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '--timeout=1', '--rollback'))
-
-    assert result.exit_code == 1
-    assert result.exception
-    assert u"Deploying based on task definition: test-task:1" in result.output
-
-    assert u"Deployment failed" in result.output
-    assert u"Rolling back to task definition: test-task:1" in result.output
-    assert u'Successfully changed task definition to: test-task:1' in result.output
-
-    assert u"Rollback successful" in result.output
-    assert u'Deployment failed, but service has been rolled back to ' \
-           u'previous task definition: test-task:1' in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_deploy_without_deregister(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '--no-deregister'))
-    assert result.exit_code == 0
-    assert not result.exception
-    assert u"Deploying based on task definition: test-task:1" in result.output
-    assert u'Successfully created revision: 2' in result.output
-    assert u'Successfully deregistered revision: 1' not in result.output
-    assert u'Successfully changed task definition to: test-task:2' in result.output
-    assert u'Deployment successful' in result.output
-    assert u"Updating task definition" not in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_deploy_with_role_arn(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '-r', 'arn:new:role'))
-    assert result.exit_code == 0
-    assert not result.exception
-    assert u"Deploying based on task definition: test-task:1" in result.output
-    assert u'Successfully created revision: 2' in result.output
-    assert u'Successfully deregistered revision: 1' in result.output
-    assert u'Successfully changed task definition to: test-task:2' in result.output
-    assert u'Deployment successful' in result.output
-    assert u"Updating task definition" in result.output
-    assert u'Changed role_arn to: "arn:new:role" (was: "arn:test:role:1")' in result.output
-
-@patch('ecs_deploy.cli.get_client')
-def test_deploy_with_execution_role_arn(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '-x', 'arn:new:role'))
-    assert result.exit_code == 0
-    assert not result.exception
-    assert u"Deploying based on task definition: test-task:1" in result.output
-    assert u'Successfully created revision: 2' in result.output
-    assert u'Successfully deregistered revision: 1' in result.output
-    assert u'Successfully changed task definition to: test-task:2' in result.output
-    assert u'Deployment successful' in result.output
-    assert u"Updating task definition" in result.output
-    assert u'Changed execution_role_arn to: "arn:new:role" (was: "arn:test:role:1")' in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_deploy_new_tag(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '-t', 'latest'))
-    assert result.exit_code == 0
-    assert not result.exception
-    assert u"Deploying based on task definition: test-task:1" in result.output
-    assert u"Updating task definition" in result.output
-    assert u'Changed image of container "webserver" to: "webserver:latest" (was: "webserver:123")' in result.output
-    assert u'Changed image of container "application" to: "application:latest" (was: "application:123")' in result.output
-    assert u'Successfully created revision: 2' in result.output
-    assert u'Successfully deregistered revision: 1' in result.output
-    assert u'Successfully changed task definition to: test-task:2' in result.output
-    assert u'Deployment successful' in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_deploy_one_new_image(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '-i', 'application', 'application:latest'))
-    assert result.exit_code == 0
-    assert not result.exception
-    assert u"Deploying based on task definition: test-task:1" in result.output
-    assert u"Updating task definition" in result.output
-    assert u'Changed image of container "application" to: "application:latest" (was: "application:123")' in result.output
-    assert u'Successfully created revision: 2' in result.output
-    assert u'Successfully deregistered revision: 1' in result.output
-    assert u'Successfully changed task definition to: test-task:2' in result.output
-    assert u'Deployment successful' in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_deploy_two_new_images(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '-i', 'application', 'application:latest',
-                                        '-i', 'webserver', 'webserver:latest'))
-    assert result.exit_code == 0
-    assert not result.exception
-    assert u"Deploying based on task definition: test-task:1" in result.output
-    assert u"Updating task definition" in result.output
-    assert u'Changed image of container "webserver" to: "webserver:latest" (was: "webserver:123")' in result.output
-    assert u'Changed image of container "application" to: "application:latest" (was: "application:123")' in result.output
-    assert u'Successfully created revision: 2' in result.output
-    assert u'Successfully deregistered revision: 1' in result.output
-    assert u'Successfully changed task definition to: test-task:2' in result.output
-    assert u'Deployment successful' in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_deploy_one_new_command(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '-c', 'application', 'foobar'))
-    assert result.exit_code == 0
-    assert not result.exception
-    assert u"Deploying based on task definition: test-task:1" in result.output
-    assert u"Updating task definition" in result.output
-    assert u'Changed command of container "application" to: "foobar" (was: "run")' in result.output
-    assert u'Successfully created revision: 2' in result.output
-    assert u'Successfully deregistered revision: 1' in result.output
-    assert u'Successfully changed task definition to: test-task:2' in result.output
-    assert u'Deployment successful' in result.output
-
-@pytest.mark.parametrize(
-    'cmd_input, cmd_expected',
-    (
-        (
-            u'curl -f http://localhost/alive/',
-            u'curl -f http://localhost/alive/',
-        ),
-        (
-            u'CMD-SHELL curl -f http://localhost/alive/ || 1',
-            u'CMD-SHELL curl -f http://localhost/alive/ || 1',
+        slack = SlackNotification(
+            getenv('SLACK_URL', slack_url),
+            getenv('SLACK_SERVICE_MATCH', slack_service_match)
         )
-    )
-)
-@patch('ecs_deploy.cli.get_client')
-def test_deploy_one_new_health_check(get_client, cmd_input, cmd_expected, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '-h', 'application', cmd_input, 30, 5, 3, 0))
-    assert result.exit_code == 0
-    assert not result.exception
-    assert u"Deploying based on task definition: test-task:1" in result.output
-    assert u"Updating task definition" in result.output
-
-    expected_health_check = {
-        u'command': cmd_expected,
-        u'interval': 30,
-        u'timeout': 5,
-        u'retries': 3,
-        u'startPeriod': 0,
-
-    }
-
-    assert 'Changed healthCheck of container "application" to: ' in result.output
-    assert "'command': " in result.output
-    assert cmd_expected in result.output
-    assert "'interval': 30" in result.output
-    assert "'timeout': 5" in result.output
-    assert "'retries': 3" in result.output
-    assert "'startPeriod': 0" in result.output
-    assert '(was: "None")' in result.output
-
-
-    assert u'Successfully created revision: 2' in result.output
-    assert u'Successfully deregistered revision: 1' in result.output
-    assert u'Successfully changed task definition to: test-task:2' in result.output
-    assert u'Deployment successful' in result.output
-    
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_deploy_one_new_environment_variable(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME,
-                                        '-e', 'application', 'foo', 'bar',
-                                        '-e', 'webserver', 'foo', 'baz'))
-
-    assert result.exit_code == 0
-    assert not result.exception
-
-    assert u"Deploying based on task definition: test-task:1" in result.output
-    assert u"Updating task definition" in result.output
-    assert u'Changed environment "foo" of container "application" to: "bar"' in result.output
-    assert u'Changed environment "foo" of container "webserver" to: "baz"' in result.output
-    assert u'Changed environment "lorem" of container "webserver" to: "ipsum"' not in result.output
-    assert u'Successfully created revision: 2' in result.output
-    assert u'Successfully deregistered revision: 1' in result.output
-    assert u'Successfully changed task definition to: test-task:2' in result.output
-    assert u'Deployment successful' in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_deploy_change_environment_variable_empty_string(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '-e', 'application', 'foo', ''))
-
-    assert result.exit_code == 0
-    assert not result.exception
-
-    assert u"Deploying based on task definition: test-task:1" in result.output
-    assert u"Updating task definition" in result.output
-    assert u'Changed environment "foo" of container "application" to: ""' in result.output
-    assert u'Successfully created revision: 2' in result.output
-    assert u'Successfully deregistered revision: 1' in result.output
-    assert u'Successfully changed task definition to: test-task:2' in result.output
-    assert u'Deployment successful' in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_deploy_new_empty_environment_variable(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '-e', 'application', 'new', ''))
-
-    assert result.exit_code == 0
-    assert not result.exception
-
-    assert u"Deploying based on task definition: test-task:1" in result.output
-    assert u"Updating task definition" in result.output
-    assert u'Changed environment "new" of container "application" to: ""' in result.output
-    assert u'Successfully created revision: 2' in result.output
-    assert u'Successfully deregistered revision: 1' in result.output
-    assert u'Successfully changed task definition to: test-task:2' in result.output
-    assert u'Deployment successful' in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_deploy_empty_environment_variable_again(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '-e', 'webserver', 'empty', ''))
-
-    assert result.exit_code == 0
-    assert not result.exception
-
-    assert u"Deploying based on task definition: test-task:1" in result.output
-    assert u"Updating task definition" not in result.output
-    assert u'Changed environment' not in result.output
-    assert u'Successfully created revision: 2' in result.output
-    assert u'Successfully deregistered revision: 1' in result.output
-    assert u'Successfully changed task definition to: test-task:2' in result.output
-    assert u'Deployment successful' in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_deploy_previously_empty_environment_variable_with_value(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '-e', 'webserver', 'empty', 'not-empty'))
-
-    assert result.exit_code == 0
-    assert not result.exception
-
-    assert u"Deploying based on task definition: test-task:1" in result.output
-    assert u"Updating task definition" in result.output
-    assert u'Changed environment "empty" of container "webserver" to: "not-empty"' in result.output
-    assert u'Successfully created revision: 2' in result.output
-    assert u'Successfully deregistered revision: 1' in result.output
-    assert u'Successfully changed task definition to: test-task:2' in result.output
-    assert u'Deployment successful' in result.output
-
-@patch('ecs_deploy.cli.get_client')
-def test_deploy_s3_env_file_with_previous_value(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '--s3-env-file', 'webserver', 'arn:aws:s3:::centerfun/.env', '--s3-env-file', 'webserver', 'arn:aws:s3:::stormzone/.env'))
-
-    assert result.exit_code == 0
-    assert not result.exception
-
-    assert u"Deploying based on task definition: test-task:1" in result.output
-    assert u"Updating task definition" in result.output
-    assert u'Changed environmentFiles of container "webserver" to: "{\'arn:aws:s3:::stormzone/.env\', \'arn:aws:s3:::coolBuckets/dev/.env\', \'arn:aws:s3:::myS3bucket/myApp/.env\', \'arn:aws:s3:::centerfun/.env\'}" (was: "{\'arn:aws:s3:::coolBuckets/dev/.env\', \'arn:aws:s3:::myS3bucket/myApp/.env\'}")'
-    assert u'Successfully created revision: 2' in result.output
-    assert u'Successfully deregistered revision: 1' in result.output
-    assert u'Successfully changed task definition to: test-task:2' in result.output
-    assert u'Deployment successful' in result.output
-
-@patch('ecs_deploy.cli.get_client')
-def test_deploy_runtime_platform_with_previous_value(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '--runtime-platform', 'ARM64', 'WINDOWS'))
-    expected_runtime_platform = {
-      u'cpuArchitecture': u'ARM64',
-      u'operatingSystemFamily': u'WINDOWS'
-    }
-    assert result.exit_code == 0
-    assert not result.exception
-    assert u"Deploying based on task definition: test-task:1" in result.output
-    assert u"Updating task definition" in result.output
-    assert str(expected_runtime_platform) in result.output
-    assert u'Successfully created revision: 2' in result.output
-    assert u'Successfully deregistered revision: 1' in result.output
-    assert u'Successfully changed task definition to: test-task:2' in result.output
-    assert u'Deployment successful' in result.output
-
-@patch('ecs_deploy.cli.get_client')
-def test_update_previously_empty_runtime_platform_with_value(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_2, '--runtime-platform', 'ARM64', 'WINDOWS'))
-    assert result.exit_code == 0
-    assert not result.exception
-    assert u"Update task definition based on: test-task:2" in result.output
-    assert u"Updating task definition" in result.output
-    expected_runtime_platform = {
-      u'cpuArchitecture': u'ARM64',
-      u'operatingSystemFamily': u'WINDOWS'
-    }
-    assert str(expected_runtime_platform) in result.output
-    assert u"Creating new task definition revision" in result.output
-    assert u"Successfully created revision: 2" in result.output
-
-@patch('ecs_deploy.cli.get_client')
-def test_deploy_exclusive_environment(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '-e', 'webserver', 'new-env', 'new-value', '--exclusive-env'))
-
-    assert result.exit_code == 0
-    assert not result.exception
-
-    assert u"Deploying based on task definition: test-task:1" in result.output
-    assert u"Updating task definition" in result.output
-    assert u'Changed environment "new-env" of container "webserver" to: "new-value"' in result.output
-
-    assert u'Removed environment "foo" of container "webserver"' in result.output
-    assert u'Removed environment "lorem" of container "webserver"' in result.output
-
-    assert u'Removed secret' not in result.output
-
-    assert u'Successfully created revision: 2' in result.output
-    assert u'Successfully deregistered revision: 1' in result.output
-    assert u'Successfully changed task definition to: test-task:2' in result.output
-    assert u'Deployment successful' in result.output
-
-@patch('ecs_deploy.cli.get_client')
-def test_deploy_one_new_docker_laberl(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME,
-                                        '-d', 'application', 'foo', 'bar',
-                                        '-d', 'webserver', 'foo', 'baz'))
-
-    assert result.exit_code == 0
-    assert not result.exception
-
-    assert u"Deploying based on task definition: test-task:1" in result.output
-    assert u"Updating task definition" in result.output
-    assert u'Changed dockerLabel "foo" of container "application" to: "bar"' in result.output
-    assert u'Changed dockerLabel "foo" of container "webserver" to: "baz"' in result.output
-    assert u'Changed dockerLabel "lorem" of container "webserver" to: "ipsum"' not in result.output
-    assert u'Successfully created revision: 2' in result.output
-    assert u'Successfully deregistered revision: 1' in result.output
-    assert u'Successfully changed task definition to: test-task:2' in result.output
-    assert u'Deployment successful' in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_deploy_change_docker_label_empty_string(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '-d', 'application', 'foo', ''))
-
-    assert result.exit_code == 0
-    assert not result.exception
-
-    assert u"Deploying based on task definition: test-task:1" in result.output
-    assert u"Updating task definition" in result.output
-    assert u'Changed dockerLabel "foo" of container "application" to: ""' in result.output
-    assert u'Successfully created revision: 2' in result.output
-    assert u'Successfully deregistered revision: 1' in result.output
-    assert u'Successfully changed task definition to: test-task:2' in result.output
-    assert u'Deployment successful' in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_deploy_new_empty_docker_label(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '-d', 'application', 'new', ''))
-
-    assert result.exit_code == 0
-    assert not result.exception
-
-    assert u"Deploying based on task definition: test-task:1" in result.output
-    assert u"Updating task definition" in result.output
-    assert u'Changed dockerLabel "new" of container "application" to: ""' in result.output
-    assert u'Successfully created revision: 2' in result.output
-    assert u'Successfully deregistered revision: 1' in result.output
-    assert u'Successfully changed task definition to: test-task:2' in result.output
-    assert u'Deployment successful' in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_deploy_empty_docker_label_again(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '-d', 'webserver', 'empty', ''))
-
-    assert result.exit_code == 0
-    assert not result.exception
-
-    assert u"Deploying based on task definition: test-task:1" in result.output
-    assert u"Updating task definition" not in result.output
-    assert u'Changed dockerLabel' not in result.output
-    assert u'Successfully created revision: 2' in result.output
-    assert u'Successfully deregistered revision: 1' in result.output
-    assert u'Successfully changed task definition to: test-task:2' in result.output
-    assert u'Deployment successful' in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_deploy_previously_empty_docker_label_with_value(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '-d', 'webserver', 'empty', 'not-empty'))
-
-    assert result.exit_code == 0
-    assert not result.exception
-
-    assert u"Deploying based on task definition: test-task:1" in result.output
-    assert u"Updating task definition" in result.output
-    assert u'Changed dockerLabel "empty" of container "webserver" to: "not-empty"' in result.output
-    assert u'Successfully created revision: 2' in result.output
-    assert u'Successfully deregistered revision: 1' in result.output
-    assert u'Successfully changed task definition to: test-task:2' in result.output
-    assert u'Deployment successful' in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_deploy_exclusive_docker_label(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '-d', 'webserver', 'new-label', 'new-value', '--exclusive-docker-labels'))
-
-    assert result.exit_code == 0
-    assert not result.exception
-
-    assert u"Deploying based on task definition: test-task:1" in result.output
-    assert u"Updating task definition" in result.output
-    assert u'Changed dockerLabel "new-label" of container "webserver" to: "new-value"' in result.output
-
-    assert u'Removed dockerLabel "foo" of container "webserver"' in result.output
-    assert u'Removed dockerLabel "lorem" of container "webserver"' in result.output
-
-    assert u'Successfully created revision: 2' in result.output
-    assert u'Successfully deregistered revision: 1' in result.output
-    assert u'Successfully changed task definition to: test-task:2' in result.output
-    assert u'Deployment successful' in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_deploy_exclusive_secret(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '-s', 'webserver', 'new-secret', 'new-place', '--exclusive-secrets'))
-
-    assert result.exit_code == 0
-    assert not result.exception
-
-    assert u"Deploying based on task definition: test-task:1" in result.output
-    assert u"Updating task definition" in result.output
-    assert u'Changed secret "new-secret" of container "webserver" to: "new-place"' in result.output
-
-    assert u'Removed secret "baz" of container "webserver"' in result.output
-    assert u'Removed secret "dolor" of container "webserver"' in result.output
-
-    assert u'Removed environment' not in result.output
-
-    assert u'Successfully created revision: 2' in result.output
-    assert u'Successfully deregistered revision: 1' in result.output
-    assert u'Successfully changed task definition to: test-task:2' in result.output
-    assert u'Deployment successful' in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_deploy_one_new_secret_variable(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME,
-                                        '-s', 'application', 'baz', 'qux',
-                                        '-s', 'webserver', 'baz', 'quux'))
-
-    assert result.exit_code == 0
-    assert not result.exception
-
-    assert u"Deploying based on task definition: test-task:1" in result.output
-    assert u"Updating task definition" in result.output
-    assert u'Changed secret "baz" of container "application" to: "qux"' in result.output
-    assert u'Changed secret "baz" of container "webserver" to: "quux"' in result.output
-    assert u'Changed secret "dolor" of container "webserver" to: "sit"' not in result.output
-    assert u'Successfully created revision: 2' in result.output
-    assert u'Successfully deregistered revision: 1' in result.output
-    assert u'Successfully changed task definition to: test-task:2' in result.output
-    assert u'Deployment successful' in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_deploy_without_changing_environment_value(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '-e', 'webserver', 'foo', 'bar'))
-
-    assert result.exit_code == 0
-    assert not result.exception
-
-    assert u"Deploying based on task definition: test-task:1" in result.output
-    assert u"Updating task definition" not in result.output
-    assert u'Changed environment' not in result.output
-    assert u'Successfully created revision: 2' in result.output
-    assert u'Successfully deregistered revision: 1' in result.output
-    assert u'Successfully changed task definition to: test-task:2' in result.output
-    assert u'Deployment successful' in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_deploy_without_changing_docker_labels(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '-d', 'webserver', 'foo', 'bar'))
-
-    assert result.exit_code == 0
-    assert not result.exception
-
-    assert u"Deploying based on task definition: test-task:1" in result.output
-    assert u"Updating task definition" not in result.output
-    assert u'Changed dockerLabel' not in result.output
-    assert u'Successfully created revision: 2' in result.output
-    assert u'Successfully deregistered revision: 1' in result.output
-    assert u'Successfully changed task definition to: test-task:2' in result.output
-    assert u'Deployment successful' in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_deploy_without_changing_secrets_value(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '-s', 'webserver', 'baz', 'qux'))
-
-    assert result.exit_code == 0
-    assert not result.exception
-
-    assert u"Deploying based on task definition: test-task:1" in result.output
-    assert u"Updating task definition" not in result.output
-    assert u'Changed secrets' not in result.output
-    assert u'Successfully created revision: 2' in result.output
-    assert u'Successfully deregistered revision: 1' in result.output
-    assert u'Successfully changed task definition to: test-task:2' in result.output
-    assert u'Deployment successful' in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_deploy_without_diff(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '-t', 'latest', '-e', 'webserver', 'foo', 'barz', '--no-diff'))
-
-    assert result.exit_code == 0
-    assert not result.exception
-
-    assert u"Deploying based on task definition: test-task:1" in result.output
-    assert u"Updating task definition" not in result.output
-    assert u'Changed environment' not in result.output
-    assert u'Successfully created revision: 2' in result.output
-    assert u'Successfully deregistered revision: 1' in result.output
-    assert u'Successfully changed task definition to: test-task:2' in result.output
-    assert u'Deployment successful' in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_deploy_with_errors(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key', deployment_errors=True)
-    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME))
-    assert result.exit_code == 1
-    assert u"Deployment failed" in result.output
-    assert u"ERROR: Service was unable to Lorem Ipsum" in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_deploy_with_client_errors(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key', client_errors=True)
-    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME))
-    assert result.exit_code == 1
-    assert u"Something went wrong" in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_deploy_ignore_warnings(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key', deployment_errors=True)
-    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '--ignore-warnings'))
-
-    assert result.exit_code == 0
-    assert not result.exception
-    assert u"Deploying based on task definition: test-task:1" in result.output
-    assert u'Successfully created revision: 2' in result.output
-    assert u'Successfully deregistered revision: 1' in result.output
-    assert u'Successfully changed task definition to: test-task:2' in result.output
-    assert u"WARNING: Service was unable to Lorem Ipsum" in result.output
-    assert u"Continuing." in result.output
-    assert u'Deployment successful' in result.output
-
-
-@patch('ecs_deploy.newrelic.Deployment.deploy')
-@patch('ecs_deploy.cli.get_client')
-def test_deploy_with_newrelic_tag(get_client, newrelic, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME,
-                                        '-t', 'my-tag',
-                                        '--newrelic-apikey', 'test',
-                                        '--newrelic-appid', 'test',
-                                        '--comment', 'Lorem Ipsum'))
-    assert result.exit_code == 0
-    assert not result.exception
-    assert u"Deploying based on task definition: test-task:1" in result.output
-    assert u'Successfully created revision: 2' in result.output
-    assert u'Successfully deregistered revision: 1' in result.output
-    assert u'Successfully changed task definition to: test-task:2' in result.output
-    assert u'Deployment successful' in result.output
-    assert u"Recording deployment in New Relic" in result.output
-
-    newrelic.assert_called_once_with(
-        'my-tag',
-        '',
-        'Lorem Ipsum'
+        slack.notify_start(cluster, tag, td, comment, user, service=service)
+
+        click.secho('Deploying based on task definition: %s\n' % td.family_revision)
+
+        if diff:
+            print_diff(td)
+
+        new_td = create_task_definition(deployment, td)
+
+        try:
+            deploy_task_definition(
+                deployment=deployment,
+                task_definition=new_td,
+                title='Deploying new task definition',
+                success_message='Deployment successful',
+                failure_message='Deployment failed',
+                timeout=timeout,
+                deregister=deregister,
+                previous_task_definition=td,
+                ignore_warnings=ignore_warnings,
+                sleep_time=sleep_time
+            )
+
+        except TaskPlacementError as e:
+            slack.notify_failure(cluster, str(e), service=service)
+            if rollback:
+                click.secho('%s\n' % str(e), fg='red', err=True)
+                rollback_task_definition(deployment, td, new_td, sleep_time=sleep_time)
+                exit(1)
+            else:
+                raise
+
+        record_deployment(tag, newrelic_apikey, newrelic_appid, newrelic_region, newrelic_revision, comment, user)
+
+        slack.notify_success(cluster, td.revision, service=service)
+
+    except (EcsError, NewRelicException, ClientError) as e:
+        click.secho('%s\n' % str(e), fg='red', err=True)
+        exit(1)
+
+
+@click.command()
+@click.argument('cluster')
+@click.argument('task')
+@click.argument('rule')
+@click.option('-i', '--image', type=(str, str), multiple=True, help='Overwrites the image for a container: <container> <image>')
+@click.option('-t', '--tag', help='Changes the tag for ALL container images')
+@click.option('-c', '--command', type=(str, str), multiple=True, help='Overwrites the command in a container: <container> <command>')
+@click.option('--cpu', type=(str, int), multiple=True, help='Overwrites the cpu value for a container: <container> <cpu>')
+@click.option('--memory', type=(str, int), multiple=True, help='Overwrites the memory value for a container: <container> <memory>')
+@click.option('--memoryreservation', type=(str, int), multiple=True, help='Overwrites the memory reservation value for a container: <container> <memoryreservation>')
+@click.option('--task-cpu', type=int, help='Overwrites the cpu value for a task: <cpu>')
+@click.option('--task-memory', type=int, help='Overwrites the memory value for a task: <memory>')
+@click.option('--privileged', type=(str, bool), multiple=True, help='Overwrites the memory reservation value for a container: <container> <memoryreservation>')
+@click.option('-e', '--env', type=(str, str, str), multiple=True, help='Adds or changes an environment variable: <container> <name> <value>')
+@click.option('-s', '--secret', type=(str, str, str), multiple=True, help='Adds or changes a secret environment variable from the AWS Parameter Store (Not available for Fargate): <container> <name> <parameter name>')
+@click.option('--secrets-env-file', type=(str, str), default=((None, None),), multiple=True, required=False, help='Load secrets from .env-file: <container> <env file path>')
+@click.option('-d', '--docker-label', type=(str, str, str), multiple=True, help='Adds or changes a docker label: <container> <name> <value>')
+@click.option('-u', '--ulimit', type=(str, str, int, int), multiple=True, help='Adds or changes a ulimit variable in the container description (Not available for Fargate): <container> <ulimit name> <softlimit value> <hardlimit value>')
+@click.option('--system-control', type=(str, str, str), multiple=True, help='Adds or changes a system control variable in the container description (Not available for Fargate): <container> <namespace> <value>')
+@click.option('-p', '--port', type=(str, int, int), multiple=True, help='Adds or changes a port mappings in the container description (Not available for Fargate): <container> <container port value> <host port value>')
+@click.option('-m', '--mount', type=(str, str, str), multiple=True, help='Adds or changes a mount points in the container description (Not available for Fargate): <container> <container port value> <host port value>')
+@click.option('-l', '--log', type=(str, str, str, str), multiple=True, help='Adds or changes a log configuration in the container description (Not available for Fargate): <container> <log driver> <option name> <option value>')
+@click.option('--env-file', type=(str, str), default=((None, None),), multiple=True, required=False, help='Load environment variables from .env-file')
+@click.option('--s3-env-file', type=(str, str), multiple=True, required=False, help='Location of .env-file in S3 in ARN format (eg arn:aws:s3:::/bucket_name/object_name')
+@click.option('-r', '--role', type=str, help='Sets the task\'s role ARN: <task role ARN>')
+@click.option('-x', '--execution-role', type=str, help='Sets the execution\'s role ARN: <execution role ARN>')
+@click.option('--region', help='AWS region (e.g. eu-central-1)')
+@click.option('--access-key-id', help='AWS access key id')
+@click.option('--secret-access-key', help='AWS secret access key')
+@click.option('--session-token', required=False, help='AWS session token')
+@click.option('--newrelic-apikey', required=False, help='New Relic API Key for recording the deployment. Can also be defined via environment variable NEW_RELIC_API_KEY')
+@click.option('--newrelic-appid', required=False, help='New Relic App ID for recording the deployment. Can also be defined via environment variable NEW_RELIC_APP_ID')
+@click.option('--newrelic-region', required=False, help='New Relic region: US or EU (default: US). Can also be defined via environment variable NEW_RELIC_REGION')
+@click.option('--newrelic-revision', required=False, help='New Relic revision for recording the deployment (default: --tag value). Can also be defined via environment variable NEW_RELIC_REVISION')
+@click.option('--comment', required=False, help='Description/comment for recording the deployment')
+@click.option('--user', required=False, help='User who executes the deployment (used for recording)')
+@click.option('--profile', help='AWS configuration profile name')
+@click.option('--account', help='Target AWS account id to deploy in')
+@click.option('--assume-role', help='AWS Role to assume in target account')
+@click.option('--diff/--no-diff', default=True, help='Print what values were changed in the task definition')
+@click.option('--deregister/--no-deregister', default=True, help='Deregister or keep the old task definition (default: --deregister)')
+@click.option('--rollback/--no-rollback', default=False, help='Rollback to previous revision, if deployment failed (default: --no-rollback)')
+@click.option('--exclusive-env', is_flag=True, default=False, help='Set the given environment variables exclusively and remove all other pre-existing env variables from all containers')
+@click.option('--exclusive-secrets', is_flag=True, default=False, help='Set the given secrets exclusively and remove all other pre-existing secrets from all containers')
+@click.option('--exclusive-docker-labels', is_flag=True, default=False, help='Set the given docker labels exclusively and remove all other pre-existing docker-labels from all containers')
+@click.option('--exclusive-s3-env-file', is_flag=True, default=False, help='Set the given s3 env files exclusively and remove all other pre-existing s3 env files from all containers')
+@click.option('--slack-url', required=False, help='Webhook URL of the Slack integration. Can also be defined via environment variable SLACK_URL')
+@click.option('--slack-service-match', default=".*", required=False, help='A regular expression for defining, deployments of which crons should be notified. (default: .* =all). Can also be defined via environment variable SLACK_SERVICE_MATCH')
+@click.option('--exclusive-ulimits', is_flag=True, default=False, help='Set the given ulimits exclusively and remove all other pre-existing ulimits from all containers')
+@click.option('--exclusive-system-controls', is_flag=True, default=False, help='Set the given system controls exclusively and remove all other pre-existing system controls from all containers')
+@click.option('--exclusive-ports', is_flag=True, default=False, help='Set the given port mappings exclusively and remove all other pre-existing port mappings from all containers')
+@click.option('--exclusive-mounts', is_flag=True, default=False, help='Set the given mount points exclusively and remove all other pre-existing mount points from all containers')
+@click.option('--volume', type=(str, str), multiple=True, required=False, help='Set volume mapping from host to container in the task definition.')
+def cron(cluster, task, rule, image, tag, command, cpu, memory, memoryreservation, task_cpu, task_memory, privileged, env, env_file, s3_env_file, secret, secrets_env_file, ulimit, system_control, port, mount, log, role, execution_role, region, access_key_id, secret_access_key, session_token, newrelic_apikey, newrelic_appid, newrelic_region, newrelic_revision, comment, user, profile, account, assume_role, diff, deregister, rollback, exclusive_env, exclusive_secrets, exclusive_s3_env_file, slack_url, slack_service_match, exclusive_ulimits, exclusive_system_controls, exclusive_ports, exclusive_mounts, volume, docker_label, exclusive_docker_labels):
+    """
+    Update a scheduled task.
+
+    \b
+    CLUSTER is the name of your cluster (e.g. 'my-cluster') within ECS.
+    TASK is the name of your task definition (e.g. 'my-task') within ECS.
+    RULE is the name of the rule to use the new task definition.
+    """
+    try:
+        client = get_client(access_key_id, secret_access_key, region, profile, session_token, account, assume_role)
+        action = RunAction(client, cluster)
+
+        td = action.get_task_definition(task)
+        click.secho('Update task definition based on: %s\n' % td.family_revision)
+
+        td.set_images(tag, **{key: value for (key, value) in image})
+        td.set_commands(**{key: value for (key, value) in command})
+        td.set_cpu(**{key: value for (key, value) in cpu})
+        td.set_memory(**{key: value for (key, value) in memory})
+        td.set_memoryreservation(**{key: value for (key, value) in memoryreservation})
+        td.set_task_cpu(task_cpu)
+        td.set_task_memory(task_memory)
+        td.set_privileged(**{key: value for (key, value) in privileged})
+        td.set_environment(env, exclusive_env, env_file)
+        td.set_docker_labels(docker_label, exclusive_docker_labels)
+        td.set_s3_env_file(s3_env_file, exclusive_s3_env_file)
+        td.set_secrets(secret, exclusive_secrets, secrets_env_file)
+        td.set_ulimits(ulimit, exclusive_ulimits)
+        td.set_system_controls(system_control, exclusive_system_controls)
+        td.set_port_mappings(port, exclusive_ports)
+        td.set_mount_points(mount, exclusive_mounts)
+        td.set_log_configurations(log)
+        td.set_role_arn(role)
+        td.set_execution_role_arn(execution_role)
+        td.set_volumes(volume)
+
+        slack = SlackNotification(
+            getenv('SLACK_URL', slack_url),
+            getenv('SLACK_SERVICE_MATCH', slack_service_match)
+        )
+        slack.notify_start(cluster, tag, td, comment, user, rule=rule)
+
+        if diff:
+            print_diff(td)
+
+        new_td = create_task_definition(action, td)
+
+        client.update_rule(
+            cluster=cluster,
+            rule=rule,
+            task_definition=new_td
+        )
+        click.secho('Updating scheduled task')
+        click.secho('Successfully updated scheduled task %s\n' % rule, fg='green')
+
+        slack.notify_success(cluster, td.revision, rule=rule)
+
+        record_deployment(tag, newrelic_apikey, newrelic_appid, newrelic_region, newrelic_revision, comment, user)
+
+        if deregister:
+            deregister_task_definition(action, td)
+
+    except (EcsError, ClientError) as e:
+        click.secho('%s\n' % str(e), fg='red', err=True)
+        exit(1)
+
+
+@click.command()
+@click.argument('task')
+@click.option('-i', '--image', type=(str, str), multiple=True, help='Overwrites the image for a container: <container> <image>')
+@click.option('-t', '--tag', help='Changes the tag for ALL container images')
+@click.option('-c', '--command', type=(str, str), multiple=True, help='Overwrites the command in a container: <container> <command>')
+@click.option('-e', '--env', type=(str, str, str), multiple=True, help='Adds or changes an environment variable: <container> <name> <value>')
+@click.option('--env-file', type=(str, str), default=((None, None),), multiple=True, required=False, help='Load environment variables from .env-file')
+@click.option('--s3-env-file', type=(str, str), multiple=True, required=False, help='Location of .env-file in S3 in ARN format (eg arn:aws:s3:::/bucket_name/object_name')
+@click.option('-s', '--secret', type=(str, str, str), multiple=True, help='Adds or changes a secret environment variable from the AWS Parameter Store (Not available for Fargate): <container> <name> <parameter name>')
+@click.option('--secrets-env-file', type=(str, str), default=((None, None),), multiple=True, required=False, help='Load secrets from .env-file: <container> <env file path>')
+@click.option('-d', '--docker-label', type=(str, str, str), multiple=True, help='Adds or changes a docker label: <container> <name> <value>')
+@click.option('-r', '--role', type=str, help='Sets the task\'s role ARN: <task role ARN>')
+@click.option('--runtime-platform', type=str, nargs=2, help='Overwrites runtimePlatform: <cpuArchitecture> <operatingSystemFamily>')
+@click.option('--region', help='AWS region (e.g. eu-central-1)')
+@click.option('--access-key-id', help='AWS access key id')
+@click.option('--secret-access-key', help='AWS secret access key')
+@click.option('--session-token', required=False, help='AWS session token')
+@click.option('--profile', help='AWS configuration profile name')
+@click.option('--account', help='Target AWS account id to deploy in')
+@click.option('--assume-role', help='AWS Role to assume in target account')
+@click.option('--diff/--no-diff', default=True, help='Print what values were changed in the task definition')
+@click.option('--exclusive-env', is_flag=True, default=False, help='Set the given environment variables exclusively and remove all other pre-existing env variables from all containers')
+@click.option('--exclusive-secrets', is_flag=True, default=False, help='Set the given secrets exclusively and remove all other pre-existing secrets from all containers')
+@click.option('--exclusive-docker-labels', is_flag=True, default=False, help='Set the given docker labels exclusively and remove all other pre-existing docker-labels from all containers')
+@click.option('--exclusive-s3-env-file', is_flag=True, default=False, help='Set the given s3 env files exclusively and remove all other pre-existing s3 env files from all containers')
+@click.option('--deregister/--no-deregister', default=True, help='Deregister or keep the old task definition (default: --deregister)')
+def update(task, image, tag, command, env, env_file, s3_env_file, secret, secrets_env_file, role, region, access_key_id, secret_access_key, session_token, profile, account, assume_role, diff, exclusive_env, exclusive_s3_env_file, exclusive_secrets, runtime_platform, deregister, docker_label, exclusive_docker_labels):
+    """
+    Update a task definition.
+
+    \b
+    TASK is the name of your task definition family (e.g. 'my-task') within ECS.
+    """
+    try:
+        client = get_client(access_key_id, secret_access_key, region, profile, session_token, account, assume_role)
+        action = UpdateAction(client)
+
+        td = action.get_task_definition(task)
+        click.secho('Update task definition based on: %s\n' % td.family_revision)
+
+        td.set_images(tag, **{key: value for (key, value) in image})
+        td.set_commands(**{key: value for (key, value) in command})
+        td.set_environment(env, exclusive_env, env_file)
+        td.set_docker_labels(docker_label, exclusive_docker_labels)
+        td.set_secrets(secret, exclusive_secrets, secrets_env_file)
+        td.set_s3_env_file(s3_env_file, exclusive_s3_env_file)
+        td.set_role_arn(role)
+        td.set_runtime_platform(runtime_platform)
+
+        if diff:
+            print_diff(td)
+
+        create_task_definition(action, td)
+
+        if deregister:
+            deregister_task_definition(action, td)
+
+    except (EcsError, ClientError) as e:
+        click.secho('%s\n' % str(e), fg='red', err=True)
+        exit(1)
+
+
+@click.command()
+@click.argument('cluster')
+@click.argument('service')
+@click.argument('desired_count', type=int)
+@click.option('--region', help='AWS region (e.g. eu-central-1)')
+@click.option('--access-key-id', help='AWS access key id')
+@click.option('--secret-access-key', help='AWS secret access key')
+@click.option('--session-token', required=False, help='AWS session token')
+@click.option('--profile', help='AWS configuration profile name')
+@click.option('--account', help='Target AWS account id to deploy in')
+@click.option('--assume-role', help='AWS Role to assume in target account')
+@click.option('--timeout', default=300, type=int, help='Amount of seconds to wait for deployment before command fails (default: 300). To disable timeout (fire and forget) set to -1')
+@click.option('--ignore-warnings', is_flag=True, help='Do not fail deployment on warnings (port already in use or insufficient memory/CPU)')
+@click.option('--sleep-time', default=1, type=int, help='Amount of seconds to wait between each check of the service (default: 1)')
+def scale(cluster, service, desired_count, access_key_id, secret_access_key, session_token, region, profile, account, assume_role, timeout, ignore_warnings, sleep_time):
+    """
+    Scale a service up or down.
+
+    \b
+    CLUSTER is the name of your cluster (e.g. 'my-cluster') within ECS.
+    SERVICE is the name of your service (e.g. 'my-app') within ECS.
+    DESIRED_COUNT is the number of tasks your service should run.
+    """
+    try:
+        client = get_client(access_key_id, secret_access_key,  session_token,  region, profile, account, assume_role)
+        scaling = ScaleAction(client, cluster, service)
+        click.secho('Updating service')
+        scaling.scale(desired_count)
+        click.secho(
+            'Successfully changed desired count to: %s\n' % desired_count,
+            fg='green'
+        )
+        wait_for_finish(
+            action=scaling,
+            timeout=timeout,
+            title='Scaling service',
+            success_message='Scaling successful',
+            failure_message='Scaling failed',
+            ignore_warnings=ignore_warnings,
+            sleep_time=sleep_time
+        )
+
+    except (EcsError, ClientError) as e:
+        click.secho('%s\n' % str(e), fg='red', err=True)
+        exit(1)
+
+
+@click.command()
+@click.argument('cluster')
+@click.argument('task')
+@click.argument('count', required=False, default=1)
+@click.option('-c', '--command', type=(str, str), multiple=True, help='Overwrites the command in a container: <container> <command>')
+@click.option('-e', '--env', type=(str, str, str), multiple=True, help='Adds or changes an environment variable: <container> <name> <value>')
+@click.option('--env-file', type=(str, str), default=((None, None),), multiple=True, required=False, help='Load environment variables from .env-file')
+@click.option('--s3-env-file', type=(str, str), multiple=True, required=False, help='Location of .env-file in S3 in ARN format (eg arn:aws:s3:::/bucket_name/object_name')
+@click.option('-s', '--secret', type=(str, str, str), multiple=True, help='Adds or changes a secret environment variable from the AWS Parameter Store (Not available for Fargate): <container> <name> <parameter name>')
+@click.option('--secrets-env-file', type=(str, str), default=((None, None),), multiple=True, required=False, help='Load secrets from .env-file: <container> <env file path>')
+@click.option('-d', '--docker-label', type=(str, str, str), multiple=True, help='Adds or changes a docker label: <container> <name> <value>')
+@click.option('--launchtype', type=click.Choice([LAUNCH_TYPE_EC2, LAUNCH_TYPE_FARGATE]), default=LAUNCH_TYPE_EC2, help='ECS Launch type (default: EC2)')
+@click.option('--subnet', type=str, multiple=True, help='A subnet ID to launch the task within. Required for launch type FARGATE (multiple values possible)')
+@click.option('--securitygroup', type=str, multiple=True, help='A security group ID to launch the task within. Required for launch type FARGATE (multiple values possible)')
+@click.option('--public-ip', is_flag=True, default=False, help='Should a public IP address be assigned to the task (default: False)')
+@click.option('--platform-version', help='The version of the Fargate platform on which to run the task. Optional, FARGATE launch type only.', required=False)
+@click.option('--region', help='AWS region (e.g. eu-central-1)')
+@click.option('--access-key-id', help='AWS access key id')
+@click.option('--secret-access-key', help='AWS secret access key')
+@click.option('--session-token', required=False, help='AWS session token')
+@click.option('--profile', help='AWS configuration profile name')
+@click.option('--account', help='Target AWS account id to deploy in')
+@click.option('--assume-role', help='AWS Role to assume in target account')
+@click.option('--exclusive-env', is_flag=True, default=False, help='Set the given environment variables exclusively and remove all other pre-existing env variables from all containers')
+@click.option('--exclusive-secrets', is_flag=True, default=False, help='Set the given secrets exclusively and remove all other pre-existing secrets from all containers')
+@click.option('--exclusive-docker-labels', is_flag=True, default=False, help='Set the given docker labels exclusively and remove all other pre-existing docker-labels from all containers')
+@click.option('--exclusive-s3-env-file', is_flag=True, default=False, help='Set the given s3 env files exclusively and remove all other pre-existing s3 env files from all containers')
+@click.option('--diff/--no-diff', default=True, help='Print what values were changed in the task definition')
+def run(cluster, task, count, command, env, env_file, s3_env_file, secret, secrets_env_file, launchtype, subnet, securitygroup, public_ip, platform_version, region, access_key_id, secret_access_key,  session_token, profile, account, assume_role, exclusive_env, exclusive_secrets, exclusive_s3_env_file, diff, docker_label, exclusive_docker_labels):
+    """
+    Run a one-off task.
+
+    \b
+    CLUSTER is the name of your cluster (e.g. 'my-cluster') within ECS.
+    TASK is the name of your task definition (e.g. 'my-task') within ECS.
+    COUNT is the number of tasks your service should run.
+    """
+    try:
+        client = get_client(access_key_id, secret_access_key,  session_token, region, profile, account, assume_role)
+        action = RunAction(client, cluster)
+
+        td = action.get_task_definition(task)
+        td.set_commands(**{key: value for (key, value) in command})
+        td.set_environment(env, exclusive_env, env_file)
+        td.set_docker_labels(docker_label, exclusive_docker_labels)
+        td.set_s3_env_file(s3_env_file, exclusive_s3_env_file)
+        td.set_secrets(secret, exclusive_secrets, secrets_env_file)
+
+        if diff:
+            print_diff(td, 'Using task definition: %s' % task)
+
+        action.run(td, count, 'ECS Deploy', launchtype, subnet, securitygroup, public_ip, platform_version)
+
+        click.secho(
+            'Successfully started %d instances of task: %s' % (
+                len(action.started_tasks),
+                td.family_revision
+            ),
+            fg='green'
+        )
+
+        for started_task in action.started_tasks:
+            click.secho('- %s' % started_task['taskArn'], fg='green')
+        click.secho(' ')
+
+    except (EcsError, ClientError) as e:
+        click.secho('%s\n' % str(e), fg='red', err=True)
+        exit(1)
+
+
+@click.command()
+@click.argument('task')
+@click.argument('revision_a')
+@click.argument('revision_b')
+@click.option('--region', help='AWS region (e.g. eu-central-1)')
+@click.option('--access-key-id', help='AWS access key id')
+@click.option('--secret-access-key', help='AWS secret access key')
+@click.option('--session-token', required=False, help='AWS session token')
+@click.option('--profile', help='AWS configuration profile name')
+@click.option('--account', help='Target AWS account id to deploy in')
+@click.option('--assume-role', help='AWS Role to assume in target account')
+def diff(task, revision_a, revision_b, region, access_key_id, secret_access_key,  session_token, profile, account, assume_role):
+    """
+    Compare two task definition revisions.
+
+    \b
+    TASK is the name of your task definition (e.g. 'my-task') within ECS.
+    COUNT is the number of tasks your service should run.
+    """
+
+    try:
+        client = get_client(access_key_id, secret_access_key,  session_token, region, profile, account, assume_role)
+        action = DiffAction(client)
+
+        td_a = action.get_task_definition('%s:%s' % (task, revision_a))
+        td_b = action.get_task_definition('%s:%s' % (task, revision_b))
+
+        result = td_a.diff_raw(td_b)
+        for difference in result:
+            if difference[0] == 'add':
+                click.secho('%s: %s' % (difference[0], difference[1]), fg='green')
+                for added in difference[2]:
+                    click.secho('    + %s: %s' % (added[0], json.dumps(added[1])), fg='green')
+
+            if difference[0] == 'change':
+                click.secho('%s: %s' % (difference[0], difference[1]), fg='yellow')
+                click.secho('    - %s' % json.dumps(difference[2][0]), fg='red')
+                click.secho('    + %s' % json.dumps(difference[2][1]), fg='green')
+
+            if difference[0] == 'remove':
+                click.secho('%s: %s' % (difference[0], difference[1]), fg='red')
+                for removed in difference[2]:
+                    click.secho('    - %s: %s' % removed, fg='red')
+
+    except (EcsError, ClientError) as e:
+        click.secho('%s\n' % str(e), fg='red', err=True)
+        exit(1)
+
+
+def wait_for_finish(action, timeout, title, success_message, failure_message,
+                    ignore_warnings, sleep_time=1):
+    click.secho(title)
+    start_timestamp = datetime.now()
+    waiting_timeout = datetime.now() + timedelta(seconds=timeout)
+    service = action.get_service()
+    inspected_until = None
+
+    if timeout == -1:
+        waiting = False
+    else:
+        waiting = True
+
+    while waiting and datetime.now() < waiting_timeout:
+        click.secho('.', nl=False)
+        service = action.get_service()
+        inspected_until = inspect_errors(
+            service=service,
+            failure_message=failure_message,
+            ignore_warnings=ignore_warnings,
+            since=inspected_until,
+            timeout=False
+        )
+        waiting = not action.is_deployed(service)
+
+        if waiting:
+            sleep(sleep_time)
+
+    inspect_errors(
+        service=service,
+        failure_message=failure_message,
+        ignore_warnings=ignore_warnings,
+        since=inspected_until,
+        timeout=waiting
     )
 
+    click.secho('\n%s' % success_message, fg='green')
+    click.secho('Duration: %s sec\n' % (datetime.now() - start_timestamp).seconds)
 
-@patch('ecs_deploy.newrelic.Deployment.deploy')
-@patch('ecs_deploy.cli.get_client')
-def test_deploy_with_newrelic_revision(get_client, newrelic, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME,
-                                        '-i', 'application', 'application:latest',
-                                        '--newrelic-apikey', 'test',
-                                        '--newrelic-appid', 'test',
-                                        '--newrelic-revision', '1.0.0',
-                                        '--comment', 'Lorem Ipsum'))
-    assert result.exit_code == 0
-    assert not result.exception
-    assert u"Deploying based on task definition: test-task:1" in result.output
-    assert u'Successfully created revision: 2' in result.output
-    assert u'Successfully deregistered revision: 1' in result.output
-    assert u'Successfully changed task definition to: test-task:2' in result.output
-    assert u'Deployment successful' in result.output
-    assert u"Recording deployment in New Relic" in result.output
 
-    newrelic.assert_called_once_with(
-        '1.0.0',
-        '',
-        'Lorem Ipsum'
+def deploy_task_definition(deployment, task_definition, title, success_message,
+                           failure_message, timeout, deregister,
+                           previous_task_definition, ignore_warnings, sleep_time):
+    click.secho('Updating service')
+    deployment.deploy(task_definition)
+
+    message = 'Successfully changed task definition to: %s:%s\n' % (
+        task_definition.family,
+        task_definition.revision
+    )
+
+    click.secho(message, fg='green')
+
+    wait_for_finish(
+        action=deployment,
+        timeout=timeout,
+        title=title,
+        success_message=success_message,
+        failure_message=failure_message,
+        ignore_warnings=ignore_warnings,
+        sleep_time=sleep_time
+    )
+
+    if deregister:
+        deregister_task_definition(deployment, previous_task_definition)
+
+
+def get_task_definition(action, task):
+    if task:
+        task_definition = action.get_task_definition(task)
+    else:
+        task_definition = action.get_current_task_definition(action.service)
+    return task_definition
+
+
+def create_task_definition(action, task_definition):
+    click.secho('Creating new task definition revision')
+    new_td = action.update_task_definition(task_definition)
+
+    click.secho(
+        'Successfully created revision: %d\n' % new_td.revision,
+        fg='green'
+    )
+
+    return new_td
+
+
+def deregister_task_definition(action, task_definition):
+    click.secho('Deregister task definition revision')
+    action.deregister_task_definition(task_definition)
+    click.secho(
+        'Successfully deregistered revision: %d\n' % task_definition.revision,
+        fg='green'
     )
 
 
-@patch('ecs_deploy.newrelic.Deployment.deploy')
-@patch('ecs_deploy.cli.get_client')
-def test_deploy_with_newrelic_tag_revision(get_client, newrelic, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME,
-                                        '-t', 'my-tag',
-                                        '--newrelic-apikey', 'test',
-                                        '--newrelic-appid', 'test',
-                                        '--newrelic-revision', '1.0.0',
-                                        '--comment', 'Lorem Ipsum'))
-    assert result.exit_code == 0
-    assert not result.exception
-    assert u"Deploying based on task definition: test-task:1" in result.output
-    assert u'Successfully created revision: 2' in result.output
-    assert u'Successfully deregistered revision: 1' in result.output
-    assert u'Successfully changed task definition to: test-task:2' in result.output
-    assert u'Deployment successful' in result.output
-    assert u"Recording deployment in New Relic" in result.output
-
-    newrelic.assert_called_once_with(
-        '1.0.0',
-        '',
-        'Lorem Ipsum'
+def rollback_task_definition(deployment, old, new, timeout=600, sleep_time=1):
+    click.secho(
+        'Rolling back to task definition: %s\n' % old.family_revision,
+        fg='yellow',
+    )
+    deploy_task_definition(
+        deployment=deployment,
+        task_definition=old,
+        title='Deploying previous task definition',
+        success_message='Rollback successful',
+        failure_message='Rollback failed. Please check ECS Console',
+        timeout=timeout,
+        deregister=True,
+        previous_task_definition=new,
+        ignore_warnings=False,
+        sleep_time=sleep_time
+    )
+    click.secho(
+        'Deployment failed, but service has been rolled back to previous '
+        'task definition: %s\n' % old.family_revision, fg='yellow', err=True
     )
 
 
-@patch('ecs_deploy.newrelic.Deployment.deploy')
-@patch('ecs_deploy.cli.get_client')
-def test_deploy_with_newrelic_errors(get_client, deploy, runner):
-    e = NewRelicDeploymentException('Recording deployment failed')
-    deploy.side_effect = e
-
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME,
-                                        '-t', 'test',
-                                        '--newrelic-apikey', 'test',
-                                        '--newrelic-appid', 'test'))
-
-    assert result.exit_code == 1
-    assert u"Recording deployment failed" in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_deploy_task_definition_arn(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '--task', TASK_DEFINITION_ARN_2))
-    assert result.exit_code == 0
-    assert not result.exception
-    assert u"Deploying based on task definition: test-task:2" in result.output
-    assert u'Successfully deregistered revision: 2' in result.output
-    assert u'Deployment successful' in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_deploy_with_timeout(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key', wait=2)
-    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '--timeout', '1'))
-    assert result.exit_code == 1
-    assert u"Deployment failed due to timeout. Please see: " \
-           u"https://github.com/fabfuel/ecs-deploy#timeout" in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_deploy_with_wait_within_timeout(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key', wait=2)
-    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '--timeout', '10'))
-    assert result.exit_code == 0
-    assert u'Deploying new task definition' in result.output
-    assert u'...' in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_deploy_without_timeout(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key', wait=2)
-
-    start_time = datetime.now()
-    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '--timeout', '-1'))
-    end_time = datetime.now()
-
-    assert result.exit_code == 0
-
-    # assert task is not waiting for deployment
-    assert u'Deploying new task definition\n' in result.output
-    assert u'...' not in result.output
-    assert (end_time - start_time).total_seconds() < 1
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_deploy_unknown_task_definition_arn(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '--task', u'arn:aws:ecs:eu-central-1:123456789012:task-definition/foobar:55'))
-    assert result.exit_code == 1
-    assert u"Unknown task definition arn: arn:aws:ecs:eu-central-1:123456789012:task-definition/foobar:55" in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_scale_without_credentials(get_client, runner):
-    get_client.return_value = EcsTestClient()
-    result = runner.invoke(cli.scale, (CLUSTER_NAME, SERVICE_NAME, '2'))
-    assert result.exit_code == 1
-    assert result.output == u'Unable to locate credentials. Configure credentials by running "aws configure".\n\n'
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_scale_with_invalid_cluster(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.scale, ('unknown-cluster', SERVICE_NAME, '2'))
-    assert result.exit_code == 1
-    assert result.output == u'An error occurred (ClusterNotFoundException) when calling the DescribeServices ' \
-                            u'operation: Cluster not found.\n\n'
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_scale_with_invalid_service(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.scale, (CLUSTER_NAME, 'unknown-service', '2'))
-    assert result.exit_code == 1
-    assert result.output == u'An error occurred when calling the DescribeServices operation: Service not found.\n\n'
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_scale(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.scale, (CLUSTER_NAME, SERVICE_NAME, '2'))
-    assert not result.exception
-    assert result.exit_code == 0
-    assert u"Successfully changed desired count to: 2" in result.output
-    assert u"Scaling successful" in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_scale_with_errors(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key', deployment_errors=True)
-    result = runner.invoke(cli.scale, (CLUSTER_NAME, SERVICE_NAME, '2'))
-    assert result.exit_code == 1
-    assert u"Scaling failed" in result.output
-    assert u"ERROR: Service was unable to Lorem Ipsum" in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_scale_with_client_errors(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key', client_errors=True)
-    result = runner.invoke(cli.scale, (CLUSTER_NAME, SERVICE_NAME, '2'))
-    assert result.exit_code == 1
-    assert u"Something went wrong" in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_scale_ignore_warnings(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key', deployment_errors=True)
-    result = runner.invoke(cli.scale, (CLUSTER_NAME, SERVICE_NAME, '2', '--ignore-warnings'))
-
-    assert not result.exception
-    assert result.exit_code == 0
-    assert u"Successfully changed desired count to: 2" in result.output
-    assert u"WARNING: Service was unable to Lorem Ipsum" in result.output
-    assert u"Continuing." in result.output
-    assert u"Scaling successful" in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_scale_with_timeout(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key', wait=2)
-    result = runner.invoke(cli.scale, (CLUSTER_NAME, SERVICE_NAME, '2', '--timeout', '1'))
-    assert result.exit_code == 1
-    assert u"Scaling failed due to timeout. Please see: " \
-           u"https://github.com/fabfuel/ecs-deploy#timeout" in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_scale_without_credentials(get_client, runner):
-    get_client.return_value = EcsTestClient()
-    result = runner.invoke(cli.scale, (CLUSTER_NAME, SERVICE_NAME, '2'))
-    assert result.exit_code == 1
-    assert result.output == u'Unable to locate credentials. Configure credentials by running "aws configure".\n\n'
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_run_task(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.run, (CLUSTER_NAME, 'test-task'))
-
-    assert not result.exception
-    assert result.exit_code == 0
-
-    assert u"Successfully started 2 instances of task: test-task:2" in result.output
-    assert u"- arn:foo:bar" in result.output
-    assert u"- arn:lorem:ipsum" in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_run_task_with_command(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.run, (CLUSTER_NAME, 'test-task', '2', '-c', 'webserver', 'date'))
-
-    assert not result.exception
-    assert result.exit_code == 0
-
-    assert u"Using task definition: test-task" in result.output
-    assert u'Changed command of container "webserver" to: "date" (was: "run")' in result.output
-    assert u"Successfully started 2 instances of task: test-task:2" in result.output
-    assert u"- arn:foo:bar" in result.output
-    assert u"- arn:lorem:ipsum" in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_run_task_with_environment_var(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.run, (CLUSTER_NAME, 'test-task', '2', '-e', 'application', 'foo', 'bar'))
-
-    assert not result.exception
-    assert result.exit_code == 0
-
-    assert u"Using task definition: test-task" in result.output
-    assert u'Changed environment "foo" of container "application" to: "bar"' in result.output
-    assert u"Successfully started 2 instances of task: test-task:2" in result.output
-    assert u"- arn:foo:bar" in result.output
-    assert u"- arn:lorem:ipsum" in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_run_task_with_docker_label(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.run, (CLUSTER_NAME, 'test-task', '2', '-d', 'application', 'foo', 'bar'))
-
-    assert not result.exception
-    assert result.exit_code == 0
-
-    assert u"Using task definition: test-task" in result.output
-    assert u'Changed dockerLabel "foo" of container "application" to: "bar"' in result.output
-    assert u"Successfully started 2 instances of task: test-task:2" in result.output
-    assert u"- arn:foo:bar" in result.output
-    assert u"- arn:lorem:ipsum" in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_run_task_without_diff(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.run, (CLUSTER_NAME, 'test-task', '2', '-e', 'application', 'foo', 'bar', '--no-diff'))
-
-    assert not result.exception
-    assert result.exit_code == 0
-
-    assert u"Using task definition: test-task" not in result.output
-    assert u'Changed environment' not in result.output
-    assert u"Successfully started 2 instances of task: test-task:2" in result.output
-    assert u"- arn:foo:bar" in result.output
-    assert u"- arn:lorem:ipsum" in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_run_task_with_errors(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key', deployment_errors=True)
-    result = runner.invoke(cli.run, (CLUSTER_NAME, 'test-task'))
-    assert result.exception
-    assert result.exit_code == 1
-    assert u"An error occurred (123) when calling the fake_error operation: Something went wrong" in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_run_task_without_credentials(get_client, runner):
-    get_client.return_value = EcsTestClient()
-    result = runner.invoke(cli.run, (CLUSTER_NAME, 'test-task'))
-    assert result.exit_code == 1
-    assert result.output == u'Unable to locate credentials. Configure credentials by running "aws configure".\n\n'
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_run_task_with_invalid_cluster(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.run, ('unknown-cluster', 'test-task'))
-    assert result.exit_code == 1
-    assert result.output == u'An error occurred (ClusterNotFoundException) when calling the RunTask operation: Cluster not found.\n\n'
-
-
-@patch('ecs_deploy.newrelic.Deployment')
-def test_record_deployment_without_revision(Deployment):
-    result = record_deployment(None, None, None, None, None, None, None)
-    assert result is False
-
-
-@patch('ecs_deploy.newrelic.Deployment')
-def test_record_deployment_without_apikey(Deployment):
-    result = record_deployment('1.2.3', None, None, None, None, None, None)
-    assert result is False
-
-
-@patch('click.secho')
-@patch('ecs_deploy.newrelic.Deployment')
-def test_record_deployment_without_appid(Deployment, secho):
-    result = record_deployment('1.2.3', 'APIKEY', None, None, None, None, None)
-    secho.assert_any_call(
-        'Missing required parameters for recording New Relic deployment. '
-        'Please see https://github.com/fabfuel/ecs-deploy#new-relic'
-    )
-    assert result is False
-
-
-@patch('click.secho')
-@patch.object(Deployment, 'deploy')
-@patch.object(Deployment, '__init__')
-def test_record_deployment_tag(deployment_init, deployment_deploy, secho):
-    deployment_init.return_value = None
-    result = record_deployment('1.2.3', 'APIKEY', 'APPID', 'EU', None, 'Comment', 'user')
-
-    deployment_init.assert_called_once_with('APIKEY', 'APPID', 'user', 'EU')
-    deployment_deploy.assert_called_once_with('1.2.3', '', 'Comment')
-    secho.assert_any_call('Recording deployment in New Relic', nl=False)
-    secho.assert_any_call('\nDone\n', fg='green')
-
-    assert result is True
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_update_without_credentials(get_client, runner):
-    get_client.return_value = EcsTestClient()
-    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1,))
-    assert result.exit_code == 1
-    assert u'Unable to locate credentials. Configure credentials by running "aws configure".\n\n' in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_update_task_creates_new_revision(get_client, runner):
-    get_client.return_value = EcsTestClient('access_key', 'secret_key')
-    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1,))
-    assert result.exit_code == 0
-    assert u"Creating new task definition revision" in result.output
-    assert u"Successfully created revision: 2" in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_update_task(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1,))
-
-    assert result.exit_code == 0
-    assert not result.exception
-    assert u"Update task definition based on: test-task:1" in result.output
-    assert u'Successfully created revision: 2' in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_update_task_with_role_arn(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1, '-r', 'arn:new:role'))
-    assert result.exit_code == 0
-    assert not result.exception
-    assert u"Update task definition based on: test-task:1" in result.output
-    assert u"Updating task definition" in result.output
-    assert u'Changed role_arn to: "arn:new:role" (was: "arn:test:role:1")' in result.output
-    assert u'Successfully created revision: 2' in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_update_task_new_tag(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1, '-t', 'latest'))
-    assert result.exit_code == 0
-    assert not result.exception
-    assert u"Update task definition based on: test-task:1" in result.output
-    assert u"Updating task definition" in result.output
-    assert u'Changed image of container "webserver" to: "webserver:latest" (was: "webserver:123")' in result.output
-    assert u'Changed image of container "application" to: "application:latest" (was: "application:123")' in result.output
-    assert u'Successfully created revision: 2' in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_update_task_one_new_image(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1, '-i', 'application', 'application:latest'))
-    assert result.exit_code == 0
-    assert not result.exception
-    assert u"Update task definition based on: test-task:1" in result.output
-    assert u"Updating task definition" in result.output
-    assert u'Changed image of container "application" to: "application:latest" (was: "application:123")' in result.output
-    assert u'Successfully created revision: 2' in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_update_task_two_new_images(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1, '-i', 'application', 'application:latest',
-                                        '-i', 'webserver', 'webserver:latest'))
-    assert result.exit_code == 0
-    assert not result.exception
-    assert u"Update task definition based on: test-task:1" in result.output
-    assert u"Updating task definition" in result.output
-    assert u'Changed image of container "webserver" to: "webserver:latest" (was: "webserver:123")' in result.output
-    assert u'Changed image of container "application" to: "application:latest" (was: "application:123")' in result.output
-    assert u'Successfully created revision: 2' in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_update_task_one_new_command(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1, '-c', 'application', 'foobar'))
-    assert result.exit_code == 0
-    assert not result.exception
-    assert u"Update task definition based on: test-task:1" in result.output
-    assert u"Updating task definition" in result.output
-    assert u'Changed command of container "application" to: "foobar" (was: "run")' in result.output
-    assert u'Successfully created revision: 2' in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_update_task_one_new_environment_variable(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1,
-                                        '-e', 'application', 'foo', 'bar',
-                                        '-e', 'webserver', 'foo', 'baz'))
-
-    assert result.exit_code == 0
-    assert not result.exception
-
-    assert u"Update task definition based on: test-task:1" in result.output
-    assert u"Updating task definition" in result.output
-    assert u'Changed environment "foo" of container "application" to: "bar"' in result.output
-    assert u'Changed environment "foo" of container "webserver" to: "baz"' in result.output
-    assert u'Changed environment "lorem" of container "webserver" to: "ipsum"' not in result.output
-    assert u'Successfully created revision: 2' in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_update_task_change_environment_variable_empty_string(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1, '-e', 'application', 'foo', ''))
-
-    assert result.exit_code == 0
-    assert not result.exception
-
-    assert u"Update task definition based on: test-task:1" in result.output
-    assert u"Updating task definition" in result.output
-    assert u'Changed environment "foo" of container "application" to: ""' in result.output
-    assert u'Successfully created revision: 2' in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_update_task_new_empty_environment_variable(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1, '-e', 'application', 'new', ''))
-
-    assert result.exit_code == 0
-    assert not result.exception
-
-    assert u"Update task definition based on: test-task:1" in result.output
-    assert u"Updating task definition" in result.output
-    assert u'Changed environment "new" of container "application" to: ""' in result.output
-    assert u'Successfully created revision: 2' in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_update_task_empty_environment_variable_again(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1, '-e', 'webserver', 'empty', ''))
-
-    assert result.exit_code == 0
-    assert not result.exception
-
-    assert u"Update task definition based on: test-task:1" in result.output
-    assert u"Updating task definition" not in result.output
-    assert u'Changed environment' not in result.output
-    assert u'Successfully created revision: 2' in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_update_task_previously_empty_environment_variable_with_value(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1, '-e', 'webserver', 'empty', 'not-empty'))
-
-    assert result.exit_code == 0
-    assert not result.exception
-
-    assert u"Update task definition based on: test-task:1" in result.output
-    assert u"Updating task definition" in result.output
-    assert u'Changed environment "empty" of container "webserver" to: "not-empty"' in result.output
-    assert u'Successfully created revision: 2' in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_update_task_exclusive_environment(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1, '-e', 'webserver', 'new-env', 'new-value', '--exclusive-env'))
-
-    assert result.exit_code == 0
-    assert not result.exception
-
-    assert u"Update task definition based on: test-task:1" in result.output
-    assert u"Updating task definition" in result.output
-    assert u'Changed environment "new-env" of container "webserver" to: "new-value"' in result.output
-
-    assert u'Removed environment "foo" of container "webserver"' in result.output
-    assert u'Removed environment "lorem" of container "webserver"' in result.output
-
-    assert u'Removed secret' not in result.output
-
-    assert u'Successfully created revision: 2' in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_update_task_one_new_docker_label(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1,
-                                        '-d', 'application', 'foo', 'bar',
-                                        '-d', 'webserver', 'foo', 'baz'))
-
-    assert result.exit_code == 0
-    assert not result.exception
-
-    assert u"Update task definition based on: test-task:1" in result.output
-    assert u"Updating task definition" in result.output
-    assert u'Changed dockerLabel "foo" of container "application" to: "bar"' in result.output
-    assert u'Changed dockerLabel "foo" of container "webserver" to: "baz"' in result.output
-    assert u'Changed dockerLabel "lorem" of container "webserver" to: "ipsum"' not in result.output
-    assert u'Successfully created revision: 2' in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_update_task_change_docker_label_empty_string(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1, '-d', 'application', 'foo', ''))
-
-    assert result.exit_code == 0
-    assert not result.exception
-
-    assert u"Update task definition based on: test-task:1" in result.output
-    assert u"Updating task definition" in result.output
-    assert u'Changed dockerLabel "foo" of container "application" to: ""' in result.output
-    assert u'Successfully created revision: 2' in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_update_task_new_empty_docker_label(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1, '-d', 'application', 'new', ''))
-
-    assert result.exit_code == 0
-    assert not result.exception
-
-    assert u"Update task definition based on: test-task:1" in result.output
-    assert u"Updating task definition" in result.output
-    assert u'Changed dockerLabel "new" of container "application" to: ""' in result.output
-    assert u'Successfully created revision: 2' in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_update_task_empty_docker_label_again(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1, '-d', 'webserver', 'empty', ''))
-
-    assert result.exit_code == 0
-    assert not result.exception
-
-    assert u"Update task definition based on: test-task:1" in result.output
-    assert u"Updating task definition" not in result.output
-    assert u'Changed dockerLabel' not in result.output
-    assert u'Successfully created revision: 2' in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_update_task_previously_empty_docker_label_with_value(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1, '-d', 'webserver', 'empty', 'not-empty'))
-
-    assert result.exit_code == 0
-    assert not result.exception
-
-    assert u"Update task definition based on: test-task:1" in result.output
-    assert u"Updating task definition" in result.output
-    assert u'Changed dockerLabel "empty" of container "webserver" to: "not-empty"' in result.output
-    assert u'Successfully created revision: 2' in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_update_task_exclusive_docker_labels(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1, '-d', 'webserver', 'new-label', 'new-value', '--exclusive-docker-labels'))
-
-    assert result.exit_code == 0
-    assert not result.exception
-
-    assert u"Update task definition based on: test-task:1" in result.output
-    assert u"Updating task definition" in result.output
-    assert u'Changed dockerLabel "new-label" of container "webserver" to: "new-value"' in result.output
-
-    assert u'Removed dockerLabel "foo" of container "webserver"' in result.output
-    assert u'Removed dockerLabel "lorem" of container "webserver"' in result.output
-
-    assert u'Successfully created revision: 2' in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_update_task_exclusive_secret(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1, '-s', 'webserver', 'new-secret', 'new-place', '--exclusive-secrets'))
-
-    assert result.exit_code == 0
-    assert not result.exception
-
-    assert u"Update task definition based on: test-task:1" in result.output
-    assert u"Updating task definition" in result.output
-    assert u'Changed secret "new-secret" of container "webserver" to: "new-place"' in result.output
-
-    assert u'Removed secret "baz" of container "webserver"' in result.output
-    assert u'Removed secret "dolor" of container "webserver"' in result.output
-
-    assert u'Removed environment' not in result.output
-
-    assert u'Successfully created revision: 2' in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_update_task_one_new_secret_variable(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1,
-                                        '-s', 'application', 'baz', 'qux',
-                                        '-s', 'webserver', 'baz', 'quux'))
-
-    assert result.exit_code == 0
-    assert not result.exception
-
-    assert u"Update task definition based on: test-task:1" in result.output
-    assert u"Updating task definition" in result.output
-    assert u'Changed secret "baz" of container "application" to: "qux"' in result.output
-    assert u'Changed secret "baz" of container "webserver" to: "quux"' in result.output
-    assert u'Changed secret "dolor" of container "webserver" to: "sit"' not in result.output
-    assert u'Successfully created revision: 2' in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_update_task_without_changing_environment_value(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1, '-e', 'webserver', 'foo', 'bar'))
-
-    assert result.exit_code == 0
-    assert not result.exception
-
-    assert u"Update task definition based on: test-task:1" in result.output
-    assert u"Updating task definition" not in result.output
-    assert u'Changed environment' not in result.output
-    assert u'Successfully created revision: 2' in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_update_task_without_changing_docker_labels(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1, '-d', 'webserver', 'foo', 'bar'))
-
-    assert result.exit_code == 0
-    assert not result.exception
-
-    assert u"Update task definition based on: test-task:1" in result.output
-    assert u"Updating task definition" not in result.output
-    assert u'Changed dockerLabel' not in result.output
-    assert u'Successfully created revision: 2' in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_update_task_without_changing_secrets_value(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1, '-s', 'webserver', 'baz', 'qux'))
-
-    assert result.exit_code == 0
-    assert not result.exception
-
-    assert u"Update task definition based on: test-task:1" in result.output
-    assert u"Updating task definition" not in result.output
-    assert u'Changed secrets' not in result.output
-    assert u'Successfully created revision: 2' in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_update_task_without_diff(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.update, (TASK_DEFINITION_ARN_1, '-t', 'latest', '-e', 'webserver', 'foo', 'barz', '--no-diff'))
-
-    assert result.exit_code == 0
-    assert not result.exception
-
-    assert u"Update task definition based on: test-task:1" in result.output
-    assert u"Updating task definition" not in result.output
-    assert u'Changed environment' not in result.output
-    assert u'Successfully created revision: 2' in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_cron_without_credentials(get_client, runner):
-    get_client.return_value = EcsTestClient()
-    result = runner.invoke(cli.cron, (CLUSTER_NAME, TASK_DEFINITION_FAMILY_1, 'rule'))
-
-    assert result.exit_code == 1
-    assert u'Unable to locate credentials. Configure credentials by running "aws configure".\n\n' in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_cron(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.cron, (CLUSTER_NAME, TASK_DEFINITION_FAMILY_1, 'rule'))
-    assert not result.exception
-
-    assert result.exit_code == 0
-    assert u'Update task definition based on: test-task:2' in result.output
-    assert u'Creating new task definition revision' in result.output
-    assert u'Successfully created revision: 2' in result.output
-    assert u'Updating scheduled task' in result.output
-    assert u'Deregister task definition revision' in result.output
-    assert u'Successfully deregistered revision: 2' in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_diff(get_client, runner):
-    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
-    result = runner.invoke(cli.diff, (TASK_DEFINITION_FAMILY_1, str(TASK_DEFINITION_REVISION_1), str(TASK_DEFINITION_REVISION_3)))
-
-    assert not result.exception
-    assert result.exit_code == 0
-
-    assert 'change: containers.webserver.image' in result.output
-    assert '- "webserver:123"' in result.output
-    assert '+ "webserver:456"' in result.output
-    assert 'change: containers.webserver.command' in result.output
-    assert '- "run"' in result.output
-    assert '+ "execute"' in result.output
-    assert 'change: containers.webserver.environment.foo' in result.output
-    assert '- "bar"' in result.output
-    assert '+ "foobar"' in result.output
-    assert 'remove: containers.webserver.environment' in result.output
-    assert '- empty: ' in result.output
-    assert 'change: containers.webserver.dockerLabels.foo' in result.output
-    assert '- "bar"' in result.output
-    assert '+ "foobar"' in result.output
-    assert 'remove: containers.webserver.dockerLabels' in result.output
-    assert '- empty: ' in result.output
-    assert 'change: containers.webserver.secrets.baz' in result.output
-    assert '- "qux"' in result.output
-    assert '+ "foobaz"' in result.output
-    assert 'change: containers.webserver.secrets.dolor' in result.output
-    assert '- "sit"' in result.output
-    assert '+ "loremdolor"' in result.output
-    assert 'change: role_arn' in result.output
-    assert '- "arn:test:role:1"' in result.output
-    assert '+ "arn:test:another-role:1"' in result.output
-    assert 'change: execution_role_arn' in result.output
-    assert '- "arn:test:role:1"' in result.output
-    assert '+ "arn:test:another-role:1"' in result.output
-    assert 'add: containers.webserver.environment' in result.output
-    assert '+ newvar: "new value"' in result.output
-    assert 'add: containers.webserver.dockerLabel' in result.output
-    assert '+ newlabel: "new value"' in result.output
-
-
-@patch('ecs_deploy.cli.get_client')
-def test_diff_without_credentials(get_client, runner):
-    get_client.return_value = EcsTestClient()
-    result = runner.invoke(cli.diff, (TASK_DEFINITION_FAMILY_1, str(TASK_DEFINITION_REVISION_1), str(TASK_DEFINITION_REVISION_3)))
-
-    assert result.exit_code == 1
-    assert u'Unable to locate credentials. Configure credentials by running "aws configure".\n\n' in result.output
+def record_deployment(tag, api_key, app_id, region, revision, comment, user):
+    api_key = getenv('NEW_RELIC_API_KEY', api_key)
+    app_id = getenv('NEW_RELIC_APP_ID', app_id)
+    region = getenv('NEW_RELIC_REGION', region)
+    revision = getenv('NEW_RELIC_REVISION', revision) or tag
+
+    if not revision or not api_key or not app_id:
+        if api_key:
+            click.secho('Missing required parameters for recording New Relic deployment. '
+                        'Please see https://github.com/fabfuel/ecs-deploy#new-relic')
+        return False
+
+    user = user or getpass.getuser()
+
+    click.secho('Recording deployment in New Relic', nl=False)
+
+    deployment = Deployment(api_key, app_id, user, region)
+    deployment.deploy(revision, '', comment)
+
+    click.secho('\nDone\n', fg='green')
+
+    return True
+
+
+def print_diff(task_definition, title='Updating task definition'):
+    if task_definition.diff:
+        click.secho(title)
+        for diff in task_definition.diff:
+            click.secho(str(diff), fg='blue')
+        click.secho('')
+
+
+def inspect_errors(service, failure_message, ignore_warnings, since, timeout):
+    error = False
+    last_error_timestamp = since
+    warnings = service.get_warnings(since)
+    for timestamp in warnings:
+        message = warnings[timestamp]
+        click.secho('')
+        if ignore_warnings:
+            last_error_timestamp = timestamp
+            click.secho(
+                '%s\nWARNING: %s' % (timestamp, message),
+                fg='yellow',
+                err=False
+            )
+            click.secho('Continuing.', nl=False)
+        else:
+            click.secho(
+                '%s\nERROR: %s\n' % (timestamp, message),
+                fg='red',
+                err=True
+            )
+            error = True
+
+    if service.older_errors:
+        click.secho('')
+        click.secho('Older errors', fg='yellow', err=True)
+        for timestamp in service.older_errors:
+            click.secho(
+                text='%s\n%s\n' % (timestamp, service.older_errors[timestamp]),
+                fg='yellow',
+                err=True
+            )
+
+    if timeout:
+        error = True
+        failure_message += ' due to timeout. Please see: ' \
+                           'https://github.com/fabfuel/ecs-deploy#timeout'
+        click.secho('')
+
+    if error:
+        raise TaskPlacementError(failure_message)
+
+    return last_error_timestamp
+
+
+ecs.add_command(deploy)
+ecs.add_command(scale)
+ecs.add_command(run)
+ecs.add_command(cron)
+ecs.add_command(update)
+ecs.add_command(diff)
+
+if __name__ == '__main__':  # pragma: no cover
+    ecs()
