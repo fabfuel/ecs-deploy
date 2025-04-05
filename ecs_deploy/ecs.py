@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 import re
 import copy
@@ -1331,10 +1331,11 @@ class EcsAction(object):
             service_definition=services_definition[u'services'][0]
         )
 
-    def get_current_task_definition(self, service):
-        return self.get_task_definition(service.task_definition)
 
     def get_task_definition(self, task_definition):
+        if not task_definition:
+            task_definition = self._service.task_definition
+
         task_definition_payload = self._client.describe_task_definition(
             task_definition_arn=task_definition
         )
@@ -1424,18 +1425,78 @@ class EcsAction(object):
         return self._service_name
 
 
-class DeployAction(EcsAction):
+class TrackableProgress:
+    def init_progresstracker(self):
+        self.start_timestamp = datetime.now()
+        self.stop_timestamp = None
+        self.inspected_until = None
+
+    def has_finished(self, timeout, failure_message, ignore_warnings):
+        waiting_timeout = self.start_timestamp + timedelta(seconds=timeout)
+        if datetime.now() > waiting_timeout:
+            raise TaskPlacementError(failure_message + " due to timeout. Please see: https://github.com/fabfuel/ecs-deploy#timeout")
+
+        service = self.get_service()
+        self.inspect_warnings(service, failure_message, ignore_warnings)
+
+        has_finished = self.is_deployed(service)
+
+        if has_finished:
+            self.stop_timestamp = datetime.now()
+        return has_finished
+
+    def inspect_warnings(self, service, failure_message, ignore_warnings):
+
+        warnings = service.get_warnings(self.inspected_until)
+        if not warnings:
+            return
+
+        if ignore_warnings:
+            logger.warning('')
+        else:
+            logger.error('')
+
+        error = False
+
+        for timestamp in warnings:
+            message = warnings[timestamp]
+            if ignore_warnings:
+                self.inspected_until = timestamp
+                logger.warning('%s: %s' % (timestamp, message))
+                logger.warning('Continuing.')
+            else:
+                error = True
+                logger.error('%s: %s' % (timestamp, message))
+
+        if service.older_errors:
+            logger.error('')
+            logger.error('Older errors')
+            for timestamp in service.older_errors:
+                logger.error('%s: %s' % (timestamp, service.older_errors[timestamp]))
+
+        if error:
+            raise TaskPlacementError(failure_message)
+
+    def get_duration(self):
+        if not self.stop_timestamp:
+            raise ValueError("Action not finished yet.")
+        return (self.stop_timestamp - self.start_timestamp).seconds
+
+
+class DeployAction(TrackableProgress, EcsAction):
     def deploy(self, task_definition):
         try:
             self._service.set_task_definition(task_definition)
+            self.init_progresstracker()
             return self.update_service(self._service)
         except ClientError as e:
             raise EcsError(str(e))
 
 
-class ScaleAction(EcsAction):
+class ScaleAction(TrackableProgress, EcsAction):
     def scale(self, desired_count):
         try:
+            self.init_progresstracker()
             return self.update_service(self._service, desired_count)
         except ClientError as e:
             raise EcsError(str(e))
