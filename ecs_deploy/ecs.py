@@ -464,8 +464,12 @@ class EcsTaskDefinition(object):
                 self._diff.append(diff)
                 container[u'image'] = new_image
             elif tag:
-                image_definition = container[u'image'].rsplit(u':', 1)
-                new_image = u'%s:%s' % (image_definition[0], tag.strip())
+                image = container[u'image']
+                if u"@sha256:" in image:
+                    image = image.rsplit(u'@', 1)[0]
+                if u":" in image:
+                    image = image.rsplit(u':', 1)[0]
+                new_image = u'%s:%s' % (image, tag.strip())
                 diff = EcsTaskDefinitionDiff(
                     container=container[u'name'],
                     field=u'image',
