@@ -396,21 +396,13 @@ RESPONSE_TASK_DEFINITIONS = {
     u'test-task': RESPONSE_TASK_DEFINITION_2,
 }
 
-RESPONSE_LIST_TASKS_2 = {
-    u"taskArns": [TASK_ARN_1, TASK_ARN_2]
-}
+RESPONSE_LIST_TASKS_2 = [TASK_ARN_1, TASK_ARN_2]
 
-RESPONSE_LIST_TASKS_1 = {
-    u"taskArns": [TASK_ARN_1]
-}
+RESPONSE_LIST_TASKS_1 = [TASK_ARN_1]
 
-RESPONSE_LIST_TASKS_0 = {
-    u"taskArns": []
-}
+RESPONSE_LIST_TASKS_0 = []
 
-RESPONSE_DESCRIBE_TASKS = {
-    u"tasks": [PAYLOAD_TASK_1, PAYLOAD_TASK_2]
-}
+RESPONSE_DESCRIBE_TASKS = [PAYLOAD_TASK_1, PAYLOAD_TASK_2]
 
 
 @pytest.fixture()
@@ -1234,7 +1226,7 @@ def test_client_describe_unknown_task_definition(client):
 
 def test_client_list_tasks(client):
     client.list_tasks(u'test-cluster', u'test-service')
-    client.boto.list_tasks.assert_called_once_with(cluster=u'test-cluster', serviceName=u'test-service')
+    client.boto.get_paginator.assert_called_once_with(u'list_tasks')
 
 
 def test_client_describe_tasks(client):
