@@ -10,14 +10,6 @@ def readme():
     with open('README.rst') as f:
         return f.read()
 
-dependencies = [
-    'click>=7.1.2, <9',
-    'click-log==0.3.2',
-    'botocore>=1.32.6',
-    'boto3>=1.29.6',
-    'requests>=2.32.4',
-    'dictdiffer>=0.9.0',
-]
 
 setup(
     name='ecs-deploy',
@@ -33,7 +25,6 @@ setup(
     include_package_data=True,
     zip_safe=False,
     platforms='any',
-    install_requires=dependencies,
     entry_points={
         'console_scripts': [
             'ecs = ecs_deploy.cli:ecs',
@@ -42,7 +33,6 @@ setup(
     classifiers=[
         'Environment :: Console',
         'Intended Audience :: Developers',
-        'License :: OSI Approved :: BSD License',
         'Operating System :: POSIX',
         'Operating System :: MacOS',
         'Operating System :: Unix',
