@@ -151,6 +151,13 @@ This will duplicate the current task definition and cause the service to redeplo
 
     $ ecs deploy my-cluster my-service
 
+Force a new deployment
+======================
+To ask ECS to start a new deployment even when the service is already using the requested task definition, pass
+``--force-new-deployment``. This is useful when an image tag points to a new digest and you want ECS to resolve it again.::
+
+    $ ecs deploy my-cluster my-service --force-new-deployment
+
 
 Deploy a new tag
 ================

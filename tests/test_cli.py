@@ -116,6 +116,15 @@ def test_deploy_without_deregister(get_client, runner):
 
 
 @patch('ecs_deploy.cli.get_client')
+def test_deploy_with_force_new_deployment(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '--force-new-deployment'))
+    assert result.exit_code == 0
+    assert not result.exception
+    assert get_client.return_value.force_new_deployment is True
+
+
+@patch('ecs_deploy.cli.get_client')
 def test_deploy_with_role_arn(get_client, runner):
     get_client.return_value = EcsTestClient('acces_key', 'secret_key')
     result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '-r', 'arn:new:role'))
