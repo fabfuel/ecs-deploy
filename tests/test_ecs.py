@@ -1233,8 +1233,19 @@ def test_client_describe_unknown_task_definition(client):
 
 
 def test_client_list_tasks(client):
-    client.list_tasks(u'test-cluster', u'test-service')
-    client.boto.list_tasks.assert_called_once_with(cluster=u'test-cluster', serviceName=u'test-service')
+    # Mock paginator to return task ARNs
+    mock_paginator = Mock()
+    mock_paginator.paginate.return_value = [
+        {'taskArns': ['task-arn-1', 'task-arn-2']},
+        {'taskArns': ['task-arn-3']},
+    ]
+    client.boto.get_paginator.return_value = mock_paginator
+
+    result = client.list_tasks(u'test-cluster', u'test-service')
+
+    client.boto.get_paginator.assert_called_once_with('list_tasks')
+    mock_paginator.paginate.assert_called_once_with(cluster=u'test-cluster', serviceName=u'test-service')
+    assert result == {'taskArns': ['task-arn-1', 'task-arn-2', 'task-arn-3']}
 
 
 def test_client_describe_tasks(client):
@@ -1409,6 +1420,16 @@ def test_client_update_service_without_desired_count(client):
     )
 
 
+def test_client_update_service_with_force_new_deployment(client):
+    client.update_service(u'test-cluster', u'test-service', None, u'task-definition', True)
+    client.boto.update_service.assert_called_once_with(
+        cluster=u'test-cluster',
+        service=u'test-service',
+        taskDefinition=u'task-definition',
+        forceNewDeployment=True
+    )
+
+
 def test_client_run_task(client):
     client.run_task(
         cluster=u'test-cluster',
@@ -1535,6 +1556,23 @@ def test_update_service(client, service):
 
 
 @patch.object(EcsClient, '__init__')
+def test_update_service_with_force_new_deployment(client, service):
+    client.update_service.return_value = RESPONSE_SERVICE
+
+    action = EcsAction(client, CLUSTER_NAME, SERVICE_NAME)
+    new_service = action.update_service(service, force_new_deployment=True)
+
+    assert isinstance(new_service, EcsService)
+    client.update_service.assert_called_once_with(
+        cluster=service.cluster,
+        service=service.name,
+        desired_count=None,
+        task_definition=service.task_definition,
+        force_new_deployment=True
+    )
+
+
+@patch.object(EcsClient, '__init__')
 def test_is_deployed(client, service):
     client.list_tasks.return_value = RESPONSE_LIST_TASKS_1
     client.describe_tasks.return_value = RESPONSE_DESCRIBE_TASKS
@@ -1630,6 +1668,23 @@ def test_deploy_action(client, task_definition_revision_2):
         service=action.service.name,
         desired_count=action.service.desired_count,
         task_definition=task_definition_revision_2.arn
+    )
+
+
+@patch.object(EcsClient, '__init__')
+def test_deploy_action_with_force_new_deployment(client, task_definition_revision_2):
+    action = DeployAction(client, CLUSTER_NAME, SERVICE_NAME)
+    updated_service = action.deploy(task_definition_revision_2, force_new_deployment=True)
+
+    assert action.service.task_definition == task_definition_revision_2.arn
+    assert isinstance(updated_service, EcsService)
+
+    client.update_service.assert_called_once_with(
+        cluster=action.service.cluster,
+        service=action.service.name,
+        desired_count=action.service.desired_count,
+        task_definition=task_definition_revision_2.arn,
+        force_new_deployment=True
     )
 
 
@@ -1781,6 +1836,7 @@ class EcsTestClient(object):
         self.deployment_errors = deployment_errors
         self.client_errors = client_errors
         self.wait_until = datetime.now() + timedelta(seconds=wait)
+        self.force_new_deployment = False
 
     def describe_services(self, cluster_name, service_name):
         if not self.access_key_id or not self.secret_access_key:
@@ -1824,7 +1880,8 @@ class EcsTestClient(object):
     def deregister_task_definition(self, task_definition_arn):
         return deepcopy(RESPONSE_TASK_DEFINITION)
 
-    def update_service(self, cluster, service, desired_count, task_definition):
+    def update_service(self, cluster, service, desired_count, task_definition, force_new_deployment=False):
+        self.force_new_deployment = force_new_deployment
         if self.client_errors:
             error = dict(Error=dict(Code=123, Message="Something went wrong"))
             raise ClientError(error, 'fake_error')

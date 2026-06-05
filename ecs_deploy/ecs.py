@@ -98,10 +98,16 @@ class EcsClient(object):
             )
 
     def list_tasks(self, cluster_name, service_name):
-        return self.boto.list_tasks(
-            cluster=cluster_name,
-            serviceName=service_name
-        )
+        """List all tasks for a service, handling pagination.
+
+        The AWS list_tasks API returns a maximum of 100 task ARNs per call.
+        This method paginates through all results to get the complete list.
+        """
+        task_arns = []
+        paginator = self.boto.get_paginator('list_tasks')
+        for page in paginator.paginate(cluster=cluster_name, serviceName=service_name):
+            task_arns.extend(page.get('taskArns', []))
+        return {'taskArns': task_arns}
 
     def describe_tasks(self, cluster_name, task_arns):
         return self.boto.describe_tasks(cluster=cluster_name, tasks=task_arns)
@@ -136,19 +142,17 @@ class EcsClient(object):
             taskDefinition=task_definition_arn
         )
 
-    def update_service(self, cluster, service, desired_count, task_definition):
-        if desired_count is None:
-            return self.boto.update_service(
-                cluster=cluster,
-                service=service,
-                taskDefinition=task_definition
-            )
-        return self.boto.update_service(
+    def update_service(self, cluster, service, desired_count, task_definition, force_new_deployment=False):
+        kwargs = dict(
             cluster=cluster,
             service=service,
-            desiredCount=desired_count,
             taskDefinition=task_definition
         )
+        if desired_count is not None:
+            kwargs['desiredCount'] = desired_count
+        if force_new_deployment:
+            kwargs['forceNewDeployment'] = True
+        return self.boto.update_service(**kwargs)
 
     def run_task(self, cluster, task_definition, count, started_by, overrides,
                  launchtype='EC2', subnets=(), security_groups=(),
@@ -1364,13 +1368,16 @@ class EcsAction(object):
     def deregister_task_definition(self, task_definition):
         self._client.deregister_task_definition(task_definition.arn)
 
-    def update_service(self, service, desired_count=None):
-        response = self._client.update_service(
+    def update_service(self, service, desired_count=None, force_new_deployment=False):
+        kwargs = dict(
             cluster=service.cluster,
             service=service.name,
             desired_count=desired_count,
             task_definition=service.task_definition
         )
+        if force_new_deployment:
+            kwargs['force_new_deployment'] = True
+        response = self._client.update_service(**kwargs)
         return EcsService(self._cluster_name, response[u'service'])
 
     def is_deployed(self, service):
@@ -1425,10 +1432,13 @@ class EcsAction(object):
 
 
 class DeployAction(EcsAction):
-    def deploy(self, task_definition):
+    def deploy(self, task_definition, force_new_deployment=False):
         try:
             self._service.set_task_definition(task_definition)
-            return self.update_service(self._service)
+            return self.update_service(
+                self._service,
+                force_new_deployment=force_new_deployment
+            )
         except ClientError as e:
             raise EcsError(str(e))
 

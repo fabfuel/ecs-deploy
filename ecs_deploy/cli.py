@@ -61,6 +61,7 @@ def get_client(access_key_id, secret_access_key, region, profile, assume_account
 @click.option('--account', help='Target AWS account id to deploy in')
 @click.option('--assume-role', help='AWS Role to assume in target account')
 @click.option('--timeout', required=False, default=300, type=int, help='Amount of seconds to wait for deployment before command fails (default: 300). To disable timeout (fire and forget) set to -1')
+@click.option('--force-new-deployment', is_flag=True, default=False, help='Force ECS to start a new deployment')
 @click.option('--ignore-warnings', is_flag=True, help='Do not fail deployment on warnings (port already in use or insufficient memory/CPU)')
 @click.option('--newrelic-apikey', required=False, help='New Relic API Key for recording the deployment. Can also be defined via environment variable NEW_RELIC_API_KEY')
 @click.option('--newrelic-appid', required=False, help='New Relic App ID for recording the deployment. Can also be defined via environment variable NEW_RELIC_APP_ID')
@@ -85,7 +86,7 @@ def get_client(access_key_id, secret_access_key, region, profile, assume_account
 @click.option('--volume', type=(str, str), multiple=True, required=False, help='Set volume mapping from host to container in the task definition.')
 @click.option('--add-container', type=str, multiple=True, required=False, help='Add a placeholder container in the task definition.')
 @click.option('--remove-container', type=str, multiple=True, required=False, help='Remove a container from the task definition.')
-def deploy(cluster, service, tag, image, command, health_check, cpu, memory, memoryreservation, task_cpu, task_memory, privileged, essential, env, env_file, s3_env_file, secret, secrets_env_file, ulimit, system_control, port, mount, log, role, execution_role, runtime_platform, task, region, access_key_id, secret_access_key, profile, account, assume_role, timeout, newrelic_apikey, newrelic_appid, newrelic_region, newrelic_revision, comment, user, ignore_warnings, diff, deregister, rollback, exclusive_env, exclusive_secrets, exclusive_s3_env_file, sleep_time, exclusive_ulimits, exclusive_system_controls, exclusive_ports, exclusive_mounts, volume, add_container, remove_container, slack_url, docker_label, exclusive_docker_labels, slack_service_match='.*'):
+def deploy(cluster, service, tag, image, command, health_check, cpu, memory, memoryreservation, task_cpu, task_memory, privileged, essential, env, env_file, s3_env_file, secret, secrets_env_file, ulimit, system_control, port, mount, log, role, execution_role, runtime_platform, task, region, access_key_id, secret_access_key, profile, account, assume_role, timeout, force_new_deployment, newrelic_apikey, newrelic_appid, newrelic_region, newrelic_revision, comment, user, ignore_warnings, diff, deregister, rollback, exclusive_env, exclusive_secrets, exclusive_s3_env_file, sleep_time, exclusive_ulimits, exclusive_system_controls, exclusive_ports, exclusive_mounts, volume, add_container, remove_container, slack_url, docker_label, exclusive_docker_labels, slack_service_match='.*'):
     """
     Redeploy or modify a service.
 
@@ -153,7 +154,8 @@ def deploy(cluster, service, tag, image, command, health_check, cpu, memory, mem
                 deregister=deregister,
                 previous_task_definition=td,
                 ignore_warnings=ignore_warnings,
-                sleep_time=sleep_time
+                sleep_time=sleep_time,
+                force_new_deployment=force_new_deployment
             )
 
         except TaskPlacementError as e:
@@ -560,9 +562,13 @@ def wait_for_finish(action, timeout, title, success_message, failure_message,
 
 def deploy_task_definition(deployment, task_definition, title, success_message,
                            failure_message, timeout, deregister,
-                           previous_task_definition, ignore_warnings, sleep_time):
+                           previous_task_definition, ignore_warnings, sleep_time,
+                           force_new_deployment=False):
     click.secho('Updating service')
-    deployment.deploy(task_definition)
+    deployment.deploy(
+        task_definition,
+        force_new_deployment=force_new_deployment
+    )
 
     message = 'Successfully changed task definition to: %s:%s\n' % (
         task_definition.family,
