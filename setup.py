@@ -11,6 +11,15 @@ def readme():
         return f.read()
 
 
+def requirements():
+    with open('requirements.txt') as f:
+        return [
+            line.strip()
+            for line in f
+            if line.strip() and not line.startswith('#')
+        ]
+
+
 setup(
     name='ecs-deploy',
     version=VERSION,
@@ -24,6 +33,7 @@ setup(
     long_description_content_type='text/x-rst',
     packages=find_packages(exclude=['tests']),
     include_package_data=True,
+    install_requires=requirements(),
     zip_safe=False,
     platforms='any',
     entry_points={
