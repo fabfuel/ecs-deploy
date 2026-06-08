@@ -1,18 +1,21 @@
 """
 Simplify AWS ECS deployments
 """
+from pathlib import Path
 from setuptools import find_packages, setup
 
 from ecs_deploy import VERSION
 
+BASE_DIR = Path(__file__).parent
+
 
 def readme():
-    with open('README.rst') as f:
+    with open(BASE_DIR / 'README.rst') as f:
         return f.read()
 
 
 def requirements():
-    with open('requirements.txt') as f:
+    with open(BASE_DIR / 'requirements.txt') as f:
         return [
             line.strip()
             for line in f
