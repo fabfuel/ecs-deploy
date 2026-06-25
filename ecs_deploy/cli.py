@@ -520,7 +520,7 @@ def diff(task, revision_a, revision_b, region, access_key_id, secret_access_key,
         exit(1)
 
 
-def wait_for_finish(action, timeout, title, success_message, failure_message,
+def wait_for_finish(action, task_definition, timeout, title, success_message, failure_message,
                     ignore_warnings, sleep_time=1):
     click.secho(title)
     start_timestamp = datetime.now()
@@ -556,6 +556,15 @@ def wait_for_finish(action, timeout, title, success_message, failure_message,
         timeout=waiting
     )
 
+    deployed_tasked_definition = action.get_current_task_definition(service)
+
+    if deployed_tasked_definition.family_revision != task_definition.family_revision:
+        failure_message += (
+            ' due to active task definition %s not matching expected task definition %s.'
+            % (deployed_tasked_definition.family_revision, task_definition.family_revision)
+        )
+        raise TaskPlacementError(failure_message)
+
     click.secho('\n%s' % success_message, fg='green')
     click.secho('Duration: %s sec\n' % (datetime.now() - start_timestamp).seconds)
 
@@ -579,6 +588,7 @@ def deploy_task_definition(deployment, task_definition, title, success_message,
 
     wait_for_finish(
         action=deployment,
+        task_definition=task_definition,
         timeout=timeout,
         title=title,
         success_message=success_message,
