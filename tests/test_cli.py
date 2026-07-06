@@ -4,7 +4,7 @@ import pytest
 from click.testing import CliRunner
 from mock.mock import patch
 
-from ecs_deploy import cli
+from ecs_deploy import cli, VERSION
 from ecs_deploy.cli import get_client, record_deployment
 from ecs_deploy.ecs import EcsClient
 from ecs_deploy.newrelic import Deployment, NewRelicDeploymentException
@@ -30,11 +30,18 @@ def test_get_client(ecs_client):
 
 def test_ecs(runner):
     result = runner.invoke(cli.ecs)
-    assert result.exit_code == 0
-    assert not result.exception
+    assert result.exit_code == 2
+
     assert 'Usage: ecs [OPTIONS] COMMAND [ARGS]' in result.output
     assert '  deploy  ' in result.output
     assert '  scale   ' in result.output
+
+
+def test_ecs_version(runner):
+    result = runner.invoke(cli.ecs, ('--version'))
+    assert result.exit_code == 0
+    assert not result.exception
+    assert result.output == f'ecs-deploy, version {VERSION}\n'
 
 
 @patch('ecs_deploy.cli.get_client')
@@ -106,6 +113,15 @@ def test_deploy_without_deregister(get_client, runner):
     assert u'Successfully changed task definition to: test-task:2' in result.output
     assert u'Deployment successful' in result.output
     assert u"Updating task definition" not in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_deploy_with_force_new_deployment(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '--force-new-deployment'))
+    assert result.exit_code == 0
+    assert not result.exception
+    assert get_client.return_value.force_new_deployment is True
 
 
 @patch('ecs_deploy.cli.get_client')
