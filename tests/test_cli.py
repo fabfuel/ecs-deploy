@@ -965,6 +965,41 @@ def test_run_task_with_docker_label(get_client, runner):
 
 
 @patch('ecs_deploy.cli.get_client')
+def test_run_task_with_memory(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.run, (CLUSTER_NAME, 'test-task', '2', '--memory', 'webserver', '1024'))
+
+    assert not result.exception
+    assert result.exit_code == 0
+
+    assert u"Using task definition: test-task" in result.output
+    assert u'Changed memory of container "webserver" to: "1024"' in result.output
+    assert u"Successfully started 2 instances of task: test-task:2" in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_run_task_with_task_memory(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.run, (CLUSTER_NAME, 'test-task', '2', '--task-memory', '2048'))
+
+    assert not result.exception
+    assert result.exit_code == 0
+
+    assert u"Using task definition: test-task" in result.output
+    assert u'Changed memory to: "2048"' in result.output
+    assert u"Successfully started 2 instances of task: test-task:2" in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
+def test_run_task_with_unknown_container(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.run, (CLUSTER_NAME, 'test-task', '2', '--memory', 'foobar', '1024'))
+
+    assert result.exit_code == 1
+    assert u"Unknown container: foobar" in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
 def test_run_task_without_diff(get_client, runner):
     get_client.return_value = EcsTestClient('acces_key', 'secret_key')
     result = runner.invoke(cli.run, (CLUSTER_NAME, 'test-task', '2', '-e', 'application', 'foo', 'bar', '--no-diff'))

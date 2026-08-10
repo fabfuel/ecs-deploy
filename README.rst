@@ -115,7 +115,7 @@ Scale a service up or down and change the number of running tasks.
 
 run
 ===
-Run a one-off task based on an existing task-definition and optionally override command, environment variables and/or docker labels.
+Run a one-off task based on an existing task-definition and optionally override command, environment variables, docker labels and/or cpu and memory.
 
 update
 ======
@@ -497,6 +497,23 @@ command in a natural syntax, e.g. no conversion to comma-separation required::
     $ ecs run my-cluster my-task -c my-container "python some-script.py param1 param2"
 
 The JSON syntax explained above regarding modifying a command is also applicable here.
+
+
+Run a task with custom cpu and memory
+=====================================
+
+To run a one-off task with different resources than the task-definition defines, you can override the values for the
+whole task and/or for a single container::
+
+    $ ecs run my-cluster my-task --task-cpu 1024 --task-memory 2048
+    $ ecs run my-cluster my-task --memory my-container 2048
+
+The task-level options ``--task-cpu`` and ``--task-memory`` set the resources of the task itself, whereas ``--cpu``,
+``--memory`` and ``--memoryreservation`` expect a container name and set the resources of that container only. The
+task-definition is not modified, the values are applied to this task run only.
+
+For the FARGATE launch type, ``--task-cpu`` and ``--task-memory`` must form a supported combination.
+https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task-cpu-memory-error.html
 
 
 Run a task in a Fargate Cluster

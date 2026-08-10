@@ -408,6 +408,11 @@ def scale(cluster, service, desired_count, access_key_id, secret_access_key, reg
 @click.argument('task')
 @click.argument('count', required=False, default=1)
 @click.option('-c', '--command', type=(str, str), multiple=True, help='Overwrites the command in a container: <container> <command>')
+@click.option('--cpu', type=(str, int), multiple=True, help='Overwrites the cpu value for a container: <container> <cpu>')
+@click.option('--memory', type=(str, int), multiple=True, help='Overwrites the memory value for a container: <container> <memory>')
+@click.option('--memoryreservation', type=(str, int), multiple=True, help='Overwrites the memory reservation value for a container: <container> <memoryreservation>')
+@click.option('--task-cpu', type=int, help='Overwrites the cpu value for a task: <cpu>')
+@click.option('--task-memory', type=int, help='Overwrites the memory value for a task: <memory>')
 @click.option('-e', '--env', type=(str, str, str), multiple=True, help='Adds or changes an environment variable: <container> <name> <value>')
 @click.option('--env-file', type=(str, str), default=((None, None),), multiple=True, required=False, help='Load environment variables from .env-file')
 @click.option('--s3-env-file', type=(str, str), multiple=True, required=False, help='Location of .env-file in S3 in ARN format (eg arn:aws:s3:::/bucket_name/object_name')
@@ -430,7 +435,7 @@ def scale(cluster, service, desired_count, access_key_id, secret_access_key, reg
 @click.option('--exclusive-docker-labels', is_flag=True, default=False, help='Set the given docker labels exclusively and remove all other pre-existing docker-labels from all containers')
 @click.option('--exclusive-s3-env-file', is_flag=True, default=False, help='Set the given s3 env files exclusively and remove all other pre-existing s3 env files from all containers')
 @click.option('--diff/--no-diff', default=True, help='Print what values were changed in the task definition')
-def run(cluster, task, count, command, env, env_file, s3_env_file, secret, secrets_env_file, launchtype, subnet, securitygroup, public_ip, platform_version, region, access_key_id, secret_access_key, profile, account, assume_role, exclusive_env, exclusive_secrets, exclusive_s3_env_file, diff, docker_label, exclusive_docker_labels):
+def run(cluster, task, count, command, cpu, memory, memoryreservation, task_cpu, task_memory, env, env_file, s3_env_file, secret, secrets_env_file, launchtype, subnet, securitygroup, public_ip, platform_version, region, access_key_id, secret_access_key, profile, account, assume_role, exclusive_env, exclusive_secrets, exclusive_s3_env_file, diff, docker_label, exclusive_docker_labels):
     """
     Run a one-off task.
 
@@ -445,6 +450,11 @@ def run(cluster, task, count, command, env, env_file, s3_env_file, secret, secre
 
         td = action.get_task_definition(task)
         td.set_commands(**{key: value for (key, value) in command})
+        td.set_cpu(**{key: value for (key, value) in cpu})
+        td.set_memory(**{key: value for (key, value) in memory})
+        td.set_memoryreservation(**{key: value for (key, value) in memoryreservation})
+        td.set_task_cpu(task_cpu)
+        td.set_task_memory(task_memory)
         td.set_environment(env, exclusive_env, env_file)
         td.set_docker_labels(docker_label, exclusive_docker_labels)
         td.set_s3_env_file(s3_env_file, exclusive_s3_env_file)

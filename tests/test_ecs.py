@@ -1109,6 +1109,53 @@ def test_task_get_overrides_with_command_secrets_and_environment_for_multiple_co
     assert dict(name='bar', valueFrom='qux') in overrides[1]['secrets']
 
 
+def test_task_get_overrides_with_cpu_and_memory(task_definition):
+    task_definition.set_cpu(webserver=512)
+    task_definition.set_memory(webserver=1024)
+    task_definition.set_memoryreservation(webserver=512)
+    overrides = task_definition.get_overrides()
+    assert len(overrides) == 1
+    assert overrides[0]['name'] == 'webserver'
+    assert overrides[0]['cpu'] == 512
+    assert overrides[0]['memory'] == 1024
+    assert overrides[0]['memoryReservation'] == 512
+
+
+def test_task_get_overrides_with_cpu_and_memory_for_multiple_containers(task_definition):
+    task_definition.set_cpu(webserver=512, application=256)
+    task_definition.set_memory(webserver=1024, application=512)
+    overrides = task_definition.get_overrides()
+    assert len(overrides) == 2
+    assert overrides[0]['name'] == 'webserver'
+    assert overrides[0]['cpu'] == 512
+    assert overrides[0]['memory'] == 1024
+    assert overrides[1]['name'] == 'application'
+    assert overrides[1]['cpu'] == 256
+    assert overrides[1]['memory'] == 512
+
+
+def test_task_get_overrides_without_task_cpu_and_memory(task_definition):
+    task_definition.set_task_cpu(1024)
+    task_definition.set_task_memory(2048)
+    assert task_definition.get_overrides() == []
+
+
+def test_task_get_task_overrides(task_definition):
+    assert task_definition.get_task_overrides() == {}
+
+
+def test_task_get_task_overrides_with_cpu_and_memory(task_definition):
+    task_definition.set_task_cpu(1024)
+    task_definition.set_task_memory(2048)
+    assert task_definition.get_task_overrides() == dict(cpu='1024', memory='2048')
+
+
+def test_task_get_task_overrides_without_container_cpu_and_memory(task_definition):
+    task_definition.set_cpu(webserver=512)
+    task_definition.set_memory(webserver=1024)
+    assert task_definition.get_task_overrides() == {}
+
+
 def test_task_get_overrides_command(task_definition):
     command = task_definition.get_overrides_command('/usr/bin/python script.py')
     assert isinstance(command, list)
@@ -1733,6 +1780,19 @@ def test_run_action_run(client, task_definition):
     )
 
     assert len(action.started_tasks) == 2
+
+
+@patch.object(EcsClient, '__init__')
+def test_run_action_run_with_resource_overrides(client, task_definition):
+    action = RunAction(client, CLUSTER_NAME)
+    client.run_task.return_value = dict(tasks=[dict(taskArn='A')])
+    task_definition.set_memory(webserver=1024)
+    task_definition.set_task_memory(2048)
+    action.run(task_definition, 1, 'test', LAUNCH_TYPE_EC2, (), (), False, None)
+
+    overrides = client.run_task.call_args[1]['overrides']
+    assert overrides['memory'] == '2048'
+    assert overrides['containerOverrides'] == [dict(name='webserver', memory=1024)]
 
 
 def test_ecs_server_get_warnings():
