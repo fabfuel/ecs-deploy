@@ -1296,8 +1296,29 @@ def test_client_list_tasks(client):
 
 
 def test_client_describe_tasks(client):
-    client.describe_tasks(u'test-cluster', u'task-arns')
-    client.boto.describe_tasks.assert_called_once_with(cluster=u'test-cluster', tasks=u'task-arns')
+    client.boto.describe_tasks.return_value = {'tasks': ['task-1'], 'failures': []}
+
+    result = client.describe_tasks(u'test-cluster', ['task-arn-1'])
+
+    client.boto.describe_tasks.assert_called_once_with(cluster=u'test-cluster', tasks=['task-arn-1'])
+    assert result == {'tasks': ['task-1'], 'failures': []}
+
+
+def test_client_describe_tasks_batches_more_than_100_task_arns(client):
+    task_arns = [u'task-arn-%d' % i for i in range(150)]
+
+    def describe_tasks_side_effect(cluster, tasks):
+        return {'tasks': [u'task-%s' % arn for arn in tasks], 'failures': []}
+
+    client.boto.describe_tasks.side_effect = describe_tasks_side_effect
+
+    result = client.describe_tasks(u'test-cluster', task_arns)
+
+    assert client.boto.describe_tasks.call_count == 2
+    first_call, second_call = client.boto.describe_tasks.call_args_list
+    assert first_call == call(cluster=u'test-cluster', tasks=task_arns[0:100])
+    assert second_call == call(cluster=u'test-cluster', tasks=task_arns[100:150])
+    assert len(result['tasks']) == 150
 
 
 def test_client_register_task_definition(client):
