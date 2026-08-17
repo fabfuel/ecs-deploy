@@ -110,7 +110,21 @@ class EcsClient(object):
         return {'taskArns': task_arns}
 
     def describe_tasks(self, cluster_name, task_arns):
-        return self.boto.describe_tasks(cluster=cluster_name, tasks=task_arns)
+        """Describe tasks, batching requests to comply with the 100 item limit.
+
+        The AWS describe_tasks API accepts at most 100 task IDs per call.
+        This method batches the given task_arns into chunks of 100 and
+        merges the results.
+        """
+        tasks = []
+        failures = []
+        batch_size = 100
+        for i in range(0, len(task_arns), batch_size):
+            batch = task_arns[i:i + batch_size]
+            response = self.boto.describe_tasks(cluster=cluster_name, tasks=batch)
+            tasks.extend(response.get('tasks', []))
+            failures.extend(response.get('failures', []))
+        return {'tasks': tasks, 'failures': failures}
 
     def register_task_definition(self, family, containers, volumes, role_arn,
                                  execution_role_arn, runtime_platform, tags,
@@ -409,12 +423,13 @@ class EcsTaskDefinition(object):
         return list(diff(composite_a, composite_b))
 
     def get_overrides(self):
-        override = dict()
-        overrides = []
+        overrides = dict()
         for diff in self.diff:
-            if override.get('name') != diff.container:
-                override = dict(name=diff.container)
-                overrides.append(override)
+            if not diff.container:
+                continue
+            if diff.container not in overrides:
+                overrides[diff.container] = dict(name=diff.container)
+            override = overrides[diff.container]
             if diff.field == 'command':
                 override['command'] = self.get_overrides_command(diff.value)
             elif diff.field == 'environment':
@@ -423,6 +438,15 @@ class EcsTaskDefinition(object):
                 override['secrets'] = self.get_overrides_secrets(diff.value)
             elif diff.field == 'dockerLabels':
                 override['dockerLabels'] = self.get_overrides_docker_labels(diff.value)
+            elif diff.field in ('cpu', 'memory', 'memoryReservation'):
+                override[diff.field] = diff.value
+        return list(overrides.values())
+
+    def get_task_overrides(self):
+        overrides = dict()
+        for diff in self.diff:
+            if not diff.container and diff.field in ('cpu', 'memory'):
+                overrides[diff.field] = diff.value
         return overrides
 
     @staticmethod
@@ -1460,13 +1484,16 @@ class RunAction(EcsAction):
 
     def run(self, task_definition, count, started_by, launchtype, subnets,
             security_groups, public_ip, platform_version):
+        overrides = dict(containerOverrides=task_definition.get_overrides())
+        overrides.update(task_definition.get_task_overrides())
+
         try:
             result = self._client.run_task(
                 cluster=self._cluster_name,
                 task_definition=task_definition.family_revision,
                 count=count,
                 started_by=started_by,
-                overrides=dict(containerOverrides=task_definition.get_overrides()),
+                overrides=overrides,
                 launchtype=launchtype,
                 subnets=subnets,
                 security_groups=security_groups,
