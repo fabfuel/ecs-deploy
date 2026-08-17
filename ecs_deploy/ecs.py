@@ -110,7 +110,21 @@ class EcsClient(object):
         return {'taskArns': task_arns}
 
     def describe_tasks(self, cluster_name, task_arns):
-        return self.boto.describe_tasks(cluster=cluster_name, tasks=task_arns)
+        """Describe tasks, batching requests to comply with the 100 item limit.
+
+        The AWS describe_tasks API accepts at most 100 task IDs per call.
+        This method batches the given task_arns into chunks of 100 and
+        merges the results.
+        """
+        tasks = []
+        failures = []
+        batch_size = 100
+        for i in range(0, len(task_arns), batch_size):
+            batch = task_arns[i:i + batch_size]
+            response = self.boto.describe_tasks(cluster=cluster_name, tasks=batch)
+            tasks.extend(response.get('tasks', []))
+            failures.extend(response.get('failures', []))
+        return {'tasks': tasks, 'failures': failures}
 
     def register_task_definition(self, family, containers, volumes, role_arn,
                                  execution_role_arn, runtime_platform, tags,
