@@ -1,3 +1,4 @@
+import re
 from datetime import datetime
 
 import pytest
@@ -84,6 +85,35 @@ def test_deploy(get_client, runner):
 
 
 @patch('ecs_deploy.cli.get_client')
+def test_deploy_multiple_services(get_client, runner):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, CLUSTER_NAME, SERVICE_NAME))
+    assert result.exit_code == 0
+    assert not result.exception
+    assert result.output.count(u'Updating %s' % SERVICE_NAME) == 2
+    assert result.output.count(u'Successfully changed task definition to: test-task:2') == 2
+    assert result.output.count(u'Deployment successful (%s)' % SERVICE_NAME) == 2
+    assert result.output.count(u'Successfully deregistered revision: 1') == 2
+
+
+@pytest.mark.parametrize(
+    'arguments',
+    (
+            (),
+            (CLUSTER_NAME,),
+            (CLUSTER_NAME, SERVICE_NAME, CLUSTER_NAME),
+    )
+)
+@patch('ecs_deploy.cli.get_client')
+def test_deploy_without_cluster_service_pairs(get_client, runner, arguments):
+    get_client.return_value = EcsTestClient('acces_key', 'secret_key')
+    result = runner.invoke(cli.deploy, arguments)
+    assert result.exit_code == 2
+    assert u'CLUSTER_SERVICE must be one or more pairs of CLUSTER and SERVICE.' in result.output
+    assert u'Deploying based on task definition' not in result.output
+
+
+@patch('ecs_deploy.cli.get_client')
 def test_deploy_with_rollback(get_client, runner):
     get_client.return_value = EcsTestClient('acces_key', 'secret_key', wait=2)
     result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '--timeout=1', '--rollback'))
@@ -93,12 +123,12 @@ def test_deploy_with_rollback(get_client, runner):
     assert u"Deploying based on task definition: test-task:1" in result.output
 
     assert u"Deployment failed" in result.output
-    assert u"Rolling back to task definition: test-task:1" in result.output
+    assert u"Rolling back to task definitions: test-task:1" in result.output
     assert u'Successfully changed task definition to: test-task:1' in result.output
 
     assert u"Rollback successful" in result.output
-    assert u'Deployment failed, but service has been rolled back to ' \
-           u'previous task definition: test-task:1' in result.output
+    assert u'Deployment failed, but services have been rolled back to ' \
+           u'previous task definitions: test-task:1' in result.output
 
 
 @patch('ecs_deploy.cli.get_client')
@@ -260,7 +290,7 @@ def test_deploy_one_new_health_check(get_client, cmd_input, cmd_expected, runner
     assert u'Successfully deregistered revision: 1' in result.output
     assert u'Successfully changed task definition to: test-task:2' in result.output
     assert u'Deployment successful' in result.output
-    
+
 
 
 @patch('ecs_deploy.cli.get_client')
@@ -651,8 +681,7 @@ def test_deploy_with_errors(get_client, runner):
     result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME))
     assert result.exit_code == 1
     assert u"Deployment failed" in result.output
-    assert u"ERROR: Service was unable to Lorem Ipsum" in result.output
-
+    assert re.search("error: [0-9-: \\.+]+Service was unable to Lorem Ipsum", result.output)
 
 @patch('ecs_deploy.cli.get_client')
 def test_deploy_with_client_errors(get_client, runner):
@@ -673,7 +702,7 @@ def test_deploy_ignore_warnings(get_client, runner):
     assert u'Successfully created revision: 2' in result.output
     assert u'Successfully deregistered revision: 1' in result.output
     assert u'Successfully changed task definition to: test-task:2' in result.output
-    assert u"WARNING: Service was unable to Lorem Ipsum" in result.output
+    assert re.search("warning: [0-9-: \\.+]+Service was unable to Lorem Ipsum", result.output)
     assert u"Continuing." in result.output
     assert u'Deployment successful' in result.output
 
@@ -797,7 +826,7 @@ def test_deploy_with_wait_within_timeout(get_client, runner):
     result = runner.invoke(cli.deploy, (CLUSTER_NAME, SERVICE_NAME, '--timeout', '10'))
     assert result.exit_code == 0
     assert u'Deploying new task definition' in result.output
-    assert u'...' in result.output
+    assert u'..' in result.output
 
 
 @patch('ecs_deploy.cli.get_client')
@@ -865,7 +894,7 @@ def test_scale_with_errors(get_client, runner):
     result = runner.invoke(cli.scale, (CLUSTER_NAME, SERVICE_NAME, '2'))
     assert result.exit_code == 1
     assert u"Scaling failed" in result.output
-    assert u"ERROR: Service was unable to Lorem Ipsum" in result.output
+    assert re.search("error: [0-9-: \\.+]+Service was unable to Lorem Ipsum", result.output)
 
 
 @patch('ecs_deploy.cli.get_client')
@@ -884,7 +913,7 @@ def test_scale_ignore_warnings(get_client, runner):
     assert not result.exception
     assert result.exit_code == 0
     assert u"Successfully changed desired count to: 2" in result.output
-    assert u"WARNING: Service was unable to Lorem Ipsum" in result.output
+    assert re.search("warning: [0-9-: \\.+]+Service was unable to Lorem Ipsum", result.output)
     assert u"Continuing." in result.output
     assert u"Scaling successful" in result.output
 
