@@ -31,9 +31,10 @@ def read_env_file(container_name, file):
     try:
         with open(file) as f:
             for line in f:
-                if line.startswith('#') or not line.strip() or '=' not in line:
+                stripped = line.strip()
+                if stripped.startswith('#') or not stripped or '=' not in stripped:
                     continue
-                key, value = line.strip().split('=', 1)
+                key, value = stripped.split('=', 1)
                 env_vars.append((container_name,key,value))
     except Exception as e:
         raise EcsTaskDefinitionCommandError(str(e))
