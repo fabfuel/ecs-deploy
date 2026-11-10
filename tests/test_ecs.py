@@ -637,6 +637,18 @@ def test_read_env_file_wrong_env_format():
     assert l == ()
 
 
+def test_read_env_file_ignores_indented_comments(tmp_path):
+    env_file = tmp_path / 'test.env'
+    env_file.write_text(
+        '# a comment\n'
+        '  # an indented comment with FOO=should-be-ignored\n'
+        'KEY=value\n'
+    )
+    assert read_env_file('webserver', str(env_file)) == (
+        ('webserver', 'KEY', 'value'),
+    )
+
+
 def test_env_file_wrong_file_name():
     with pytest.raises(EcsTaskDefinitionCommandError):
         read_env_file('webserver', 'WrongFileName')
